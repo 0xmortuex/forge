@@ -30,9 +30,10 @@ self.MonacoEnvironment = {
 
 interface OpenFile {
   path: string
-  model: monaco.editor.ITextModel // for a diff tab: the (read-only) working-copy side
+  model: monaco.editor.ITextModel // for a diff tab: the working-copy side (shared with the file tab when editable)
   savedVersion: number
-  diff?: { original: monaco.editor.ITextModel } // present on diff tabs: the HEAD side
+  // Present on diff tabs: the HEAD side, and the file tab whose model the right side edits (none for deleted files).
+  diff?: { original: monaco.editor.ITextModel; shared?: OpenFile }
 }
 
 /** Map key: a file and its diff are separate tabs for the same path. */
@@ -88,8 +89,7 @@ const editor = monaco.editor.create($('editor'), {
 
 const diffEditor = monaco.editor.createDiffEditor($('diff'), {
   automaticLayout: true,
-  readOnly: true,
-  originalEditable: false,
+  originalEditable: false, // the HEAD side never edits; the working-copy side is made editable per tab
   fontFamily: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
   fontSize: 13,
   lineHeight: 21,
@@ -369,7 +369,8 @@ async function guarded<T>(label: string, fn: () => Promise<T>): Promise<void> {
 }
 
 const basename = (p: string): string => p.split(/[\\/]/).pop() ?? p
-const isDirty = (f: OpenFile): boolean => !f.diff && f.model.getAlternativeVersionId() !== f.savedVersion
+const isDirty = (f: OpenFile): boolean =>
+  f.diff ? (f.diff.shared ? isDirty(f.diff.shared) : false) : f.model.getAlternativeVersionId() !== f.savedVersion
 
 function renderTabs(): void {
   tabsEl.replaceChildren()
@@ -403,8 +404,11 @@ function activate(f: OpenFile | null): void {
   active = f
   $('editor').hidden = !!f?.diff
   $('diff').hidden = !f?.diff
-  if (f?.diff) diffEditor.setModel({ original: f.diff.original, modified: f.model })
-  else {
+  if (f?.diff) {
+    diffEditor.setModel({ original: f.diff.original, modified: f.model })
+    // Only a diff against a real file is editable; a deleted file has nothing to save into.
+    diffEditor.getModifiedEditor().updateOptions({ readOnly: !f.diff.shared })
+  } else {
     // Don't leave the hidden diff editor holding models that may be disposed later.
     diffEditor.setModel(null)
     editor.setModel(f?.model ?? null)
@@ -415,16 +419,20 @@ function activate(f: OpenFile | null): void {
 }
 
 function closeFile(f: OpenFile): void {
+  if (!openFiles.has(tabKey(f))) return // already closed, e.g. together with the file it shows
+  // A diff that edits this file's model must go first, or it would be left holding a disposed model.
+  if (!f.diff) for (const d of [...openFiles.values()]) if (d.diff?.shared === f) closeFile(d)
   openFiles.delete(tabKey(f))
   if (f.diff) {
     // Monaco requires the diff editor to let go of its models before they are disposed.
     if (active === f) diffEditor.setModel(null)
     f.diff.original.dispose()
+    if (!f.diff.shared) f.model.dispose() // a shared model belongs to the file tab
   } else {
     lsp.closeDoc(f.model)
     dbg.onModelClosing(f.model, f.path)
+    f.model.dispose()
   }
-  f.model.dispose()
   if (active === f) activate([...openFiles.values()].pop() ?? null)
   else renderTabs()
 }
@@ -454,8 +462,9 @@ async function openFile(path: string, line?: number, column = 1): Promise<void> 
 }
 
 async function saveActive(): Promise<void> {
-  const f = active
-  if (!f || f.diff) return
+  // From a diff tab, Save writes the file the diff is editing.
+  const f = active?.diff ? active.diff.shared : active
+  if (!f) return
   await guarded(`Save ${basename(f.path)}`, async () => {
     await window.forge.writeFile(f.path, f.model.getValue())
     f.savedVersion = f.model.getAlternativeVersionId()
@@ -700,7 +709,7 @@ function refreshBlame(): void {
   gitUi.updateBlame(f ? f.path : null, editor.getPosition()?.lineNumber ?? 1, f ? isDirty(f) : false)
 }
 
-/** Opens (or refreshes) a read-only HEAD-vs-working-copy diff tab. */
+/** Opens (or refreshes) a HEAD-vs-working-copy diff tab. The right side edits the real file. */
 async function openDiff(path: string, kind: ChangeKind): Promise<void> {
   const root = rootDir
   if (!root) return
@@ -708,21 +717,25 @@ async function openDiff(path: string, kind: ChangeKind): Promise<void> {
     // Renamed files: the old path isn't tracked here, so the whole file shows as added.
     const isNew = kind === 'added' || kind === 'untracked' || kind === 'renamed'
     const original = isNew ? '' : await window.forge.gitShow(root, path)
-    const open = [...openFiles.values()].find((f) => !f.diff && samePath(f.path, path))
-    const modified = kind === 'deleted' ? '' : open ? open.model.getValue() : await window.forge.readFile(path)
     const existing = openFiles.get(`diff:${path}`)
     if (existing?.diff) {
       existing.diff.original.setValue(original)
-      existing.model.setValue(modified)
       activate(existing)
       return
+    }
+    // The diff edits the real file, so the file has to be open; a deleted file has nothing to open.
+    let shared: OpenFile | undefined
+    if (kind !== 'deleted') {
+      await openFile(path)
+      shared = [...openFiles.values()].find((f) => !f.diff && samePath(f.path, path))
+      if (!shared) throw new Error(`Could not open ${basename(path)} to show its diff`)
     }
     const uriPath = '/' + norm(path)
     const f: OpenFile = {
       path,
       savedVersion: 0,
-      model: monaco.editor.createModel(modified, undefined, monaco.Uri.from({ scheme: 'forge-diff', path: uriPath })),
-      diff: { original: monaco.editor.createModel(original, undefined, monaco.Uri.from({ scheme: 'forge-head', path: uriPath })) }
+      model: shared ? shared.model : monaco.editor.createModel('', undefined, monaco.Uri.from({ scheme: 'forge-diff', path: uriPath })),
+      diff: { original: monaco.editor.createModel(original, undefined, monaco.Uri.from({ scheme: 'forge-head', path: uriPath })), shared }
     }
     f.savedVersion = f.model.getAlternativeVersionId()
     openFiles.set(tabKey(f), f)
@@ -773,7 +786,7 @@ window.addEventListener('focus', refreshGit) // changes made outside Forge
 /** Saves every modified file so a run never executes stale code from disk. */
 async function saveAllDirty(): Promise<void> {
   for (const f of openFiles.values()) {
-    if (!isDirty(f)) continue
+    if (f.diff || !isDirty(f)) continue // a diff tab shares its file's model, which is saved via the file tab
     await window.forge.writeFile(f.path, f.model.getValue())
     f.savedVersion = f.model.getAlternativeVersionId()
   }

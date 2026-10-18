@@ -58,6 +58,28 @@ run('git', { 'a.txt': 'one\ntwo\n', 'src/b.ts': 'export const b = 1\n' }, async 
 
   await t.shot('git-diff.png')
 
+  // The right side is the real file: edit it inside the diff, save, and close in either order.
+  await t.type('EDIT-')
+  check('typing in the diff marks its tab dirty', !!(await waitFor(() => js("!!document.querySelector('.tab .dot')"), 3000)))
+  check(
+    'the diff updates live with the edit',
+    !!(await waitFor(async () => (await text('diff')).includes('EDIT-one'), 5000))
+  )
+  key('S', ['control'])
+  check(
+    'Ctrl+S in the diff saves the real file',
+    !!(await waitFor(() => require('node:fs').readFileSync(path.join(root, 'a.txt'), 'utf8').startsWith('EDIT-one'), 5000))
+  )
+  check('the dirty marker clears after saving', !!(await waitFor(() => js("!document.querySelector('.tab .dot')"), 3000)))
+  await js(
+    "[...document.querySelectorAll('.tab')].find((t) => t.textContent.includes('a.txt') && !t.textContent.includes('(diff)')).querySelector('.close').click()"
+  )
+  check(
+    'closing the file tab also closes the diff that edits it',
+    !!(await waitFor(async () => !(await text('tabs')).includes('a.txt'), 3000)),
+    await text('tabs')
+  )
+
   // Blame: committed line, then an uncommitted line
   await js("document.querySelector('.btab[data-side=\"project\"]').click()")
   await js(`${node('src')}.click()`) // expand the folder; its children render lazily
