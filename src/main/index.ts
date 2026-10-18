@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { access, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { searchProject } from './search'
+import { killAllLsp, registerLsp } from './lsp'
 import { killAllTerminals, registerTerminal } from './terminal'
 import { walkFiles } from './walk'
 
@@ -76,7 +77,11 @@ ipcMain.handle('fs:writeFile', (_e, path: string, content: string) =>
 )
 
 registerTerminal()
-app.on('before-quit', killAllTerminals)
+registerLsp()
+app.on('before-quit', () => {
+  killAllTerminals()
+  killAllLsp()
+})
 
 app.whenReady().then(() => {
   createWindow()

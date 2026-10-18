@@ -171,3 +171,5 @@ kbd { background: var(--island-2); border: 1px solid #38505a; border-bottom-widt
 #ask-input { width: 100%; padding: 8px 10px; background: var(--island-2); color: var(--text-hi);
   border: 1px solid var(--accent); border-radius: 8px; outline: 0; font: 14px var(--ui); }
 #ask-hint { margin-top: 8px; color: var(--text-dim); font-size: 12px; }
+
+#st-problems.has-errors { color: var(--err); }

@@ -22,6 +22,19 @@ const api = {
   termResize: (id: number, cols: number, rows: number): Promise<void> =>
     ipcRenderer.invoke('term:resize', id, cols, rows),
   termKill: (id: number): Promise<void> => ipcRenderer.invoke('term:kill', id),
+  lspOpen: (root: string, uri: string, path: string, version: number, text: string): Promise<boolean> =>
+    ipcRenderer.invoke('lsp:open', root, uri, path, version, text),
+  lspChange: (uri: string, version: number, text: string): Promise<void> =>
+    ipcRenderer.invoke('lsp:change', uri, version, text),
+  lspClose: (uri: string): Promise<void> => ipcRenderer.invoke('lsp:close', uri),
+  lspRequest: (uri: string, method: string, params: unknown): Promise<unknown> =>
+    ipcRenderer.invoke('lsp:request', uri, method, params),
+  onLspDiagnostics: (cb: (uri: string, diagnostics: unknown[]) => void): void => {
+    ipcRenderer.on('lsp:diagnostics', (_e, uri: string, diagnostics: unknown[]) => cb(uri, diagnostics))
+  },
+  onLspLog: (cb: (server: string, type: number, message: string) => void): void => {
+    ipcRenderer.on('lsp:log', (_e, server: string, type: number, message: string) => cb(server, type, message))
+  },
   onTermData: (cb: (id: number, data: string) => void): void => {
     ipcRenderer.on('term:data', (_e, id: number, data: string) => cb(id, data))
   },

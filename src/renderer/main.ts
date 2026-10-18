@@ -10,6 +10,7 @@ import { fileIcon, folderIcon, icons } from './icons'
 import { askText, showMenu, type MenuItem } from './menu'
 import { initFind } from './find'
 import { createTerminalView } from './terminal'
+import { initLsp } from './lsp'
 
 self.MonacoEnvironment = {
   getWorker(_id, label) {
@@ -44,13 +45,17 @@ const stIndent = $('st-indent')
 const stLang = $('st-lang')
 
 defineTheme()
-// Monaco's in-browser TS worker can't resolve node_modules, so its semantic errors are false
-// positives. Real diagnostics will come from a language server (LSP) instead.
+// Monaco's in-browser TS worker can't resolve node_modules, so its results are wrong or duplicated.
+// All TS/JS intelligence comes from the language server (see lsp.ts); only highlighting stays built in.
 for (const defaults of [
   monaco.languages.typescript.typescriptDefaults,
   monaco.languages.typescript.javascriptDefaults
 ]) {
-  defaults.setDiagnosticsOptions({ noSemanticValidation: true, noSyntaxValidation: false })
+  defaults.setModeConfiguration({
+    completionItems: false, hovers: false, documentSymbols: false, definitions: false, references: false,
+    documentHighlights: false, rename: false, diagnostics: false, documentRangeFormattingEdits: false,
+    signatureHelp: false, onTypeFormattingEdits: false, codeActions: false, inlayHints: false
+  })
 }
 const editor = monaco.editor.create($('editor'), {
   theme: THEME,
@@ -353,13 +358,17 @@ function activate(f: OpenFile | null): void {
 
 function closeFile(f: OpenFile): void {
   openFiles.delete(f.path)
+  lsp.closeDoc(f.model)
   f.model.dispose()
   if (active === f) activate([...openFiles.values()].pop() ?? null)
   else renderTabs()
 }
 
-async function openFile(path: string, line?: number): Promise<void> {
-  const existing = openFiles.get(path)
+// Windows paths are case-insensitive, and servers/Monaco may hand back a different drive-letter case.
+const samePath = (a: string, b: string): boolean => norm(a).toLowerCase() === norm(b).toLowerCase()
+
+async function openFile(path: string, line?: number, column = 1): Promise<void> {
+  const existing = [...openFiles.values()].find((f) => samePath(f.path, path))
   if (existing) activate(existing)
   else {
     await guarded(`Open ${basename(path)}`, async () => {
@@ -369,10 +378,11 @@ async function openFile(path: string, line?: number): Promise<void> {
       model.onDidChangeContent(() => renderTabs())
       openFiles.set(path, f)
       activate(f)
+      lsp.openDoc(model, path)
     })
   }
   if (line) {
-    editor.setPosition({ lineNumber: line, column: 1 })
+    editor.setPosition({ lineNumber: line, column })
     editor.revealLineInCenter(line)
   }
 }
@@ -568,6 +578,17 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'o') { e.preventDefault(); void openFolder() }
   else if (e.key === 's') { e.preventDefault(); void saveActive() }
   else if (e.key === 'w' && active) { e.preventDefault(); closeFile(active) }
+})
+
+const stProblems = $('st-problems')
+const lsp = initLsp({
+  getRoot: () => rootDir,
+  openFile,
+  report,
+  onProblems: (errors, warnings) => {
+    stProblems.textContent = errors || warnings ? `✕ ${errors}  ⚠ ${warnings}` : ''
+    stProblems.classList.toggle('has-errors', errors > 0)
+  }
 })
 
 const terminal = createTerminalView($('term'), () => rootDir, guarded)
