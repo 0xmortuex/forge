@@ -441,3 +441,6 @@ body.reduced #aurora, body.reduced .logo, body.reduced .w-title, body.reduced.bu
 .recent:hover { background: var(--hover); transform: translateX(3px); }
 .recent .rn { color: var(--text-hi); font-weight: 600; }
 .recent .rp { color: var(--text-dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.empty-tree { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 36px 16px; color: var(--text-dim); text-align: center; animation: rise var(--t-slow) var(--ease); }
+.empty-tree p { margin: 0; }

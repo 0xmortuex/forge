@@ -391,6 +391,22 @@ const basename = (p: string): string => p.split(/[\\/]/).pop() ?? p
 const isDirty = (f: OpenFile): boolean =>
   f.diff ? (f.diff.shared ? isDirty(f.diff.shared) : false) : f.model.getAlternativeVersionId() !== f.savedVersion
 
+function tabMenu(f: OpenFile): (MenuItem | 'sep')[] {
+  const closeAll = (keep?: OpenFile): void => {
+    for (const other of [...openFiles.values()]) {
+      if (other !== keep && !requestClose(other)) return // the user said no to discarding something: stop there
+    }
+  }
+  return [
+    { label: 'Close', run: () => void requestClose(f) },
+    { label: 'Close Others', run: () => closeAll(f) },
+    { label: 'Close All', run: () => closeAll() },
+    'sep',
+    { label: 'Copy Path', run: () => void window.forge.copyText(f.path) },
+    { label: 'Reveal in File Explorer', run: () => void window.forge.reveal(f.path) }
+  ]
+}
+
 const renderedTabs = new Set<string>() // tabs that already exist don't replay their entrance
 
 function renderTabs(): void {
@@ -418,10 +434,14 @@ function renderTabs(): void {
     close.innerHTML = icons.close
     close.onclick = (e) => {
       e.stopPropagation()
-      closeFile(f)
+      requestClose(f)
     }
     tab.append(close)
     tab.onclick = () => activate(f)
+    tab.oncontextmenu = (ev) => {
+      ev.preventDefault()
+      showMenu(ev.clientX, ev.clientY, tabMenu(f))
+    }
     tabsEl.append(tab)
   }
   renderedTabs.clear()
@@ -446,6 +466,14 @@ function activate(f: OpenFile | null): void {
   renderTabs()
   if (f) (f.diff ? diffEditor.getModifiedEditor() : editor).focus()
   updateStatus()
+}
+
+/** User-initiated close: asks first if that would throw away unsaved edits. */
+function requestClose(f: OpenFile): boolean {
+  const unsaved = f.diff ? f.diff.shared : f
+  if (unsaved && isDirty(unsaved) && !confirm(`${basename(unsaved.path)} has unsaved changes. Close it and discard them?`)) return false
+  closeFile(f)
+  return true
 }
 
 function closeFile(f: OpenFile): void {
@@ -641,7 +669,11 @@ function entryMenu(path: string, isDir: boolean): (MenuItem | 'sep')[] {
     { label: 'New Folder…', run: () => void createEntry(target, 'folder') },
     'sep',
     { label: 'Rename…', run: () => void renameEntry(path) },
-    { label: 'Delete', danger: true, run: () => void deleteEntry(path) }
+    { label: 'Delete', danger: true, run: () => void deleteEntry(path) },
+    'sep',
+    { label: 'Copy Path', run: () => void window.forge.copyText(path) },
+    { label: 'Copy Relative Path', run: () => void window.forge.copyText(relPath(path)) },
+    { label: 'Reveal in File Explorer', run: () => void window.forge.reveal(path) }
   ]
 }
 
@@ -727,7 +759,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Backquote') { e.preventDefault(); toggleView('terminal'); return }
   if (e.key === 'o') { e.preventDefault(); void openFolder() }
   else if (e.key === 's') { e.preventDefault(); void saveActive() }
-  else if (e.key === 'w' && active) { e.preventDefault(); closeFile(active) }
+  else if (e.key === 'w' && active) { e.preventDefault(); requestClose(active) }
 })
 
 const stProblems = $('st-problems')
@@ -944,7 +976,7 @@ registerBuiltinCommands({
   openFolder,
   saveActive: () => saveActive(),
   closeActiveTab: () => {
-    if (active) closeFile(active)
+    if (active) requestClose(active)
   },
   openSearch: () => void openSearch(),
   showFind: () => showView('find'),
@@ -975,6 +1007,7 @@ registerBuiltinCommands({
   }
 })
 $('settings-btn').onclick = () => settingsUi.open()
+$('open-folder-btn').onclick = () => void openFolder()
 $('palette-btn').onclick = () => palette.open()
 settings.onChange((key) => {
   if (key === 'colorful') renderTabs() // tab colors are set per tab

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
 import { access, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { registerDebug } from './debug'
@@ -76,6 +76,8 @@ ipcMain.handle('fs:rename', async (_e, from: string, to: string) => {
 })
 // Recycle Bin instead of permanent delete.
 ipcMain.handle('fs:trash', (_e, path: string) => shell.trashItem(path))
+ipcMain.handle('shell:reveal', (_e, path: string) => shell.showItemInFolder(path))
+ipcMain.handle('clipboard:write', (_e, text: string) => clipboard.writeText(text))
 
 ipcMain.handle('fs:readFile', (_e, path: string) => readFile(path, 'utf8'))
 

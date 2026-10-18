@@ -15,6 +15,9 @@ const api = {
     ipcRenderer.invoke('fs:writeFile', path, content),
   search: (root: string, query: string): Promise<SearchResult> =>
     ipcRenderer.invoke('fs:search', root, query),
+  /** Shows the file in Explorer / Finder. */
+  reveal: (path: string): Promise<void> => ipcRenderer.invoke('shell:reveal', path),
+  copyText: (text: string): Promise<void> => ipcRenderer.invoke('clipboard:write', text),
   exists: (path: string): Promise<boolean> => ipcRenderer.invoke('fs:exists', path),
   createFile: (path: string): Promise<void> => ipcRenderer.invoke('fs:createFile', path),
   createDir: (path: string): Promise<void> => ipcRenderer.invoke('fs:createDir', path),
