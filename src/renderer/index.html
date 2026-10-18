@@ -4,31 +4,59 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; worker-src 'self' blob:"
     />
     <title>Forge</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <header id="toolbar">
+      <div class="logo">F</div>
+      <button class="widget" id="project-widget" title="Open folder (Ctrl+O)">
+        <span id="project-name">No project</span><span class="chev" id="project-chev"></span>
+      </button>
+      <span class="grow"></span>
+      <button class="icon-btn" id="search-btn" title="Search Everywhere (Shift Shift)"></button>
+    </header>
     <div id="app">
       <nav id="stripe">
-        <button class="tw-btn active" data-tw="project" title="Project (Alt+1)">Project</button>
+        <button class="tw-btn active" data-tw="project" title="Project (Alt+1)"></button>
         <span class="spacer"></span>
-        <button class="tw-btn active" data-tw="output" title="Output (Alt+2)">Output</button>
+        <button class="tw-btn active" data-tw="output" title="Output (Alt+2)"></button>
       </nav>
-      <aside id="project"><div class="tw-header">Project</div><div id="tree"></div></aside>
+      <aside id="project" class="island">
+        <div class="tw-header"><span>Project</span><button class="icon-btn small" data-hide="project" title="Hide"></button></div>
+        <div id="tree"></div>
+      </aside>
       <div class="splitter v" id="split-project"></div>
       <section id="center">
-        <main id="editor-area">
+        <main id="editor-area" class="island">
           <div id="tabs"></div>
           <div id="editor"></div>
-          <div id="welcome">Open a folder with <kbd>Ctrl</kbd>+<kbd>O</kbd> &middot; Search files with <kbd>Shift</kbd> <kbd>Shift</kbd></div>
+          <div id="welcome">
+            <div class="w-title">Forge</div>
+            <div class="w-row"><span>Open a folder</span><span><kbd>Ctrl</kbd><kbd>O</kbd></span></div>
+            <div class="w-row"><span>Search Everywhere</span><span><kbd>Shift</kbd><kbd>Shift</kbd></span></div>
+            <div class="w-row"><span>Toggle Project</span><span><kbd>Alt</kbd><kbd>1</kbd></span></div>
+            <div class="w-row"><span>Toggle Output</span><span><kbd>Alt</kbd><kbd>2</kbd></span></div>
+          </div>
         </main>
         <div class="splitter h" id="split-output"></div>
-        <section id="output"><div class="tw-header">Output</div><div id="log"></div></section>
+        <section id="output" class="island">
+          <div class="tw-header"><span>Output</span><button class="icon-btn small" data-hide="output" title="Hide"></button></div>
+          <div id="log"></div>
+        </section>
       </section>
     </div>
-    <footer id="status"><span id="status-msg"></span><span id="status-pos"></span></footer>
+    <footer id="status">
+      <span id="status-msg"></span>
+      <span class="grow"></span>
+      <span class="sw" id="st-pos"></span>
+      <span class="sw" id="st-eol"></span>
+      <span class="sw" id="st-enc">UTF-8</span>
+      <span class="sw" id="st-indent"></span>
+      <span class="sw" id="st-lang"></span>
+    </footer>
     <div id="search" hidden>
       <div id="search-box">
         <input id="search-input" placeholder="Search files by name" spellcheck="false" autocomplete="off" />

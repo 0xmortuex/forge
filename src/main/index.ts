@@ -12,8 +12,10 @@ function createWindow(): void {
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
-    backgroundColor: '#2b2b2b',
+    backgroundColor: '#101d22',
     title: 'Forge',
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: '#101d22', symbolColor: '#b0bec5', height: 40 },
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,

@@ -4,8 +4,9 @@ import JsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import CssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import HtmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
-import { DARCULA, defineDarcula } from './darcula'
+import { THEME, defineTheme } from './theme'
 import { fuzzy } from './search'
+import { fileIcon, folderIcon, icons } from './icons'
 
 self.MonacoEnvironment = {
   getWorker(_id, label) {
@@ -34,17 +35,46 @@ const tabsEl = $('tabs')
 const welcomeEl = $('welcome')
 const statusEl = $('status')
 const statusMsg = $('status-msg')
-const statusPos = $('status-pos')
+const stPos = $('st-pos')
+const stEol = $('st-eol')
+const stIndent = $('st-indent')
+const stLang = $('st-lang')
 
-defineDarcula()
+defineTheme()
+// Monaco's in-browser TS worker can't resolve node_modules, so its semantic errors are false
+// positives. Real diagnostics will come from a language server (LSP) instead.
+for (const defaults of [
+  monaco.languages.typescript.typescriptDefaults,
+  monaco.languages.typescript.javascriptDefaults
+]) {
+  defaults.setDiagnosticsOptions({ noSemanticValidation: true, noSyntaxValidation: false })
+}
 const editor = monaco.editor.create($('editor'), {
-  theme: DARCULA,
+  theme: THEME,
   automaticLayout: true,
-  fontFamily: 'JetBrains Mono, Consolas, monospace',
+  fontFamily: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
   fontSize: 13,
+  lineHeight: 21,
   minimap: { enabled: false },
+  padding: { top: 6 },
+  renderLineHighlight: 'all',
+  smoothScrolling: true,
+  cursorSmoothCaretAnimation: 'on',
+  guides: { indentation: true, bracketPairs: true },
+  bracketPairColorization: { enabled: true },
+  scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10 },
   model: null
 })
+
+// Static icons for buttons declared in index.html.
+const setIcon = (sel: string, html: string): void => {
+  document.querySelectorAll(sel).forEach((el) => (el.innerHTML = html))
+}
+setIcon('[data-tw="project"]', icons.project)
+setIcon('[data-tw="output"]', icons.output)
+setIcon('#search-btn', icons.search)
+setIcon('#project-chev', icons.chevronDown)
+setIcon('[data-hide]', icons.minus)
 
 const openFiles = new Map<string, OpenFile>()
 let active: OpenFile | null = null
@@ -249,10 +279,18 @@ function renderTabs(): void {
   for (const f of openFiles.values()) {
     const tab = document.createElement('div')
     tab.className = 'tab' + (f === active ? ' active' : '')
-    tab.textContent = basename(f.path) + (isDirty(f) ? ' •' : '')
+    const name = basename(f.path)
+    tab.innerHTML = fileIcon(name)
+    tab.append(name)
+    if (isDirty(f)) {
+      const dot = document.createElement('span')
+      dot.className = 'dot'
+      dot.textContent = '●'
+      tab.append(dot)
+    }
     const close = document.createElement('span')
     close.className = 'close'
-    close.textContent = '×'
+    close.innerHTML = icons.close
     close.onclick = (e) => {
       e.stopPropagation()
       closeFile(f)
@@ -302,27 +340,31 @@ async function saveActive(): Promise<void> {
   })
 }
 
-async function renderDir(dir: string, into: HTMLElement): Promise<void> {
+async function renderDir(dir: string, into: HTMLElement, depth = 0): Promise<void> {
   const entries = await window.forge.readDir(dir)
   for (const e of entries) {
     const row = document.createElement('div')
     row.className = 'node'
-    row.innerHTML = `<span class="icon">${e.isDir ? '▸' : ''}</span>`
+    row.style.paddingLeft = `${depth * 14 + 6}px`
+    const twisty = document.createElement('span')
+    twisty.className = 'twisty'
+    if (e.isDir) twisty.innerHTML = icons.chevronRight
+    row.append(twisty)
+    row.insertAdjacentHTML('beforeend', e.isDir ? folderIcon : fileIcon(e.name))
     row.append(e.name)
     into.append(row)
     if (e.isDir) {
       const kids = document.createElement('div')
-      kids.className = 'children'
       kids.hidden = true
       let loaded = false
       into.append(kids)
       row.onclick = () =>
         void guarded(`Read ${e.name}`, async () => {
           kids.hidden = !kids.hidden
-          row.querySelector('.icon')!.textContent = kids.hidden ? '▸' : '▾'
+          twisty.innerHTML = kids.hidden ? icons.chevronRight : icons.chevronDown
           if (!loaded) {
             loaded = true
-            await renderDir(e.path, kids)
+            await renderDir(e.path, kids, depth + 1)
           }
         })
     } else {
@@ -343,11 +385,26 @@ async function openFolder(): Promise<void> {
     rootDir = dir
     await renderDir(dir, treeEl)
     document.title = `${basename(dir)} – Forge`
+    $('project-name').textContent = basename(dir)
+    report(`Opened ${dir}`)
   })
 }
 
-editor.onDidChangeCursorPosition((e) => {
-  statusPos.textContent = `${e.position.lineNumber}:${e.position.column}`
+function updateStatus(): void {
+  const model = editor.getModel()
+  const pos = editor.getPosition()
+  stPos.textContent = model && pos ? `${pos.lineNumber}:${pos.column}` : ''
+  stEol.textContent = model ? (model.getEOL() === '\r\n' ? 'CRLF' : 'LF') : ''
+  stLang.textContent = model ? model.getLanguageId() : ''
+  stIndent.textContent = model ? `${model.getOptions().tabSize} spaces` : ''
+}
+editor.onDidChangeCursorPosition(updateStatus)
+editor.onDidChangeModel(updateStatus)
+
+$('project-widget').onclick = () => void openFolder()
+$('search-btn').onclick = () => void openSearch()
+document.querySelectorAll<HTMLButtonElement>('[data-hide]').forEach((b) => {
+  b.onclick = () => toggleToolWindow(b.dataset['hide'] ?? '')
 })
 
 window.addEventListener('keydown', (e) => {
