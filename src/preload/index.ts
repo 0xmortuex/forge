@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { DirEntry } from '../main/index'
 import type { DebugEvent, DebugEval, DebugKind, DebugScope, DebugVar } from '../main/debug'
-import type { BlameLine, GitStatus } from '../main/git'
+import type { BlameLine, ChangeKind, GitStatus, StashEntry } from '../main/git'
 import type { SearchResult } from '../main/search'
 import type { PtySpec } from '../main/terminal'
 
@@ -47,6 +47,14 @@ const api = {
   gitSwitch: (root: string, branch: string): Promise<void> => ipcRenderer.invoke('git:switch', root, branch),
   gitCreateBranch: (root: string, name: string): Promise<void> =>
     ipcRenderer.invoke('git:createBranch', root, name),
+  gitPush: (root: string): Promise<void> => ipcRenderer.invoke('git:push', root),
+  gitPull: (root: string): Promise<void> => ipcRenderer.invoke('git:pull', root),
+  gitStashList: (root: string): Promise<StashEntry[]> => ipcRenderer.invoke('git:stashList', root),
+  gitStashPush: (root: string, message: string): Promise<void> => ipcRenderer.invoke('git:stashPush', root, message),
+  gitStashPop: (root: string, ref: string): Promise<void> => ipcRenderer.invoke('git:stashPop', root, ref),
+  gitStashDrop: (root: string, ref: string): Promise<void> => ipcRenderer.invoke('git:stashDrop', root, ref),
+  gitRevert: (root: string, path: string, kind: ChangeKind): Promise<void> =>
+    ipcRenderer.invoke('git:revert', root, path, kind),
   gitCommit: (root: string, message: string, paths: string[]): Promise<void> =>
     ipcRenderer.invoke('git:commit', root, message, paths),
   debugLaunch: (cwd: string, cols: number, rows: number, spec: PtySpec, kind: DebugKind): Promise<number> =>

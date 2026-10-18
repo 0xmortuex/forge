@@ -41,6 +41,9 @@ export function initGit(deps: GitDeps): {
 
   byId('branch-icon').innerHTML = icons.branch
   byId('commit-refresh').innerHTML = icons.refresh
+  byId('commit-pull').innerHTML = icons.pull
+  byId('commit-push').innerHTML = icons.push
+  byId('commit-stash').innerHTML = icons.stash
 
   let status: GitStatus | null = null
   const checked = new Map<string, boolean>() // path -> included in next commit (default true)
@@ -64,7 +67,10 @@ export function initGit(deps: GitDeps): {
 
   function render(): void {
     branchWidget.hidden = !status
-    if (status) branchName.textContent = status.branch
+    if (status) {
+      branchName.textContent = status.branch + (status.ahead ? ` ↑${status.ahead}` : '') + (status.behind ? ` ↓${status.behind}` : '')
+      branchWidget.title = status.upstream ? `Tracking ${status.upstream}` : 'No upstream yet — Push will publish this branch'
+    }
     list.replaceChildren()
     if (!status) {
       summary.textContent = ''
@@ -99,6 +105,10 @@ export function initGit(deps: GitDeps): {
       dir.textContent = dirname(c.path).slice(root.length).replace(/^[\\/]/, '')
       row.append(box, badge, name, dir)
       row.onclick = () => void deps.openDiff(c.path, c.kind).catch(() => undefined) // reported by the opener
+      row.oncontextmenu = (ev) => {
+        ev.preventDefault()
+        showMenu(ev.clientX, ev.clientY, changeMenu(c))
+      }
       list.append(row)
     }
   }
@@ -122,6 +132,108 @@ export function initGit(deps: GitDeps): {
       .finally(() => (commitBtn.disabled = !status))
   }
   byId('commit-refresh').onclick = () => void refresh().catch(() => undefined)
+
+  // ---- Revert / push / pull / stash ----
+  function changeMenu(c: GitChange): (MenuItem | 'sep')[] {
+    const items: (MenuItem | 'sep')[] = [{ label: 'Show Diff', run: () => void deps.openDiff(c.path, c.kind).catch(() => undefined) }]
+    const root = deps.getRoot()
+    if (!root) return items
+    items.push('sep')
+    const name = basename(c.path)
+    if (c.kind === 'untracked') {
+      items.push({
+        label: 'Delete…',
+        danger: true,
+        run: () =>
+          void runOp('Delete', async () => {
+            if (!confirm(`Move "${name}" to the Recycle Bin?`)) return false
+            await window.forge.trash(c.path)
+            return true
+          }, `Moved ${name} to the Recycle Bin`, true)
+      })
+    } else {
+      const label = c.kind === 'added' ? 'Unstage…' : 'Revert…'
+      const prompt =
+        c.kind === 'added'
+          ? `Unstage "${name}"? The file stays on disk.`
+          : `Revert "${name}" to the last commit? Your changes to it will be lost.`
+      items.push({
+        label,
+        danger: c.kind !== 'added',
+        run: () =>
+          void runOp(label.replace('…', ''), async () => {
+            if (!confirm(prompt)) return false
+            await window.forge.gitRevert(root, c.path, c.kind)
+            return true
+          }, c.kind === 'added' ? `Unstaged ${name}` : `Reverted ${name}`, true)
+      })
+    }
+    return items
+  }
+
+  /**
+   * Runs one git operation with the usual reporting. `action` returns false if the user backed out.
+   * `worktree`: the working tree changed, so reload open files and close stale diffs.
+   */
+  async function runOp(label: string, action: () => Promise<boolean | void>, done: string, worktree: boolean): Promise<void> {
+    await deps
+      .guard(label, async () => {
+        if ((await action()) === false) return
+        deps.report(done)
+        if (worktree) await deps.onWorktreeChanged()
+        await refresh()
+      })
+      .catch(() => undefined) // already reported by guard
+  }
+
+  byId('commit-pull').onclick = () => {
+    const root = deps.getRoot()
+    if (root && status) void runOp('Pull', () => window.forge.gitPull(root), 'Pulled', true)
+  }
+  byId('commit-push').onclick = () => {
+    const root = deps.getRoot()
+    if (root && status) void runOp('Push', () => window.forge.gitPush(root), 'Pushed', false)
+  }
+  byId('commit-stash').onclick = () => {
+    const root = deps.getRoot()
+    if (!root || !status) return
+    const rect = byId('commit-stash').getBoundingClientRect()
+    void deps
+      .guard('Stash', async () => {
+        const stashes = await window.forge.gitStashList(root)
+        const items: (MenuItem | 'sep')[] = [
+          {
+            label: 'Stash Changes…',
+            run: () =>
+              void runOp('Stash', async () => {
+                const message = await askText('Stash message (optional)')
+                if (message === null) return false
+                await window.forge.gitStashPush(root, message)
+                return true
+              }, 'Stashed your changes', true)
+          }
+        ]
+        if (stashes.length) items.push('sep')
+        for (const s of stashes) {
+          items.push({
+            label: `Pop: ${s.message}`,
+            run: () => void runOp('Stash pop', () => window.forge.gitStashPop(root, s.ref), `Applied and removed ${s.ref}`, true)
+          })
+          items.push({
+            label: `Drop: ${s.message}`,
+            danger: true,
+            run: () =>
+              void runOp('Stash drop', async () => {
+                if (!confirm(`Permanently drop "${s.message}"?`)) return false
+                await window.forge.gitStashDrop(root, s.ref)
+                return true
+              }, `Dropped ${s.ref}`, false)
+          })
+        }
+        showMenu(rect.left, rect.bottom + 4, items)
+      })
+      .catch(() => undefined) // already reported by guard
+  }
 
   // ---- Branches ----
   branchWidget.onclick = () => {

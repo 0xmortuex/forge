@@ -46,7 +46,15 @@
         </div>
         <div id="tree"></div>
         <div id="commit-view" hidden>
-          <div id="commit-head"><span id="commit-summary"></span><button class="icon-btn small" id="commit-refresh" title="Refresh"></button></div>
+          <div id="commit-head">
+            <span id="commit-summary"></span>
+            <span class="actions">
+              <button class="icon-btn small" id="commit-pull" title="Pull (fast-forward only)"></button>
+              <button class="icon-btn small" id="commit-push" title="Push"></button>
+              <button class="icon-btn small" id="commit-stash" title="Stash"></button>
+              <button class="icon-btn small" id="commit-refresh" title="Refresh"></button>
+            </span>
+          </div>
           <div id="commit-list"></div>
           <div id="commit-foot">
             <textarea id="commit-msg" placeholder="Commit message" spellcheck="false"></textarea>

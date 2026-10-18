@@ -181,6 +181,7 @@ kbd { background: var(--island-2); border: 1px solid #38505a; border-bottom-widt
 .node[data-git="renamed"] { color: #82aaff; }
 #side-tabs { display: flex; gap: 2px; }
 #commit-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#commit-head .actions { display: flex; gap: 2px; }
 #commit-head { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 4px 14px; color: var(--text-dim); }
 #commit-list { flex: 1; overflow: auto; padding: 0 6px; }
 .change { display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 8px; border-radius: 6px; white-space: nowrap; }
