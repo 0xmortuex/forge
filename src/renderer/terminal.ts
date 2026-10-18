@@ -21,6 +21,8 @@ export interface TerminalView {
   /** Kills the running process, if any. */
   kill: () => Promise<void>
   isRunning: () => boolean
+  /** Kills the process, removes listeners and disposes the xterm. The view is unusable afterwards. */
+  dispose: () => Promise<void>
 }
 
 export interface TerminalOptions {
@@ -48,12 +50,13 @@ export function createTerminalView(
   const fitNow = (): void => {
     if (term && fit && container.offsetParent !== null) fit.fit()
   }
-  new ResizeObserver(fitNow).observe(container)
+  const observer = new ResizeObserver(fitNow)
+  observer.observe(container)
 
-  window.forge.onTermData((tid, data) => {
+  const offData = window.forge.onTermData((tid, data) => {
     if (tid === id) term?.write(data)
   })
-  window.forge.onTermExit((tid, code) => {
+  const offExit = window.forge.onTermExit((tid, code) => {
     if (tid !== id) return
     id = null
     term?.write(`\r\n\x1b[90m[${opts.exitMessage(code)}]\x1b[0m\r\n`)
@@ -115,6 +118,14 @@ export function createTerminalView(
     },
     begin,
     kill,
-    isRunning: () => id !== null
+    isRunning: () => id !== null,
+    dispose: async () => {
+      await kill()
+      offData()
+      offExit()
+      observer.disconnect()
+      term?.dispose()
+      term = null
+    }
   }
 }

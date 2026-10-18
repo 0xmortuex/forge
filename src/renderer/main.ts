@@ -10,6 +10,7 @@ import { fileIcon, folderIcon, icons } from './icons'
 import { askText, showMenu, type MenuItem } from './menu'
 import { initFind } from './find'
 import { createTerminalView } from './terminal'
+import { initTerminals } from './terminals'
 import { initLsp } from './lsp'
 import { initGit } from './git'
 import { registerMort } from './mort'
@@ -649,7 +650,9 @@ window.addEventListener('keydown', (e) => {
   }
   if (!e.ctrlKey) return
   if (e.shiftKey && e.key === 'F') { e.preventDefault(); showView('find'); return }
-  if (e.key === '`') { e.preventDefault(); toggleView('terminal'); return }
+  // e.code, not e.key: with Shift held the key reports '~' (and layouts differ).
+  if (e.code === 'Backquote' && e.shiftKey) { e.preventDefault(); showView('terminal'); terminals.newTerminal(); return }
+  if (e.code === 'Backquote') { e.preventDefault(); toggleView('terminal'); return }
   if (e.key === 'o') { e.preventDefault(); void openFolder() }
   else if (e.key === 's') { e.preventDefault(); void saveActive() }
   else if (e.key === 'w' && active) { e.preventDefault(); closeFile(active) }
@@ -666,8 +669,8 @@ const lsp = initLsp({
   }
 })
 
-const terminal = createTerminalView($('term'), () => rootDir, guarded)
-onViewShown.terminal = () => terminal.show()
+const terminals = initTerminals({ getCwd: () => rootDir, guard: guarded })
+onViewShown.terminal = () => terminals.show()
 
 const findInput = $<HTMLInputElement>('find-input')
 initFind({

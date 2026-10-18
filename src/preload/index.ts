@@ -62,11 +62,16 @@ const api = {
   onDebugEvent: (cb: (evt: DebugEvent) => void): void => {
     ipcRenderer.on('debug:event', (_e, evt: DebugEvent) => cb(evt))
   },
-  onTermData: (cb: (id: number, data: string) => void): void => {
-    ipcRenderer.on('term:data', (_e, id: number, data: string) => cb(id, data))
+  /** Each subscription returns a function that removes it. */
+  onTermData: (cb: (id: number, data: string) => void): (() => void) => {
+    const listener = (_e: unknown, id: number, data: string): void => cb(id, data)
+    ipcRenderer.on('term:data', listener)
+    return () => ipcRenderer.removeListener('term:data', listener)
   },
-  onTermExit: (cb: (id: number, code: number) => void): void => {
-    ipcRenderer.on('term:exit', (_e, id: number, code: number) => cb(id, code))
+  onTermExit: (cb: (id: number, code: number) => void): (() => void) => {
+    const listener = (_e: unknown, id: number, code: number): void => cb(id, code)
+    ipcRenderer.on('term:exit', listener)
+    return () => ipcRenderer.removeListener('term:exit', listener)
   }
 }
 
