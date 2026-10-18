@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { access, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { registerDebug } from './debug'
 import { registerGit } from './git'
 import { searchProject } from './search'
 import { killAllLsp, registerLsp } from './lsp'
@@ -81,6 +82,7 @@ ipcMain.handle('fs:writeFile', (_e, path: string, content: string) =>
 registerTerminal()
 registerLsp()
 registerGit()
+registerDebug()
 app.on('before-quit', () => {
   killAllTerminals()
   killAllLsp()

@@ -21,6 +21,7 @@
       <span class="grow"></span>
       <button class="widget" id="run-config" title="Run configuration"><span id="run-config-name">Current File</span><span class="chev" id="run-config-chev"></span></button>
       <button class="icon-btn run" id="run-btn" title="Run (Shift+F10)"></button>
+      <button class="icon-btn" id="debug-btn" title="Debug (Shift+F9)"></button>
       <button class="icon-btn" id="stop-btn" title="Stop (Ctrl+F2)" disabled></button>
       <button class="icon-btn" id="search-btn" title="Search Everywhere (Shift Shift)"></button>
     </header>
@@ -29,6 +30,7 @@
         <button class="tw-btn active" data-side="project" title="Project (Alt+1)"></button>
         <button class="tw-btn" data-side="commit" title="Commit (Alt+0)"></button>
         <span class="spacer"></span>
+        <button class="tw-btn" data-view="debug" title="Debug"></button>
         <button class="tw-btn" data-view="run" title="Run (Shift+F10)"></button>
         <button class="tw-btn" data-view="find" title="Find in Project (Ctrl+Shift+F)"></button>
         <button class="tw-btn" data-view="terminal" title="Terminal (Alt+3)"></button>
@@ -76,12 +78,31 @@
               <button class="btab" data-view="terminal">Terminal</button>
               <button class="btab" data-view="find">Find</button>
               <button class="btab" data-view="run">Run</button>
+              <button class="btab" data-view="debug">Debug</button>
             </div>
             <button class="icon-btn small" data-hide="bottom" title="Hide"></button>
           </div>
           <div id="view-output" class="view"><div id="log"></div></div>
           <div id="view-terminal" class="view" hidden><div id="term"></div></div>
           <div id="view-run" class="view" hidden><div id="run-term"></div></div>
+          <div id="view-debug" class="view" hidden>
+            <div id="dbg-bar">
+              <button class="icon-btn small" data-dbg="resume" title="Resume (F9)"></button>
+              <button class="icon-btn small" data-dbg="stepOver" title="Step Over (F8)"></button>
+              <button class="icon-btn small" data-dbg="stepInto" title="Step Into (F7)"></button>
+              <button class="icon-btn small" data-dbg="stepOut" title="Step Out (Shift+F8)"></button>
+              <button class="icon-btn small" data-dbg="stop" title="Stop (Ctrl+F2)"></button>
+              <span id="dbg-status"></span>
+            </div>
+            <div id="dbg-body">
+              <div id="dbg-frames" class="dbg-pane"></div>
+              <div id="dbg-vars" class="dbg-pane"></div>
+              <div id="dbg-eval" class="dbg-pane">
+                <div id="dbg-log"></div>
+                <input id="dbg-input" placeholder="Evaluate expression (Enter)" spellcheck="false" autocomplete="off" />
+              </div>
+            </div>
+          </div>
           <div id="view-find" class="view" hidden>
             <div id="find-bar">
               <input id="find-input" placeholder="Find in project (Enter)" spellcheck="false" autocomplete="off" />

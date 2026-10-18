@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { delimiter, extname, isAbsolute, join } from 'node:path'
 import { ipcMain, type WebContents } from 'electron'
@@ -33,7 +34,8 @@ export function findOnPath(cmd: string): string {
 
 /**
  * Starts a pseudo-terminal running `spec` (default: the user's shell) and streams it to `wc`.
- * `tap` sees every chunk of output first, e.g. to read a debugger's listening URL.
+ * `tap` sees every chunk of output first, e.g. to read a debugger's listening URL;
+ * `onExit` runs when the process ends.
  */
 export function startPty(
   wc: WebContents,
@@ -41,7 +43,8 @@ export function startPty(
   cols: number,
   rows: number,
   spec?: PtySpec,
-  tap?: (data: string) => void
+  tap?: (data: string) => void,
+  onExit?: (code: number) => void
 ): number {
   const file = spec ? findOnPath(spec.file) : process.platform === 'win32' ? 'powershell.exe' : (process.env['SHELL'] ?? '/bin/bash')
   const id = nextId++
@@ -58,10 +61,26 @@ export function startPty(
   })
   term.onExit(({ exitCode }) => {
     terms.delete(id)
+    onExit?.(exitCode)
     if (!wc.isDestroyed()) wc.send('term:exit', id, exitCode)
   })
   terms.set(id, term)
   return id
+}
+
+/**
+ * Ends a pty's whole process tree. On Windows node-pty's own kill() only closes the pseudo-console,
+ * which neither stops a program that is paused in a debugger nor shuts down safely while the app
+ * is quitting (it crashed natively in testing). taskkill /T /F is immediate and covers children;
+ * node-pty then sees the process exit and cleans up through its normal path.
+ */
+function killTree(t: pty.IPty): void {
+  if (process.platform !== 'win32') return t.kill()
+  const res = spawnSync('taskkill', ['/PID', String(t.pid), '/T', '/F'], { windowsHide: true, encoding: 'utf8' })
+  // 128 = the process already exited, which is exactly what we wanted.
+  if (res.status !== 0 && res.status !== 128) {
+    throw new Error(`taskkill failed (exit ${res.status}): ${(res.stderr || res.stdout).trim()}`)
+  }
 }
 
 export function registerTerminal(): void {
@@ -70,10 +89,10 @@ export function registerTerminal(): void {
   )
   ipcMain.handle('term:write', (_e, id: number, data: string) => getTerm(id).write(data))
   ipcMain.handle('term:resize', (_e, id: number, cols: number, rows: number) => getTerm(id).resize(cols, rows))
-  ipcMain.handle('term:kill', (_e, id: number) => getTerm(id).kill())
+  ipcMain.handle('term:kill', (_e, id: number) => killTree(getTerm(id)))
 }
 
 export function killAllTerminals(): void {
-  for (const t of terms.values()) t.kill()
+  for (const t of terms.values()) killTree(t)
   terms.clear()
 }

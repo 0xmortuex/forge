@@ -208,3 +208,33 @@ kbd { background: var(--island-2); border: 1px solid #38505a; border-bottom-widt
 #run-btn:not(:disabled) { color: #4df0d8; }
 #stop-btn:not(:disabled) { color: #f07178; }
 .icon-btn:disabled { opacity: .35; pointer-events: none; }
+
+/* Debugger */
+.bp-glyph { background: #f07178; border-radius: 50%; width: 10px !important; height: 10px !important; margin: 6px 0 0 6px; }
+.debug-glyph { border-style: solid; border-width: 5px 0 5px 9px; border-color: transparent transparent transparent #26c6b0;
+  width: 0 !important; height: 0 !important; margin: 6px 0 0 5px; background: none; }
+.debug-line { background: rgba(38, 198, 176, 0.2); }
+#dbg-bar { display: flex; align-items: center; gap: 2px; padding: 0 8px 6px; flex: none; }
+#dbg-bar .icon-btn:not(:disabled) { color: var(--text-hi); }
+#dbg-bar [data-dbg="stop"]:not(:disabled) { color: #f07178; }
+#dbg-status { margin-left: 10px; color: var(--text-dim); }
+#dbg-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(160px, 26%) 1fr minmax(220px, 32%); gap: 8px; padding: 0 8px 8px; }
+.dbg-pane { min-height: 0; overflow: auto; background: var(--island-2); border-radius: 8px; padding: 4px; }
+#dbg-eval { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+#dbg-vars { padding: 4px; }
+#dbg-log { flex: 1; min-height: 0; overflow: auto; padding: 4px 10px; font: 12px "Cascadia Mono", Consolas, monospace; }
+#dbg-log .echo { color: var(--text-dim); } #dbg-log .err { color: var(--err); }
+#dbg-log .string { color: #c3e88d; } #dbg-log .number { color: #f78c6c; }
+#dbg-input { margin: 4px; padding: 5px 9px; background: var(--island); color: var(--text-hi); border: 1px solid #38505a;
+  border-radius: 7px; outline: 0; font: 12px "Cascadia Mono", Consolas, monospace; }
+#dbg-input:focus { border-color: var(--accent); }
+.frame { display: flex; gap: 10px; padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
+.frame:hover { background: var(--hover); }
+.frame.sel { background: var(--sel); color: var(--text-hi); }
+.frame .where { color: var(--text-dim); }
+.var { display: flex; align-items: center; gap: 4px; height: 22px; border-radius: 5px; white-space: nowrap;
+  font: 12px "Cascadia Mono", Consolas, monospace; }
+.var:hover { background: var(--hover); }
+.var .vname { color: #82aaff; }
+.var .vval { color: var(--text); overflow: hidden; text-overflow: ellipsis; margin-left: 4px; }
+.vval.string { color: #c3e88d; } .vval.number { color: #f78c6c; } .vval.boolean { color: #c792ea; } .vval.undefined { color: var(--text-dim); }

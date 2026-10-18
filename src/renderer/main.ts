@@ -12,6 +12,7 @@ import { initFind } from './find'
 import { createTerminalView } from './terminal'
 import { initLsp } from './lsp'
 import { initGit } from './git'
+import { initDebug } from './debug'
 import { initRun } from './run'
 import type { ChangeKind, GitChange } from '../main/git'
 
@@ -71,6 +72,7 @@ const editor = monaco.editor.create($('editor'), {
   fontSize: 13,
   lineHeight: 21,
   minimap: { enabled: false },
+  glyphMargin: true,
   padding: { top: 6 },
   renderLineHighlight: 'all',
   smoothScrolling: true,
@@ -103,6 +105,8 @@ setIcon('.tw-btn[data-view="output"]', icons.output)
 setIcon('.tw-btn[data-view="terminal"]', icons.terminal)
 setIcon('.tw-btn[data-view="find"]', icons.search)
 setIcon('.tw-btn[data-view="run"]', icons.play)
+setIcon('.tw-btn[data-view="debug"]', icons.bug)
+setIcon('#debug-btn', icons.bug)
 setIcon('#search-btn', icons.search)
 setIcon('#project-chev', icons.chevronDown)
 setIcon('[data-hide]', icons.minus)
@@ -133,7 +137,7 @@ const toolWindows: Record<string, HTMLElement> = { project: $('project'), bottom
 // Each tool window's splitter is hidden together with it.
 const splitters: Record<string, HTMLElement> = { project: $('split-project'), bottom: $('split-bottom') }
 
-type View = 'output' | 'terminal' | 'find' | 'run'
+type View = 'output' | 'terminal' | 'find' | 'run' | 'debug'
 let currentView: View = 'output'
 const onViewShown: Partial<Record<View, () => void>> = {}
 
@@ -181,7 +185,7 @@ function toggleToolWindow(name: string): void {
 
 function showView(view: View): void {
   currentView = view
-  for (const v of ['output', 'terminal', 'find', 'run'] as const) $(`view-${v}`).hidden = v !== view
+  for (const v of ['output', 'terminal', 'find', 'run', 'debug'] as const) $(`view-${v}`).hidden = v !== view
   setWindowHidden('bottom', false)
   onViewShown[view]?.()
 }
@@ -413,7 +417,10 @@ function closeFile(f: OpenFile): void {
     // Monaco requires the diff editor to let go of its models before they are disposed.
     if (active === f) diffEditor.setModel(null)
     f.diff.original.dispose()
-  } else lsp.closeDoc(f.model)
+  } else {
+    lsp.closeDoc(f.model)
+    dbg.onModelClosing(f.model, f.path)
+  }
   f.model.dispose()
   if (active === f) activate([...openFiles.values()].pop() ?? null)
   else renderTabs()
@@ -434,6 +441,7 @@ async function openFile(path: string, line?: number, column = 1): Promise<void> 
       openFiles.set(path, f)
       activate(f)
       lsp.openDoc(model, path)
+      dbg.onModelOpened(model, path)
     })
   }
   if (line) {
@@ -788,19 +796,41 @@ const runUi = initRun({
 })
 onViewShown.run = () => runView.show()
 
+const dbg = initDebug({
+  editor,
+  getModel: (path) => [...openFiles.values()].find((f) => !f.diff && samePath(f.path, path))?.model,
+  getActivePath: () => (active && !active.diff ? active.path : null),
+  openFile,
+  report,
+  guard: guarded,
+  resolveDebug: () => runUi.resolveSelected(true),
+  saveAll: saveAllDirty,
+  runView,
+  showView: (v) => showView(v),
+  stop: runUi.stop,
+  setBusy: runUi.setBusy
+})
+$('debug-btn').onclick = () => void dbg.start().catch(() => undefined) // reported by guard
+onViewShown.debug = () => undefined
+
 // Capture phase: Monaco claims several F-keys (e.g. F8) before they would bubble to the window.
 window.addEventListener(
   'keydown',
   (e) => {
-    if (e.key === 'F10' && e.shiftKey) {
+    const act = (fn: () => void): void => {
       e.preventDefault()
       e.stopPropagation()
-      void runUi.run().catch(() => undefined) // reported by guard
-    } else if (e.key === 'F2' && e.ctrlKey) {
-      e.preventDefault()
-      e.stopPropagation()
-      void runUi.stop()
+      fn()
     }
+    const quiet = (p: Promise<unknown>): void => void p.catch(() => undefined) // errors are reported by guard
+    if (e.key === 'F10' && e.shiftKey) act(() => quiet(runUi.run()))
+    else if (e.key === 'F9' && e.shiftKey) act(() => quiet(dbg.start()))
+    else if (e.key === 'F9') act(() => quiet(dbg.control('resume')))
+    else if (e.key === 'F8' && e.ctrlKey) act(() => dbg.toggleAtCursor())
+    else if (e.key === 'F8' && e.shiftKey) act(() => quiet(dbg.control('stepOut')))
+    else if (e.key === 'F8') act(() => quiet(dbg.control('stepOver')))
+    else if (e.key === 'F7') act(() => quiet(dbg.control('stepInto')))
+    else if (e.key === 'F2' && e.ctrlKey) act(() => quiet(runUi.stop()))
   },
   true
 )

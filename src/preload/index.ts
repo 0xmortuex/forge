@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { DirEntry } from '../main/index'
+import type { DebugEvent, DebugEval, DebugScope, DebugVar } from '../main/debug'
 import type { BlameLine, GitStatus } from '../main/git'
 import type { SearchResult } from '../main/search'
 import type { PtySpec } from '../main/terminal'
@@ -48,6 +49,19 @@ const api = {
     ipcRenderer.invoke('git:createBranch', root, name),
   gitCommit: (root: string, message: string, paths: string[]): Promise<void> =>
     ipcRenderer.invoke('git:commit', root, message, paths),
+  debugLaunch: (cwd: string, cols: number, rows: number, spec: PtySpec): Promise<number> =>
+    ipcRenderer.invoke('debug:launch', cwd, cols, rows, spec),
+  debugSetBreakpoints: (path: string, lines: number[]): Promise<void> =>
+    ipcRenderer.invoke('debug:setBreakpoints', path, lines),
+  debugControl: (cmd: 'resume' | 'stepOver' | 'stepInto' | 'stepOut' | 'pause'): Promise<void> =>
+    ipcRenderer.invoke('debug:control', cmd),
+  debugScopes: (frameId: number): Promise<DebugScope[]> => ipcRenderer.invoke('debug:scopes', frameId),
+  debugVariables: (ref: number): Promise<DebugVar[]> => ipcRenderer.invoke('debug:variables', ref),
+  debugEvaluate: (frameId: number, expression: string): Promise<DebugEval> =>
+    ipcRenderer.invoke('debug:evaluate', frameId, expression),
+  onDebugEvent: (cb: (evt: DebugEvent) => void): void => {
+    ipcRenderer.on('debug:event', (_e, evt: DebugEvent) => cb(evt))
+  },
   onTermData: (cb: (id: number, data: string) => void): void => {
     ipcRenderer.on('term:data', (_e, id: number, data: string) => cb(id, data))
   },
