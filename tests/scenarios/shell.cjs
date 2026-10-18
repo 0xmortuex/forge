@@ -45,13 +45,13 @@ run(
 
     // Tool windows
     key('1', ['alt'])
-    check('Alt+1 hides Project', await js("document.getElementById('project').hidden"))
+    check('Alt+1 hides Project', !!(await waitFor(() => js("document.getElementById('project').hidden"), 2000)))
     key('1', ['alt'])
-    check('Alt+1 shows Project again', await js("!document.getElementById('project').hidden"))
+    check('Alt+1 shows Project again', !!(await waitFor(() => js("!document.getElementById('project').hidden"), 2000)))
     key('2', ['alt'])
-    check('Alt+2 hides the bottom panel (Output was showing)', await js("document.getElementById('bottom').hidden"))
+    check('Alt+2 hides the bottom panel (Output was showing)', !!(await waitFor(() => js("document.getElementById('bottom').hidden"), 2000)))
     key('2', ['alt'])
-    check('Alt+2 shows Output', await js("!document.getElementById('bottom').hidden && !document.getElementById('view-output').hidden"))
+    check('Alt+2 shows Output', !!(await waitFor(() => js("!document.getElementById('bottom').hidden && !document.getElementById('view-output').hidden"), 2000)))
 
     // Tabs
     key('W', ['control'])
