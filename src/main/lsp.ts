@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { basename, dirname, extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { ipcMain, type WebContents } from 'electron'
+import { findOnPath } from './terminal'
 import {
   createMessageConnection,
   ResponseError,
@@ -41,17 +42,31 @@ function npmBin(pkg: string, binName: string): Launch {
 const SERVERS: Record<string, ServerSpec> = {
   typescript: { id: 'typescript', launch: () => npmBin('typescript-language-server', 'typescript-language-server') },
   python: { id: 'python', launch: () => npmBin('pyright', 'pyright-langserver') },
+  // Mort's own language server (`mortc lsp`). Set MORTC to a mortc.py path to run it from a checkout.
+  mort: {
+    id: 'mort',
+    launch: () => {
+      const custom = process.env['MORTC']
+      if (custom) return custom.endsWith('.py') ? { command: findOnPath('python'), args: [custom, 'lsp'] } : { command: custom, args: ['lsp'] }
+      try {
+        return { command: findOnPath('mortc'), args: ['lsp'] }
+      } catch {
+        throw new Error('mortc not found on PATH — install it (pip install mort-lang) or set the MORTC environment variable to your mortc.py')
+      }
+    }
+  },
   // Not bundled: must be installed and on PATH.
   clangd: { id: 'clangd', launch: () => ({ command: 'clangd', args: [] }) }
 }
 
-// File extension -> [LSP languageId, server id]. Mort has no language server yet.
+// File extension -> [LSP languageId, server id].
 const BY_EXT: Record<string, [string, string]> = {
   '.ts': ['typescript', 'typescript'], '.mts': ['typescript', 'typescript'], '.cts': ['typescript', 'typescript'],
   '.tsx': ['typescriptreact', 'typescript'],
   '.js': ['javascript', 'typescript'], '.mjs': ['javascript', 'typescript'], '.cjs': ['javascript', 'typescript'],
   '.jsx': ['javascriptreact', 'typescript'],
   '.py': ['python', 'python'],
+  '.mx': ['mort', 'mort'],
   '.c': ['c', 'clangd'], '.h': ['c', 'clangd'],
   '.cpp': ['cpp', 'clangd'], '.cc': ['cpp', 'clangd'], '.cxx': ['cpp', 'clangd'], '.hpp': ['cpp', 'clangd']
 }

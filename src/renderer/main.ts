@@ -12,6 +12,7 @@ import { initFind } from './find'
 import { createTerminalView } from './terminal'
 import { initLsp } from './lsp'
 import { initGit } from './git'
+import { registerMort } from './mort'
 import { initDebug } from './debug'
 import { initRun } from './run'
 import type { ChangeKind, GitChange } from '../main/git'
@@ -53,6 +54,7 @@ const stIndent = $('st-indent')
 const stLang = $('st-lang')
 
 defineTheme()
+registerMort()
 // Monaco's in-browser TS worker can't resolve node_modules, so its results are wrong or duplicated.
 // All TS/JS intelligence comes from the language server (see lsp.ts); only highlighting stays built in.
 for (const defaults of [

@@ -16,7 +16,7 @@ import type {
 } from 'vscode-languageserver-protocol'
 
 /** Monaco language ids that Forge can talk to a language server for (see BY_EXT in main/lsp.ts). */
-const LANGUAGES = ['typescript', 'javascript', 'python', 'c', 'cpp']
+const LANGUAGES = ['typescript', 'javascript', 'python', 'c', 'cpp', 'mort']
 
 export interface LspDeps {
   getRoot: () => string | null
