@@ -137,9 +137,9 @@ kbd { background: var(--island-2); border: 1px solid #38505a; border-bottom-widt
 .btab.active { background: var(--accent-soft); color: var(--accent); }
 
 /* Terminal */
-#term { flex: 1; min-height: 0; padding: 0 0 6px 14px; }
-#term .xterm { height: 100%; }
-#term .xterm-viewport { background: transparent !important; }
+#term, #run-term { flex: 1; min-height: 0; padding: 0 0 6px 14px; }
+#term .xterm, #run-term .xterm { height: 100%; }
+#term .xterm-viewport, #run-term .xterm-viewport { background: transparent !important; }
 
 /* Find in project */
 #find-bar { display: flex; align-items: center; gap: 10px; padding: 0 14px 8px; flex: none; }
@@ -203,3 +203,8 @@ kbd { background: var(--island-2); border: 1px solid #38505a; border-bottom-widt
 #diff { flex: 1; min-height: 0; background: var(--island); padding-top: 4px; }
 #branch-icon { display: inline-flex; color: var(--accent); }
 #st-blame { color: var(--text-dim); }
+
+/* Run toolbar */
+#run-btn:not(:disabled) { color: #4df0d8; }
+#stop-btn:not(:disabled) { color: #f07178; }
+.icon-btn:disabled { opacity: .35; pointer-events: none; }

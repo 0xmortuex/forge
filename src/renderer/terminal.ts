@@ -13,12 +13,33 @@ const THEME = {
   brightBlue: '#9cc4ff', brightMagenta: '#e1acff', brightCyan: '#a3f7ff', brightWhite: '#eeffff'
 }
 
-/** One shell session shown in `container`. Starts lazily on first show(); restarts after the shell exits. */
+export interface TerminalView {
+  /** Shows the view; a shell view with autoStart starts its shell the first time. */
+  show: () => void
+  /** Clears the screen and starts whatever `create` spawns, replacing any running process. */
+  begin: (create: (cols: number, rows: number) => Promise<number>) => Promise<void>
+  /** Kills the running process, if any. */
+  kill: () => Promise<void>
+  isRunning: () => boolean
+}
+
+export interface TerminalOptions {
+  /** Start the user's shell on first show(). Off for views driven by begin() (e.g. Run). */
+  autoStart: boolean
+  exitMessage: (code: number) => string
+  onExit?: (code: number) => void
+}
+
+/** One pty-backed xterm shown in `container`. */
 export function createTerminalView(
   container: HTMLElement,
   getCwd: () => string | null,
-  guard: (label: string, fn: () => Promise<void>) => Promise<void>
-): { show: () => void } {
+  guard: (label: string, fn: () => Promise<void>) => Promise<void>,
+  opts: TerminalOptions = {
+    autoStart: true,
+    exitMessage: (code) => `process exited with code ${code} — reopen the terminal to start a new one`
+  }
+): TerminalView {
   let term: Terminal | null = null
   let fit: FitAddon | null = null
   let id: number | null = null
@@ -35,44 +56,65 @@ export function createTerminalView(
   window.forge.onTermExit((tid, code) => {
     if (tid !== id) return
     id = null
-    term?.write(`\r\n\x1b[90m[process exited with code ${code} — reopen the terminal to start a new one]\x1b[0m\r\n`)
+    term?.write(`\r\n\x1b[90m[${opts.exitMessage(code)}]\x1b[0m\r\n`)
+    opts.onExit?.(code)
   })
 
-  async function start(): Promise<void> {
+  function ensureTerm(): Terminal {
+    if (term) return term
+    term = new Terminal({
+      theme: THEME,
+      fontFamily: '"Cascadia Mono", Consolas, monospace',
+      fontSize: 13,
+      cursorBlink: true,
+      allowProposedApi: false
+    })
+    fit = new FitAddon()
+    term.loadAddon(fit)
+    term.open(container)
+    term.onData((data) => {
+      if (id !== null) void window.forge.termWrite(id, data)
+    })
+    term.onResize(({ cols, rows }) => {
+      if (id !== null) void window.forge.termResize(id, cols, rows)
+    })
+    return term
+  }
+
+  async function kill(): Promise<void> {
+    if (id === null) return
+    const old = id
+    id = null // the old process's output and exit are ignored from here on
+    await window.forge.termKill(old)
+  }
+
+  async function begin(create: (cols: number, rows: number) => Promise<number>): Promise<void> {
+    await kill()
+    const t = ensureTerm()
+    t.clear()
+    fit?.fit()
+    id = await create(t.cols, t.rows)
+  }
+
+  function startShell(): Promise<void> {
     const cwd = getCwd()
     if (!cwd) throw new Error('Open a folder first (Ctrl+O) — the terminal starts in the project folder')
-    if (!term) {
-      term = new Terminal({
-        theme: THEME,
-        fontFamily: '"Cascadia Mono", Consolas, monospace',
-        fontSize: 13,
-        cursorBlink: true,
-        allowProposedApi: false
-      })
-      fit = new FitAddon()
-      term.loadAddon(fit)
-      term.open(container)
-      term.onData((data) => {
-        if (id !== null) void window.forge.termWrite(id, data)
-      })
-      term.onResize(({ cols, rows }) => {
-        if (id !== null) void window.forge.termResize(id, cols, rows)
-      })
-    } else term.clear()
-    fit?.fit()
-    id = await window.forge.termCreate(cwd, term.cols, term.rows)
+    return begin((cols, rows) => window.forge.termCreate(cwd, cols, rows))
   }
 
   return {
     show(): void {
-      if (id === null && !starting) {
+      if (opts.autoStart && id === null && !starting) {
         starting = true
-        void guard('Terminal', start).finally(() => (starting = false))
+        void guard('Terminal', startShell).finally(() => (starting = false))
       }
       requestAnimationFrame(() => {
         fitNow()
         term?.focus()
       })
-    }
+    },
+    begin,
+    kill,
+    isRunning: () => id !== null
   }
 }

@@ -19,6 +19,9 @@
         <span id="branch-icon"></span><span id="branch-name"></span>
       </button>
       <span class="grow"></span>
+      <button class="widget" id="run-config" title="Run configuration"><span id="run-config-name">Current File</span><span class="chev" id="run-config-chev"></span></button>
+      <button class="icon-btn run" id="run-btn" title="Run (Shift+F10)"></button>
+      <button class="icon-btn" id="stop-btn" title="Stop (Ctrl+F2)" disabled></button>
       <button class="icon-btn" id="search-btn" title="Search Everywhere (Shift Shift)"></button>
     </header>
     <div id="app">
@@ -26,6 +29,7 @@
         <button class="tw-btn active" data-side="project" title="Project (Alt+1)"></button>
         <button class="tw-btn" data-side="commit" title="Commit (Alt+0)"></button>
         <span class="spacer"></span>
+        <button class="tw-btn" data-view="run" title="Run (Shift+F10)"></button>
         <button class="tw-btn" data-view="find" title="Find in Project (Ctrl+Shift+F)"></button>
         <button class="tw-btn" data-view="terminal" title="Terminal (Alt+3)"></button>
         <button class="tw-btn active" data-view="output" title="Output (Alt+2)"></button>
@@ -71,11 +75,13 @@
               <button class="btab" data-view="output">Output</button>
               <button class="btab" data-view="terminal">Terminal</button>
               <button class="btab" data-view="find">Find</button>
+              <button class="btab" data-view="run">Run</button>
             </div>
             <button class="icon-btn small" data-hide="bottom" title="Hide"></button>
           </div>
           <div id="view-output" class="view"><div id="log"></div></div>
           <div id="view-terminal" class="view" hidden><div id="term"></div></div>
+          <div id="view-run" class="view" hidden><div id="run-term"></div></div>
           <div id="view-find" class="view" hidden>
             <div id="find-bar">
               <input id="find-input" placeholder="Find in project (Enter)" spellcheck="false" autocomplete="off" />

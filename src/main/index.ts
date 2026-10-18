@@ -62,6 +62,7 @@ const assertMissing = async (path: string): Promise<void> => {
   if (exists) throw new Error(`Already exists: ${path}`)
 }
 
+ipcMain.handle('fs:exists', (_e, path: string) => access(path).then(() => true, () => false))
 ipcMain.handle('fs:createFile', (_e, path: string) => writeFile(path, '', { flag: 'wx' }))
 ipcMain.handle('fs:createDir', (_e, path: string) => mkdir(path))
 ipcMain.handle('fs:rename', async (_e, from: string, to: string) => {

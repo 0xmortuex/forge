@@ -12,6 +12,7 @@ import { initFind } from './find'
 import { createTerminalView } from './terminal'
 import { initLsp } from './lsp'
 import { initGit } from './git'
+import { initRun } from './run'
 import type { ChangeKind, GitChange } from '../main/git'
 
 self.MonacoEnvironment = {
@@ -101,6 +102,7 @@ setIcon('.tw-btn[data-side="commit"]', icons.commit)
 setIcon('.tw-btn[data-view="output"]', icons.output)
 setIcon('.tw-btn[data-view="terminal"]', icons.terminal)
 setIcon('.tw-btn[data-view="find"]', icons.search)
+setIcon('.tw-btn[data-view="run"]', icons.play)
 setIcon('#search-btn', icons.search)
 setIcon('#project-chev', icons.chevronDown)
 setIcon('[data-hide]', icons.minus)
@@ -131,7 +133,7 @@ const toolWindows: Record<string, HTMLElement> = { project: $('project'), bottom
 // Each tool window's splitter is hidden together with it.
 const splitters: Record<string, HTMLElement> = { project: $('split-project'), bottom: $('split-bottom') }
 
-type View = 'output' | 'terminal' | 'find'
+type View = 'output' | 'terminal' | 'find' | 'run'
 let currentView: View = 'output'
 const onViewShown: Partial<Record<View, () => void>> = {}
 
@@ -179,7 +181,7 @@ function toggleToolWindow(name: string): void {
 
 function showView(view: View): void {
   currentView = view
-  for (const v of ['output', 'terminal', 'find'] as const) $(`view-${v}`).hidden = v !== view
+  for (const v of ['output', 'terminal', 'find', 'run'] as const) $(`view-${v}`).hidden = v !== view
   setWindowHidden('bottom', false)
   onViewShown[view]?.()
 }
@@ -753,6 +755,55 @@ function refreshGit(): void {
 }
 onSideShown.commit = refreshGit
 window.addEventListener('focus', refreshGit) // changes made outside Forge
+
+// ---- Run ----
+/** Saves every modified file so a run never executes stale code from disk. */
+async function saveAllDirty(): Promise<void> {
+  for (const f of openFiles.values()) {
+    if (!isDirty(f)) continue
+    await window.forge.writeFile(f.path, f.model.getValue())
+    f.savedVersion = f.model.getAlternativeVersionId()
+  }
+  renderTabs()
+}
+
+const runView = createTerminalView($('run-term'), () => rootDir, guarded, {
+  autoStart: false,
+  exitMessage: (code) => `Process finished with exit code ${code}`,
+  onExit: (code) => {
+    report(`Process finished with exit code ${code}`)
+    runUi.updateButtons()
+  }
+})
+
+const runUi = initRun({
+  getRoot: () => rootDir,
+  getActivePath: () => (active && !active.diff ? active.path : null),
+  saveAll: saveAllDirty,
+  report,
+  guard: guarded,
+  openFile,
+  view: runView,
+  showRunView: () => showView('run')
+})
+onViewShown.run = () => runView.show()
+
+// Capture phase: Monaco claims several F-keys (e.g. F8) before they would bubble to the window.
+window.addEventListener(
+  'keydown',
+  (e) => {
+    if (e.key === 'F10' && e.shiftKey) {
+      e.preventDefault()
+      e.stopPropagation()
+      void runUi.run().catch(() => undefined) // reported by guard
+    } else if (e.key === 'F2' && e.ctrlKey) {
+      e.preventDefault()
+      e.stopPropagation()
+      void runUi.stop()
+    }
+  },
+  true
+)
 
 syncStripe()
 renderTabs()

@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { DirEntry } from '../main/index'
 import type { BlameLine, GitStatus } from '../main/git'
 import type { SearchResult } from '../main/search'
+import type { PtySpec } from '../main/terminal'
 
 const api = {
   openFolder: (): Promise<string | null> => ipcRenderer.invoke('dialog:openFolder'),
@@ -12,13 +13,14 @@ const api = {
     ipcRenderer.invoke('fs:writeFile', path, content),
   search: (root: string, query: string): Promise<SearchResult> =>
     ipcRenderer.invoke('fs:search', root, query),
+  exists: (path: string): Promise<boolean> => ipcRenderer.invoke('fs:exists', path),
   createFile: (path: string): Promise<void> => ipcRenderer.invoke('fs:createFile', path),
   createDir: (path: string): Promise<void> => ipcRenderer.invoke('fs:createDir', path),
   rename: (from: string, to: string): Promise<void> => ipcRenderer.invoke('fs:rename', from, to),
   trash: (path: string): Promise<void> => ipcRenderer.invoke('fs:trash', path),
 
-  termCreate: (cwd: string, cols: number, rows: number): Promise<number> =>
-    ipcRenderer.invoke('term:create', cwd, cols, rows),
+  termCreate: (cwd: string, cols: number, rows: number, spec?: PtySpec): Promise<number> =>
+    ipcRenderer.invoke('term:create', cwd, cols, rows, spec),
   termWrite: (id: number, data: string): Promise<void> => ipcRenderer.invoke('term:write', id, data),
   termResize: (id: number, cols: number, rows: number): Promise<void> =>
     ipcRenderer.invoke('term:resize', id, cols, rows),
