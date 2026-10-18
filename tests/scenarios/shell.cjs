@@ -14,6 +14,10 @@ run(
     key('O', ['control'])
     check('Ctrl+O populates the tree', !!(await waitFor(async () => (await text('tree')).includes('alpha.txt'), 5000)))
     check('project widget shows folder name', (await text('project-name')) === path.basename(root))
+    check(
+      'git UI stays hidden in a folder that is not a repository',
+      !!(await waitFor(() => js("document.getElementById('branch-widget').hidden"), 3000))
+    )
 
     // Search Everywhere: double-tap Shift, type, Enter opens the best match.
     key('Shift')

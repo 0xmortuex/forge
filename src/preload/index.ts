@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { DirEntry } from '../main/index'
+import type { BlameLine, GitStatus } from '../main/git'
 import type { SearchResult } from '../main/search'
 
 const api = {
@@ -35,6 +36,16 @@ const api = {
   onLspLog: (cb: (server: string, type: number, message: string) => void): void => {
     ipcRenderer.on('lsp:log', (_e, server: string, type: number, message: string) => cb(server, type, message))
   },
+  gitStatus: (root: string): Promise<GitStatus | null> => ipcRenderer.invoke('git:status', root),
+  gitShow: (root: string, path: string): Promise<string> => ipcRenderer.invoke('git:show', root, path),
+  gitBlame: (root: string, path: string): Promise<BlameLine[] | null> =>
+    ipcRenderer.invoke('git:blame', root, path),
+  gitBranches: (root: string): Promise<string[]> => ipcRenderer.invoke('git:branches', root),
+  gitSwitch: (root: string, branch: string): Promise<void> => ipcRenderer.invoke('git:switch', root, branch),
+  gitCreateBranch: (root: string, name: string): Promise<void> =>
+    ipcRenderer.invoke('git:createBranch', root, name),
+  gitCommit: (root: string, message: string, paths: string[]): Promise<void> =>
+    ipcRenderer.invoke('git:commit', root, message, paths),
   onTermData: (cb: (id: number, data: string) => void): void => {
     ipcRenderer.on('term:data', (_e, id: number, data: string) => cb(id, data))
   },

@@ -15,26 +15,45 @@
       <button class="widget" id="project-widget" title="Open folder (Ctrl+O)">
         <span id="project-name">No project</span><span class="chev" id="project-chev"></span>
       </button>
+      <button class="widget" id="branch-widget" hidden title="Git branch">
+        <span id="branch-icon"></span><span id="branch-name"></span>
+      </button>
       <span class="grow"></span>
       <button class="icon-btn" id="search-btn" title="Search Everywhere (Shift Shift)"></button>
     </header>
     <div id="app">
       <nav id="stripe">
-        <button class="tw-btn active" data-tw="project" title="Project (Alt+1)"></button>
+        <button class="tw-btn active" data-side="project" title="Project (Alt+1)"></button>
+        <button class="tw-btn" data-side="commit" title="Commit (Alt+0)"></button>
         <span class="spacer"></span>
         <button class="tw-btn" data-view="find" title="Find in Project (Ctrl+Shift+F)"></button>
         <button class="tw-btn" data-view="terminal" title="Terminal (Alt+3)"></button>
         <button class="tw-btn active" data-view="output" title="Output (Alt+2)"></button>
       </nav>
       <aside id="project" class="island">
-        <div class="tw-header"><span>Project</span><button class="icon-btn small" data-hide="project" title="Hide"></button></div>
+        <div class="tw-header">
+          <div id="side-tabs">
+            <button class="btab" data-side="project">Project</button>
+            <button class="btab" data-side="commit">Commit</button>
+          </div>
+          <button class="icon-btn small" data-hide="project" title="Hide"></button>
+        </div>
         <div id="tree"></div>
+        <div id="commit-view" hidden>
+          <div id="commit-head"><span id="commit-summary"></span><button class="icon-btn small" id="commit-refresh" title="Refresh"></button></div>
+          <div id="commit-list"></div>
+          <div id="commit-foot">
+            <textarea id="commit-msg" placeholder="Commit message" spellcheck="false"></textarea>
+            <button id="commit-btn">Commit</button>
+          </div>
+        </div>
       </aside>
       <div class="splitter v" id="split-project"></div>
       <section id="center">
         <main id="editor-area" class="island">
           <div id="tabs"></div>
           <div id="editor"></div>
+          <div id="diff" hidden></div>
           <div id="welcome">
             <div class="w-title">Forge</div>
             <div class="w-row"><span>Open a folder</span><span><kbd>Ctrl</kbd><kbd>O</kbd></span></div>
@@ -69,6 +88,7 @@
     </div>
     <footer id="status">
       <span id="status-msg"></span>
+      <span class="sw" id="st-blame"></span>
       <span class="sw" id="st-problems" title="Problems from the language server"></span>
       <span class="grow"></span>
       <span class="sw" id="st-pos"></span>

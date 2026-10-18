@@ -11,6 +11,8 @@ import { askText, showMenu, type MenuItem } from './menu'
 import { initFind } from './find'
 import { createTerminalView } from './terminal'
 import { initLsp } from './lsp'
+import { initGit } from './git'
+import type { ChangeKind, GitChange } from '../main/git'
 
 self.MonacoEnvironment = {
   getWorker(_id, label) {
@@ -24,9 +26,13 @@ self.MonacoEnvironment = {
 
 interface OpenFile {
   path: string
-  model: monaco.editor.ITextModel
+  model: monaco.editor.ITextModel // for a diff tab: the (read-only) working-copy side
   savedVersion: number
+  diff?: { original: monaco.editor.ITextModel } // present on diff tabs: the HEAD side
 }
+
+/** Map key: a file and its diff are separate tabs for the same path. */
+const tabKey = (f: { path: string; diff?: unknown }): string => (f.diff ? `diff:${f.path}` : f.path)
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id)
@@ -74,11 +80,24 @@ const editor = monaco.editor.create($('editor'), {
   model: null
 })
 
+const diffEditor = monaco.editor.createDiffEditor($('diff'), {
+  automaticLayout: true,
+  readOnly: true,
+  originalEditable: false,
+  fontFamily: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
+  fontSize: 13,
+  lineHeight: 21,
+  minimap: { enabled: false },
+  scrollBeyondLastLine: false,
+  renderSideBySide: true
+})
+
 // Static icons for buttons declared in index.html.
 const setIcon = (sel: string, html: string): void => {
   document.querySelectorAll(sel).forEach((el) => (el.innerHTML = html))
 }
-setIcon('[data-tw="project"]', icons.project)
+setIcon('.tw-btn[data-side="project"]', icons.project)
+setIcon('.tw-btn[data-side="commit"]', icons.commit)
 setIcon('.tw-btn[data-view="output"]', icons.output)
 setIcon('.tw-btn[data-view="terminal"]', icons.terminal)
 setIcon('.tw-btn[data-view="find"]', icons.search)
@@ -116,14 +135,33 @@ type View = 'output' | 'terminal' | 'find'
 let currentView: View = 'output'
 const onViewShown: Partial<Record<View, () => void>> = {}
 
+// The left window has two views: the Project tree and the Commit window.
+type Side = 'project' | 'commit'
+let currentSide: Side = 'project'
+const onSideShown: Partial<Record<Side, () => void>> = {}
+
 function syncStripe(): void {
   const bottomOpen = !toolWindows['bottom']!.hidden
-  document
-    .querySelector('.tw-btn[data-tw="project"]')
-    ?.classList.toggle('active', !toolWindows['project']!.hidden)
+  const sideOpen = !toolWindows['project']!.hidden
+  document.querySelectorAll<HTMLElement>('[data-side]').forEach((el) => {
+    el.classList.toggle('active', sideOpen && el.dataset['side'] === currentSide)
+  })
   document.querySelectorAll<HTMLElement>('[data-view]').forEach((el) => {
     el.classList.toggle('active', bottomOpen && el.dataset['view'] === currentView)
   })
+}
+
+function showSide(side: Side): void {
+  currentSide = side
+  treeEl.hidden = side !== 'project'
+  $('commit-view').hidden = side !== 'commit'
+  setWindowHidden('project', false)
+  onSideShown[side]?.()
+}
+
+function toggleSide(side: Side): void {
+  if (!toolWindows['project']!.hidden && currentSide === side) setWindowHidden('project', true)
+  else showSide(side)
 }
 
 function setWindowHidden(name: string, hidden: boolean): void {
@@ -151,13 +189,16 @@ function toggleView(view: View): void {
   else showView(view)
 }
 
-document.querySelectorAll<HTMLButtonElement>('.tw-btn[data-tw]').forEach((b) => {
-  b.onclick = () => toggleToolWindow(b.dataset['tw'] ?? '')
+document.querySelectorAll<HTMLButtonElement>('.tw-btn[data-side]').forEach((b) => {
+  b.onclick = () => toggleSide(b.dataset['side'] as Side)
+})
+document.querySelectorAll<HTMLButtonElement>('.btab[data-side]').forEach((b) => {
+  b.onclick = () => showSide(b.dataset['side'] as Side)
 })
 document.querySelectorAll<HTMLButtonElement>('.tw-btn[data-view]').forEach((b) => {
   b.onclick = () => toggleView(b.dataset['view'] as View)
 })
-document.querySelectorAll<HTMLButtonElement>('.btab').forEach((b) => {
+document.querySelectorAll<HTMLButtonElement>('.btab[data-view]').forEach((b) => {
   b.onclick = () => showView(b.dataset['view'] as View)
 })
 
@@ -319,7 +360,7 @@ async function guarded<T>(label: string, fn: () => Promise<T>): Promise<void> {
 }
 
 const basename = (p: string): string => p.split(/[\\/]/).pop() ?? p
-const isDirty = (f: OpenFile): boolean => f.model.getAlternativeVersionId() !== f.savedVersion
+const isDirty = (f: OpenFile): boolean => !f.diff && f.model.getAlternativeVersionId() !== f.savedVersion
 
 function renderTabs(): void {
   tabsEl.replaceChildren()
@@ -328,7 +369,7 @@ function renderTabs(): void {
     tab.className = 'tab' + (f === active ? ' active' : '')
     const name = basename(f.path)
     tab.innerHTML = fileIcon(name)
-    tab.append(name)
+    tab.append(f.diff ? `${name} (diff)` : name)
     if (isDirty(f)) {
       const dot = document.createElement('span')
       dot.className = 'dot'
@@ -351,14 +392,26 @@ function renderTabs(): void {
 
 function activate(f: OpenFile | null): void {
   active = f
-  editor.setModel(f?.model ?? null)
+  $('editor').hidden = !!f?.diff
+  $('diff').hidden = !f?.diff
+  if (f?.diff) diffEditor.setModel({ original: f.diff.original, modified: f.model })
+  else {
+    // Don't leave the hidden diff editor holding models that may be disposed later.
+    diffEditor.setModel(null)
+    editor.setModel(f?.model ?? null)
+  }
   renderTabs()
-  if (f) editor.focus()
+  if (f) (f.diff ? diffEditor.getModifiedEditor() : editor).focus()
+  updateStatus()
 }
 
 function closeFile(f: OpenFile): void {
-  openFiles.delete(f.path)
-  lsp.closeDoc(f.model)
+  openFiles.delete(tabKey(f))
+  if (f.diff) {
+    // Monaco requires the diff editor to let go of its models before they are disposed.
+    if (active === f) diffEditor.setModel(null)
+    f.diff.original.dispose()
+  } else lsp.closeDoc(f.model)
   f.model.dispose()
   if (active === f) activate([...openFiles.values()].pop() ?? null)
   else renderTabs()
@@ -368,7 +421,7 @@ function closeFile(f: OpenFile): void {
 const samePath = (a: string, b: string): boolean => norm(a).toLowerCase() === norm(b).toLowerCase()
 
 async function openFile(path: string, line?: number, column = 1): Promise<void> {
-  const existing = [...openFiles.values()].find((f) => samePath(f.path, path))
+  const existing = [...openFiles.values()].find((f) => !f.diff && samePath(f.path, path))
   if (existing) activate(existing)
   else {
     await guarded(`Open ${basename(path)}`, async () => {
@@ -389,13 +442,14 @@ async function openFile(path: string, line?: number, column = 1): Promise<void> 
 
 async function saveActive(): Promise<void> {
   const f = active
-  if (!f) return
+  if (!f || f.diff) return
   await guarded(`Save ${basename(f.path)}`, async () => {
     await window.forge.writeFile(f.path, f.model.getValue())
     f.savedVersion = f.model.getAlternativeVersionId()
     renderTabs()
     report(`Saved ${basename(f.path)}`)
   })
+  refreshGit()
 }
 
 // ---- Project tree ----
@@ -409,6 +463,7 @@ async function renderDir(dir: string, into: HTMLElement, depth = 0): Promise<voi
   for (const e of entries) {
     const row = document.createElement('div')
     row.className = 'node'
+    row.dataset['path'] = e.path
     row.style.paddingLeft = `${depth * 14 + 6}px`
     const twisty = document.createElement('span')
     twisty.className = 'twisty'
@@ -441,6 +496,7 @@ async function renderDir(dir: string, into: HTMLElement, depth = 0): Promise<voi
       }
     }
   }
+  decorateTree()
 }
 
 /** Re-reads one directory's listing. Expanded subfolders inside it collapse. */
@@ -483,6 +539,7 @@ async function createEntry(dir: string, kind: 'file' | 'folder'): Promise<void> 
     if (kind === 'file') await window.forge.createFile(path)
     else await window.forge.createDir(path)
     await refreshDir(dir)
+    refreshGit()
     report(`Created ${path}`)
     if (kind === 'file') await openFile(path)
   })
@@ -497,6 +554,7 @@ async function renameEntry(path: string): Promise<void> {
     const parent = parentOf(path)
     await window.forge.rename(path, joinPath(parent, name))
     await refreshDir(parent)
+    refreshGit()
     report(`Renamed to ${name}`)
   })
 }
@@ -507,6 +565,7 @@ async function deleteEntry(path: string): Promise<void> {
     closeFilesUnder(path)
     await window.forge.trash(path)
     await refreshDir(parentOf(path))
+    refreshGit()
     report(`Moved ${basename(path)} to the Recycle Bin`)
   })
 }
@@ -546,18 +605,21 @@ async function openFolder(): Promise<void> {
     $('project-name').textContent = basename(dir)
     report(`Opened ${dir}`)
   })
+  refreshGit()
 }
 
 function updateStatus(): void {
-  const model = editor.getModel()
+  const model = active && !active.diff ? editor.getModel() : null
   const pos = editor.getPosition()
   stPos.textContent = model && pos ? `${pos.lineNumber}:${pos.column}` : ''
   stEol.textContent = model ? (model.getEOL() === '\r\n' ? 'CRLF' : 'LF') : ''
   stLang.textContent = model ? model.getLanguageId() : ''
   stIndent.textContent = model ? `${model.getOptions().tabSize} spaces` : ''
+  refreshBlame()
 }
 editor.onDidChangeCursorPosition(updateStatus)
 editor.onDidChangeModel(updateStatus)
+editor.onDidChangeModelContent(refreshBlame)
 
 $('project-widget').onclick = () => void openFolder()
 $('search-btn').onclick = () => void openSearch()
@@ -566,9 +628,10 @@ document.querySelectorAll<HTMLButtonElement>('[data-hide]').forEach((b) => {
 })
 
 window.addEventListener('keydown', (e) => {
-  if (e.altKey && ['1', '2', '3'].includes(e.key)) {
+  if (e.altKey && ['0', '1', '2', '3'].includes(e.key)) {
     e.preventDefault()
-    if (e.key === '1') toggleToolWindow('project')
+    if (e.key === '0') toggleSide('commit')
+    else if (e.key === '1') toggleSide('project')
     else toggleView(e.key === '2' ? 'output' : 'terminal')
     return
   }
@@ -605,6 +668,91 @@ initFind({
   guard: guarded
 })
 onViewShown.find = () => findInput.focus()
+
+// ---- Git ----
+const gitKinds = new Map<string, ChangeKind>() // normalized path -> change kind
+
+function decorateTree(): void {
+  treeEl.querySelectorAll<HTMLElement>('.node[data-path]').forEach((n) => {
+    const kind = gitKinds.get(norm(n.dataset['path'] ?? '').toLowerCase())
+    if (kind) n.dataset['git'] = kind
+    else delete n.dataset['git']
+  })
+}
+
+function refreshBlame(): void {
+  const f = active && !active.diff ? active : null
+  gitUi.updateBlame(f ? f.path : null, editor.getPosition()?.lineNumber ?? 1, f ? isDirty(f) : false)
+}
+
+/** Opens (or refreshes) a read-only HEAD-vs-working-copy diff tab. */
+async function openDiff(path: string, kind: ChangeKind): Promise<void> {
+  const root = rootDir
+  if (!root) return
+  await guarded(`Diff ${basename(path)}`, async () => {
+    // Renamed files: the old path isn't tracked here, so the whole file shows as added.
+    const isNew = kind === 'added' || kind === 'untracked' || kind === 'renamed'
+    const original = isNew ? '' : await window.forge.gitShow(root, path)
+    const open = [...openFiles.values()].find((f) => !f.diff && samePath(f.path, path))
+    const modified = kind === 'deleted' ? '' : open ? open.model.getValue() : await window.forge.readFile(path)
+    const existing = openFiles.get(`diff:${path}`)
+    if (existing?.diff) {
+      existing.diff.original.setValue(original)
+      existing.model.setValue(modified)
+      activate(existing)
+      return
+    }
+    const uriPath = '/' + norm(path)
+    const f: OpenFile = {
+      path,
+      savedVersion: 0,
+      model: monaco.editor.createModel(modified, undefined, monaco.Uri.from({ scheme: 'forge-diff', path: uriPath })),
+      diff: { original: monaco.editor.createModel(original, undefined, monaco.Uri.from({ scheme: 'forge-head', path: uriPath })) }
+    }
+    f.savedVersion = f.model.getAlternativeVersionId()
+    openFiles.set(tabKey(f), f)
+    activate(f)
+  })
+}
+
+/** After a commit or branch switch: diffs are stale snapshots, and files on disk may have changed. */
+async function onWorktreeChanged(): Promise<void> {
+  for (const f of [...openFiles.values()]) if (f.diff) closeFile(f)
+  for (const f of [...openFiles.values()]) {
+    if (isDirty(f)) continue // never clobber unsaved edits
+    try {
+      const text = await window.forge.readFile(f.path)
+      if (text !== f.model.getValue()) {
+        f.model.setValue(text)
+        f.savedVersion = f.model.getAlternativeVersionId()
+      }
+    } catch (err) {
+      report(`Reload ${basename(f.path)}: ${err instanceof Error ? err.message : String(err)}`, true)
+    }
+  }
+  if (rootDir) await refreshDir(rootDir)
+}
+
+const gitUi = initGit({
+  getRoot: () => rootDir,
+  report,
+  guard: guarded,
+  openDiff,
+  onStatus: (changes: GitChange[]) => {
+    gitKinds.clear()
+    for (const c of changes) gitKinds.set(norm(c.path).toLowerCase(), c.kind)
+    decorateTree()
+    refreshBlame()
+  },
+  onWorktreeChanged
+})
+
+/** Fire-and-forget refresh; gitUi.refresh() already reports its own failures. */
+function refreshGit(): void {
+  void gitUi.refresh().catch(() => undefined)
+}
+onSideShown.commit = refreshGit
+window.addEventListener('focus', refreshGit) // changes made outside Forge
 
 syncStripe()
 renderTabs()

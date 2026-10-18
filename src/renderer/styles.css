@@ -173,3 +173,33 @@ kbd { background: var(--island-2); border: 1px solid #38505a; border-bottom-widt
 #ask-hint { margin-top: 8px; color: var(--text-dim); font-size: 12px; }
 
 #st-problems.has-errors { color: var(--err); }
+
+/* Git: tree decorations, commit window, diff, blame */
+.node[data-git="modified"] { color: #ffcb6b; }
+.node[data-git="added"], .node[data-git="untracked"] { color: #c3e88d; }
+.node[data-git="deleted"], .node[data-git="conflict"] { color: #f07178; }
+.node[data-git="renamed"] { color: #82aaff; }
+#side-tabs { display: flex; gap: 2px; }
+#commit-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#commit-head { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 4px 14px; color: var(--text-dim); }
+#commit-list { flex: 1; overflow: auto; padding: 0 6px; }
+.change { display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 8px; border-radius: 6px; white-space: nowrap; }
+.change:hover { background: var(--hover); }
+.change input { accent-color: var(--accent); margin: 0; }
+.change .badge { width: 14px; text-align: center; font: 700 11px var(--ui); flex: none; }
+.change .dir { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; }
+.change .name { color: var(--text-hi); }
+.badge.modified { color: #ffcb6b; } .badge.added, .badge.untracked { color: #c3e88d; }
+.badge.deleted, .badge.conflict { color: #f07178; } .badge.renamed { color: #82aaff; }
+.empty { padding: 12px 14px; color: var(--text-dim); }
+#commit-foot { padding: 8px; display: flex; flex-direction: column; gap: 8px; flex: none; }
+#commit-msg { height: 76px; resize: vertical; padding: 8px 10px; background: var(--island-2); color: var(--text-hi);
+  border: 1px solid #38505a; border-radius: 8px; outline: 0; font: 13px var(--ui); }
+#commit-msg:focus { border-color: var(--accent); }
+#commit-btn { padding: 6px 12px; border-radius: 8px; font-weight: 600; color: #08201d;
+  background: linear-gradient(135deg, #4df0d8, #1ea896); transition: filter .12s; }
+#commit-btn:hover { filter: brightness(1.1); }
+#commit-btn:disabled { filter: grayscale(1) brightness(.6); }
+#diff { flex: 1; min-height: 0; background: var(--island); padding-top: 4px; }
+#branch-icon { display: inline-flex; color: var(--accent); }
+#st-blame { color: var(--text-dim); }
