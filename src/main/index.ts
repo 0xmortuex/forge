@@ -42,6 +42,23 @@ ipcMain.handle('fs:readDir', async (_e, dir: string): Promise<DirEntry[]> => {
     .sort((a, b) => Number(b.isDir) - Number(a.isDir) || a.name.localeCompare(b.name))
 })
 
+const SKIP_DIRS = new Set(['.git', 'node_modules', 'out', 'dist', '.idea', '.vscode'])
+const MAX_FILES = 50000
+
+ipcMain.handle('fs:listFiles', async (_e, root: string): Promise<string[]> => {
+  const files: string[] = []
+  const walk = async (dir: string): Promise<void> => {
+    for (const e of await readdir(dir, { withFileTypes: true })) {
+      if (files.length >= MAX_FILES) throw new Error(`Project has more than ${MAX_FILES} files; refusing to index`)
+      if (e.isDirectory()) {
+        if (!SKIP_DIRS.has(e.name)) await walk(join(dir, e.name))
+      } else files.push(join(dir, e.name))
+    }
+  }
+  await walk(root)
+  return files
+})
+
 ipcMain.handle('fs:readFile', (_e, path: string) => readFile(path, 'utf8'))
 
 ipcMain.handle('fs:writeFile', (_e, path: string, content: string) =>

@@ -29,3 +29,39 @@ kbd { background: var(--panel); padding: 1px 5px; border-radius: 3px; margin: 0 
 #status { display: flex; justify-content: space-between; padding: 2px 10px;
   background: var(--panel); border-top: 1px solid var(--border); color: var(--text-dim); }
 #status.error #status-msg { color: #ff6b68; }
+
+/* Tool windows */
+#app { flex-direction: row; }
+#stripe { width: 26px; background: var(--panel); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; align-items: stretch; }
+#stripe .spacer { flex: 1; }
+.tw-btn { writing-mode: vertical-rl; transform: rotate(180deg); background: none; border: 0;
+  color: var(--text); padding: 10px 4px; font: inherit; cursor: default; }
+.tw-btn:hover { background: #4b4d4f; }
+.tw-btn.active { background: #4e5254; }
+#project { width: 260px; flex: none; }
+#center { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#output { height: 180px; flex: none; background: var(--panel); border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; min-height: 0; }
+#log { flex: 1; overflow: auto; padding: 4px 10px; font: 12px Consolas, monospace; }
+#log .err { color: #ff6b68; }
+#log .ts { color: var(--text-dim); margin-right: 8px; }
+[hidden] { display: none !important; }
+.splitter { flex: none; background: var(--border); }
+.splitter.v { width: 3px; cursor: col-resize; }
+.splitter.h { height: 3px; cursor: row-resize; }
+.splitter:hover { background: var(--accent); }
+
+/* Search Everywhere */
+#search { position: fixed; inset: 0; display: flex; justify-content: center; align-items: flex-start;
+  padding-top: 90px; background: rgba(0, 0, 0, 0.25); z-index: 10; }
+#search-box { width: 600px; max-width: 90vw; background: var(--panel); border: 1px solid #555;
+  border-radius: 6px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5); overflow: hidden; }
+#search-input { width: 100%; padding: 10px 12px; background: #45494a; color: #fff; border: 0;
+  outline: 0; font: 15px "Segoe UI", sans-serif; }
+#search-results { max-height: 340px; overflow: auto; }
+.result { padding: 4px 12px; display: flex; justify-content: space-between; gap: 16px; }
+.result.sel { background: var(--sel); }
+.result .dir { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.result mark { background: none; color: #ffc66d; font-weight: 600; }
+.hint { padding: 8px 12px; color: var(--text-dim); }
