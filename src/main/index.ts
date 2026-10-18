@@ -1,6 +1,9 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
-import { readdir, readFile, writeFile } from 'node:fs/promises'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { access, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { searchProject } from './search'
+import { killAllTerminals, registerTerminal } from './terminal'
+import { walkFiles } from './walk'
 
 export interface DirEntry {
   name: string
@@ -44,28 +47,36 @@ ipcMain.handle('fs:readDir', async (_e, dir: string): Promise<DirEntry[]> => {
     .sort((a, b) => Number(b.isDir) - Number(a.isDir) || a.name.localeCompare(b.name))
 })
 
-const SKIP_DIRS = new Set(['.git', 'node_modules', 'out', 'dist', '.idea', '.vscode'])
-const MAX_FILES = 50000
-
 ipcMain.handle('fs:listFiles', async (_e, root: string): Promise<string[]> => {
   const files: string[] = []
-  const walk = async (dir: string): Promise<void> => {
-    for (const e of await readdir(dir, { withFileTypes: true })) {
-      if (files.length >= MAX_FILES) throw new Error(`Project has more than ${MAX_FILES} files; refusing to index`)
-      if (e.isDirectory()) {
-        if (!SKIP_DIRS.has(e.name)) await walk(join(dir, e.name))
-      } else files.push(join(dir, e.name))
-    }
-  }
-  await walk(root)
+  await walkFiles(root, (p) => void files.push(p))
   return files
 })
+
+ipcMain.handle('fs:search', (_e, root: string, query: string) => searchProject(root, query))
+
+const assertMissing = async (path: string): Promise<void> => {
+  const exists = await access(path).then(() => true, () => false)
+  if (exists) throw new Error(`Already exists: ${path}`)
+}
+
+ipcMain.handle('fs:createFile', (_e, path: string) => writeFile(path, '', { flag: 'wx' }))
+ipcMain.handle('fs:createDir', (_e, path: string) => mkdir(path))
+ipcMain.handle('fs:rename', async (_e, from: string, to: string) => {
+  await assertMissing(to) // fs.rename would silently overwrite
+  await rename(from, to)
+})
+// Recycle Bin instead of permanent delete.
+ipcMain.handle('fs:trash', (_e, path: string) => shell.trashItem(path))
 
 ipcMain.handle('fs:readFile', (_e, path: string) => readFile(path, 'utf8'))
 
 ipcMain.handle('fs:writeFile', (_e, path: string, content: string) =>
   writeFile(path, content, 'utf8')
 )
+
+registerTerminal()
+app.on('before-quit', killAllTerminals)
 
 app.whenReady().then(() => {
   createWindow()

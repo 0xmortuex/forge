@@ -22,7 +22,9 @@
       <nav id="stripe">
         <button class="tw-btn active" data-tw="project" title="Project (Alt+1)"></button>
         <span class="spacer"></span>
-        <button class="tw-btn active" data-tw="output" title="Output (Alt+2)"></button>
+        <button class="tw-btn" data-view="find" title="Find in Project (Ctrl+Shift+F)"></button>
+        <button class="tw-btn" data-view="terminal" title="Terminal (Alt+3)"></button>
+        <button class="tw-btn active" data-view="output" title="Output (Alt+2)"></button>
       </nav>
       <aside id="project" class="island">
         <div class="tw-header"><span>Project</span><button class="icon-btn small" data-hide="project" title="Hide"></button></div>
@@ -39,12 +41,29 @@
             <div class="w-row"><span>Search Everywhere</span><span><kbd>Shift</kbd><kbd>Shift</kbd></span></div>
             <div class="w-row"><span>Toggle Project</span><span><kbd>Alt</kbd><kbd>1</kbd></span></div>
             <div class="w-row"><span>Toggle Output</span><span><kbd>Alt</kbd><kbd>2</kbd></span></div>
+            <div class="w-row"><span>Terminal</span><span><kbd>Alt</kbd><kbd>3</kbd></span></div>
+            <div class="w-row"><span>Find in Project</span><span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span></div>
           </div>
         </main>
-        <div class="splitter h" id="split-output"></div>
-        <section id="output" class="island">
-          <div class="tw-header"><span>Output</span><button class="icon-btn small" data-hide="output" title="Hide"></button></div>
-          <div id="log"></div>
+        <div class="splitter h" id="split-bottom"></div>
+        <section id="bottom" class="island">
+          <div class="tw-header">
+            <div id="bottom-tabs">
+              <button class="btab" data-view="output">Output</button>
+              <button class="btab" data-view="terminal">Terminal</button>
+              <button class="btab" data-view="find">Find</button>
+            </div>
+            <button class="icon-btn small" data-hide="bottom" title="Hide"></button>
+          </div>
+          <div id="view-output" class="view"><div id="log"></div></div>
+          <div id="view-terminal" class="view" hidden><div id="term"></div></div>
+          <div id="view-find" class="view" hidden>
+            <div id="find-bar">
+              <input id="find-input" placeholder="Find in project (Enter)" spellcheck="false" autocomplete="off" />
+              <span id="find-count"></span>
+            </div>
+            <div id="find-results"></div>
+          </div>
         </section>
       </section>
     </div>
@@ -62,6 +81,14 @@
         <input id="search-input" placeholder="Search files by name" spellcheck="false" autocomplete="off" />
         <div id="search-results"></div>
       </div>
+    </div>
+    <div id="ctx" hidden></div>
+    <div id="ask" hidden>
+      <form id="ask-box">
+        <div id="ask-title"></div>
+        <input id="ask-input" spellcheck="false" autocomplete="off" />
+        <div id="ask-hint">Enter to confirm &middot; Esc to cancel</div>
+      </form>
     </div>
     <script type="module" src="./main.ts"></script>
   </body>

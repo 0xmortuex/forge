@@ -7,6 +7,9 @@ import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { THEME, defineTheme } from './theme'
 import { fuzzy } from './search'
 import { fileIcon, folderIcon, icons } from './icons'
+import { askText, showMenu, type MenuItem } from './menu'
+import { initFind } from './find'
+import { createTerminalView } from './terminal'
 
 self.MonacoEnvironment = {
   getWorker(_id, label) {
@@ -71,7 +74,9 @@ const setIcon = (sel: string, html: string): void => {
   document.querySelectorAll(sel).forEach((el) => (el.innerHTML = html))
 }
 setIcon('[data-tw="project"]', icons.project)
-setIcon('[data-tw="output"]', icons.output)
+setIcon('.tw-btn[data-view="output"]', icons.output)
+setIcon('.tw-btn[data-view="terminal"]', icons.terminal)
+setIcon('.tw-btn[data-view="find"]', icons.search)
 setIcon('#search-btn', icons.search)
 setIcon('#project-chev', icons.chevronDown)
 setIcon('[data-hide]', icons.minus)
@@ -97,21 +102,58 @@ function report(msg: string, isError = false): void {
 }
 
 // ---- Tool windows ----
-const toolWindows: Record<string, HTMLElement> = { project: $('project'), output: $('output') }
+// Project is a side window; Output, Terminal and Find are views of one bottom window.
+const toolWindows: Record<string, HTMLElement> = { project: $('project'), bottom: $('bottom') }
 // Each tool window's splitter is hidden together with it.
-const splitters: Record<string, HTMLElement> = { project: $('split-project'), output: $('split-output') }
+const splitters: Record<string, HTMLElement> = { project: $('split-project'), bottom: $('split-bottom') }
 
-function toggleToolWindow(name: string): void {
+type View = 'output' | 'terminal' | 'find'
+let currentView: View = 'output'
+const onViewShown: Partial<Record<View, () => void>> = {}
+
+function syncStripe(): void {
+  const bottomOpen = !toolWindows['bottom']!.hidden
+  document
+    .querySelector('.tw-btn[data-tw="project"]')
+    ?.classList.toggle('active', !toolWindows['project']!.hidden)
+  document.querySelectorAll<HTMLElement>('[data-view]').forEach((el) => {
+    el.classList.toggle('active', bottomOpen && el.dataset['view'] === currentView)
+  })
+}
+
+function setWindowHidden(name: string, hidden: boolean): void {
   const win = toolWindows[name]
   const split = splitters[name]
   if (!win || !split) throw new Error(`Unknown tool window: ${name}`)
-  win.hidden = !win.hidden
-  split.hidden = win.hidden
-  document.querySelector(`.tw-btn[data-tw="${name}"]`)?.classList.toggle('active', !win.hidden)
+  win.hidden = hidden
+  split.hidden = hidden
+  syncStripe()
 }
 
-document.querySelectorAll<HTMLButtonElement>('.tw-btn').forEach((b) => {
+function toggleToolWindow(name: string): void {
+  setWindowHidden(name, !toolWindows[name]?.hidden)
+}
+
+function showView(view: View): void {
+  currentView = view
+  for (const v of ['output', 'terminal', 'find'] as const) $(`view-${v}`).hidden = v !== view
+  setWindowHidden('bottom', false)
+  onViewShown[view]?.()
+}
+
+function toggleView(view: View): void {
+  if (!toolWindows['bottom']!.hidden && currentView === view) setWindowHidden('bottom', true)
+  else showView(view)
+}
+
+document.querySelectorAll<HTMLButtonElement>('.tw-btn[data-tw]').forEach((b) => {
   b.onclick = () => toggleToolWindow(b.dataset['tw'] ?? '')
+})
+document.querySelectorAll<HTMLButtonElement>('.tw-btn[data-view]').forEach((b) => {
+  b.onclick = () => toggleView(b.dataset['view'] as View)
+})
+document.querySelectorAll<HTMLButtonElement>('.btab').forEach((b) => {
+  b.onclick = () => showView(b.dataset['view'] as View)
 })
 
 function makeSplitter(split: HTMLElement, target: HTMLElement, axis: 'x' | 'y'): void {
@@ -134,7 +176,7 @@ function makeSplitter(split: HTMLElement, target: HTMLElement, axis: 'x' | 'y'):
   }
 }
 makeSplitter($('split-project'), $('project'), 'x')
-makeSplitter($('split-output'), $('output'), 'y')
+makeSplitter($('split-bottom'), $('bottom'), 'y')
 
 // ---- Search Everywhere ----
 const searchEl = $('search')
@@ -316,17 +358,23 @@ function closeFile(f: OpenFile): void {
   else renderTabs()
 }
 
-async function openFile(path: string): Promise<void> {
+async function openFile(path: string, line?: number): Promise<void> {
   const existing = openFiles.get(path)
-  if (existing) return activate(existing)
-  await guarded(`Open ${basename(path)}`, async () => {
-    const text = await window.forge.readFile(path)
-    const model = monaco.editor.createModel(text, undefined, monaco.Uri.file(path))
-    const f: OpenFile = { path, model, savedVersion: model.getAlternativeVersionId() }
-    model.onDidChangeContent(() => renderTabs())
-    openFiles.set(path, f)
-    activate(f)
-  })
+  if (existing) activate(existing)
+  else {
+    await guarded(`Open ${basename(path)}`, async () => {
+      const text = await window.forge.readFile(path)
+      const model = monaco.editor.createModel(text, undefined, monaco.Uri.file(path))
+      const f: OpenFile = { path, model, savedVersion: model.getAlternativeVersionId() }
+      model.onDidChangeContent(() => renderTabs())
+      openFiles.set(path, f)
+      activate(f)
+    })
+  }
+  if (line) {
+    editor.setPosition({ lineNumber: line, column: 1 })
+    editor.revealLineInCenter(line)
+  }
 }
 
 async function saveActive(): Promise<void> {
@@ -339,6 +387,12 @@ async function saveActive(): Promise<void> {
     report(`Saved ${basename(f.path)}`)
   })
 }
+
+// ---- Project tree ----
+// Every rendered directory, so one folder can be refreshed after a file operation.
+const norm = (p: string): string => p.replace(/\\/g, '/').replace(/\/$/, '')
+const parentOf = (p: string): string => p.replace(/[\\/][^\\/]*$/, '')
+const dirs = new Map<string, { kids: HTMLElement; depth: number }>()
 
 async function renderDir(dir: string, into: HTMLElement, depth = 0): Promise<void> {
   const entries = await window.forge.readDir(dir)
@@ -353,19 +407,21 @@ async function renderDir(dir: string, into: HTMLElement, depth = 0): Promise<voi
     row.insertAdjacentHTML('beforeend', e.isDir ? folderIcon : fileIcon(e.name))
     row.append(e.name)
     into.append(row)
+    row.oncontextmenu = (ev) => {
+      ev.preventDefault()
+      ev.stopPropagation()
+      showMenu(ev.clientX, ev.clientY, entryMenu(e.path, e.isDir))
+    }
     if (e.isDir) {
       const kids = document.createElement('div')
       kids.hidden = true
-      let loaded = false
       into.append(kids)
+      dirs.set(norm(e.path), { kids, depth })
       row.onclick = () =>
         void guarded(`Read ${e.name}`, async () => {
           kids.hidden = !kids.hidden
           twisty.innerHTML = kids.hidden ? icons.chevronRight : icons.chevronDown
-          if (!loaded) {
-            loaded = true
-            await renderDir(e.path, kids, depth + 1)
-          }
+          if (kids.childElementCount === 0) await renderDir(e.path, kids, depth + 1)
         })
     } else {
       row.onclick = () => {
@@ -377,11 +433,103 @@ async function renderDir(dir: string, into: HTMLElement, depth = 0): Promise<voi
   }
 }
 
+/** Re-reads one directory's listing. Expanded subfolders inside it collapse. */
+async function refreshDir(dir: string): Promise<void> {
+  const key = norm(dir)
+  const d = dirs.get(key)
+  if (!d) return
+  for (const k of [...dirs.keys()]) if (k.startsWith(key + '/')) dirs.delete(k)
+  const wasEmpty = d.kids.childElementCount === 0
+  d.kids.replaceChildren()
+  // A folder that was never expanded stays lazy.
+  if (wasEmpty && d.kids.hidden) return
+  await renderDir(dir, d.kids, d.depth + 1)
+}
+
+const joinPath = (dir: string, name: string): string => `${dir}${dir.includes('\\') ? '\\' : '/'}${name}`
+
+function checkName(name: string): void {
+  if (/[\\/:*?"<>|]/.test(name)) throw new Error(`Invalid name: ${name}`)
+}
+
+/** Open files at or under `path`. Refuses if any have unsaved edits; otherwise closes them. */
+function closeFilesUnder(path: string): void {
+  const key = norm(path)
+  const affected = [...openFiles.values()].filter((f) => {
+    const k = norm(f.path)
+    return k === key || k.startsWith(key + '/')
+  })
+  const dirty = affected.find(isDirty)
+  if (dirty) throw new Error(`Save or close ${basename(dirty.path)} first — it has unsaved changes`)
+  affected.forEach(closeFile)
+}
+
+async function createEntry(dir: string, kind: 'file' | 'folder'): Promise<void> {
+  const name = await askText(kind === 'file' ? 'New file' : 'New folder')
+  if (!name) return
+  await guarded(`Create ${name}`, async () => {
+    checkName(name)
+    const path = joinPath(dir, name)
+    if (kind === 'file') await window.forge.createFile(path)
+    else await window.forge.createDir(path)
+    await refreshDir(dir)
+    report(`Created ${path}`)
+    if (kind === 'file') await openFile(path)
+  })
+}
+
+async function renameEntry(path: string): Promise<void> {
+  const name = await askText('Rename', basename(path))
+  if (!name || name === basename(path)) return
+  await guarded(`Rename ${basename(path)}`, async () => {
+    checkName(name)
+    closeFilesUnder(path)
+    const parent = parentOf(path)
+    await window.forge.rename(path, joinPath(parent, name))
+    await refreshDir(parent)
+    report(`Renamed to ${name}`)
+  })
+}
+
+async function deleteEntry(path: string): Promise<void> {
+  if (!confirm(`Move "${basename(path)}" to the Recycle Bin?`)) return
+  await guarded(`Delete ${basename(path)}`, async () => {
+    closeFilesUnder(path)
+    await window.forge.trash(path)
+    await refreshDir(parentOf(path))
+    report(`Moved ${basename(path)} to the Recycle Bin`)
+  })
+}
+
+function entryMenu(path: string, isDir: boolean): (MenuItem | 'sep')[] {
+  const target = isDir ? path : parentOf(path)
+  return [
+    { label: 'New File…', run: () => void createEntry(target, 'file') },
+    { label: 'New Folder…', run: () => void createEntry(target, 'folder') },
+    'sep',
+    { label: 'Rename…', run: () => void renameEntry(path) },
+    { label: 'Delete', danger: true, run: () => void deleteEntry(path) }
+  ]
+}
+
+// Right-click on empty tree space acts on the project root.
+treeEl.oncontextmenu = (ev) => {
+  if (!rootDir) return
+  const root = rootDir
+  ev.preventDefault()
+  showMenu(ev.clientX, ev.clientY, [
+    { label: 'New File…', run: () => void createEntry(root, 'file') },
+    { label: 'New Folder…', run: () => void createEntry(root, 'folder') }
+  ])
+}
+
 async function openFolder(): Promise<void> {
   const dir = await window.forge.openFolder()
   if (!dir) return
   await guarded('Open folder', async () => {
     treeEl.replaceChildren()
+    dirs.clear()
+    dirs.set(norm(dir), { kids: treeEl, depth: -1 })
     rootDir = dir
     await renderDir(dir, treeEl)
     document.title = `${basename(dir)} – Forge`
@@ -408,15 +556,34 @@ document.querySelectorAll<HTMLButtonElement>('[data-hide]').forEach((b) => {
 })
 
 window.addEventListener('keydown', (e) => {
-  if (e.altKey && (e.key === '1' || e.key === '2')) {
+  if (e.altKey && ['1', '2', '3'].includes(e.key)) {
     e.preventDefault()
-    toggleToolWindow(e.key === '1' ? 'project' : 'output')
+    if (e.key === '1') toggleToolWindow('project')
+    else toggleView(e.key === '2' ? 'output' : 'terminal')
     return
   }
   if (!e.ctrlKey) return
+  if (e.shiftKey && e.key === 'F') { e.preventDefault(); showView('find'); return }
+  if (e.key === '`') { e.preventDefault(); toggleView('terminal'); return }
   if (e.key === 'o') { e.preventDefault(); void openFolder() }
   else if (e.key === 's') { e.preventDefault(); void saveActive() }
   else if (e.key === 'w' && active) { e.preventDefault(); closeFile(active) }
 })
 
+const terminal = createTerminalView($('term'), () => rootDir, guarded)
+onViewShown.terminal = () => terminal.show()
+
+const findInput = $<HTMLInputElement>('find-input')
+initFind({
+  input: findInput,
+  results: $('find-results'),
+  count: $('find-count'),
+  getRoot: () => rootDir,
+  relPath,
+  openAt: openFile,
+  guard: guarded
+})
+onViewShown.find = () => findInput.focus()
+
+syncStripe()
 renderTabs()

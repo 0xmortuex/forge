@@ -3,7 +3,8 @@ const svg = (body: string, size = 16): string =>
 
 export const icons = {
   project: svg('<rect x="2" y="3" width="12" height="8.5" rx="1.5"/><path d="M5.5 14h5M8 11.5V14"/>', 18),
-  output: svg('<rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M4.8 6l2 2-2 2M8.5 10.5h3"/>', 18),
+  output: svg('<path d="M3 4h10M3 8h10M3 12h6"/>', 18),
+  terminal: svg('<rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M4.8 6l2 2-2 2M8.5 10.5h3"/>', 18),
   search: svg('<circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2L13.5 13.5"/>', 18),
   chevronRight: svg('<path d="M6 4l4 4-4 4"/>', 12),
   chevronDown: svg('<path d="M4 6l4 4 4-4"/>', 12),
