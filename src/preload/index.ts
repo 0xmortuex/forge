@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { DirEntry } from '../main/index'
-import type { DebugEvent, DebugEval, DebugScope, DebugVar } from '../main/debug'
+import type { DebugEvent, DebugEval, DebugKind, DebugScope, DebugVar } from '../main/debug'
 import type { BlameLine, GitStatus } from '../main/git'
 import type { SearchResult } from '../main/search'
 import type { PtySpec } from '../main/terminal'
@@ -49,8 +49,8 @@ const api = {
     ipcRenderer.invoke('git:createBranch', root, name),
   gitCommit: (root: string, message: string, paths: string[]): Promise<void> =>
     ipcRenderer.invoke('git:commit', root, message, paths),
-  debugLaunch: (cwd: string, cols: number, rows: number, spec: PtySpec): Promise<number> =>
-    ipcRenderer.invoke('debug:launch', cwd, cols, rows, spec),
+  debugLaunch: (cwd: string, cols: number, rows: number, spec: PtySpec, kind: DebugKind): Promise<number> =>
+    ipcRenderer.invoke('debug:launch', cwd, cols, rows, spec, kind),
   debugSetBreakpoints: (path: string, lines: number[]): Promise<void> =>
     ipcRenderer.invoke('debug:setBreakpoints', path, lines),
   debugControl: (cmd: 'resume' | 'stepOver' | 'stepInto' | 'stepOut' | 'pause'): Promise<void> =>

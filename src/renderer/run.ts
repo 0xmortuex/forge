@@ -19,8 +19,8 @@ export interface ResolvedRun {
   label: string
   spec: PtySpec
   cwd: string
-  /** Node programs can be debugged; the spec then carries --inspect-brk. */
-  debuggable: boolean
+  /** Set when this configuration can be debugged: which debug backend to start it with. */
+  debugKind?: 'node' | 'python'
 }
 
 export interface RunDeps {
@@ -104,20 +104,26 @@ export function resolveConfig(cfg: RunConfig, root: string, activePath: string |
     return {
       label: `${cfg.name} (node)`,
       cwd,
-      debuggable: true,
+      debugKind: 'node',
       spec: { file: 'node', args: [...(debug ? ['--inspect-brk=127.0.0.1:0'] : []), file, ...args], env }
     }
   }
-  if (debug) throw new Error(`Debugging ${type} configurations is not supported yet — only node`)
   if (type === 'python') {
-    return { label: `${cfg.name} (python)`, cwd, debuggable: false, spec: { file: 'python', args: ['-u', joinTo(root, program ?? ''), ...args], env } }
+    // For debugging, the main process wraps this in `-m debugpy --listen …`.
+    return {
+      label: `${cfg.name} (python)`,
+      cwd,
+      debugKind: 'python',
+      spec: { file: 'python', args: ['-u', joinTo(root, program ?? ''), ...args], env }
+    }
   }
+  if (debug) throw new Error('Debugging command configurations is not supported — use a node or python configuration')
   const command = cfg.command ?? ''
   const shell: PtySpec =
     navigator.platform.startsWith('Win')
       ? { file: 'powershell.exe', args: ['-NoProfile', '-Command', command], env }
       : { file: 'sh', args: ['-c', command], env }
-  return { label: `${cfg.name} (command)`, cwd, debuggable: false, spec: shell }
+  return { label: `${cfg.name} (command)`, cwd, spec: shell }
 }
 
 export function initRun(deps: RunDeps): {

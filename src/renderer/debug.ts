@@ -282,13 +282,15 @@ export function initDebug(deps: DebugDeps): {
   async function start(): Promise<void> {
     await deps.guard('Debug', async () => {
       const resolved = await deps.resolveDebug()
+      const kind = resolved.debugKind
+      if (!kind) throw new Error(`${resolved.label} can't be debugged`)
       await deps.saveAll()
       await syncBreakpoints()
       evalLog.replaceChildren()
       deps.showView('run')
       deps.setBusy(true)
       try {
-        await deps.runView.begin((cols, rows) => window.forge.debugLaunch(resolved.cwd, cols, rows, resolved.spec))
+        await deps.runView.begin((cols, rows) => window.forge.debugLaunch(resolved.cwd, cols, rows, resolved.spec, kind))
       } catch (err) {
         deps.setBusy(false)
         throw err

@@ -19,7 +19,8 @@ an end-to-end test suite that drives the real UI.
 - **Git** — branch widget, a Commit window with per-file checkboxes, side-by-side diffs, blame in the status bar and
   status colors in the tree. It drives the `git` CLI.
 - **Run & debug** — run configurations in `.forge/run.json` (Node, Python, shell commands, or the current file), and a
-  Node debugger with gutter breakpoints, stepping, call stack, variables and expression evaluation.
+  debugger for Node (V8 inspector) and Python (debugpy, over the Debug Adapter Protocol) with gutter breakpoints,
+  stepping, call stack, variables and expression evaluation.
 
 ![Git diff and the Commit window](docs/git-diff.png)
 
@@ -60,8 +61,9 @@ A run configuration file looks like this (Forge creates a template via the run w
 
 ## How it is built
 
-- `src/main` — Electron main process: filesystem, node-pty terminals, language-server processes, git, and the Node
-  debug adapter (V8 inspector protocol, exposed to the UI through DAP-shaped IPC).
+- `src/main` — Electron main process: filesystem, node-pty terminals, language-server processes, git, and the debug
+  backends (a Node adapter over the V8 inspector protocol, and a DAP client for Python's debugpy) behind one
+  DAP-shaped IPC interface.
 - `src/preload` — the small, typed bridge exposed to the renderer.
 - `src/renderer` — the UI (vanilla TypeScript, no framework).
 - `tests/` — end-to-end scenarios. Each boots the built app against a temporary project, sends real key and mouse
@@ -69,7 +71,7 @@ A run configuration file looks like this (Forge creates a template via the run w
 
 ## Known limitations
 
-- Debugging is Node-only for now; Python can be run but not yet debugged.
+- Debugging covers Node and Python only; Python debugging needs `debugpy` installed (`uv pip install debugpy`).
 - Diffs are read-only; there is no push/pull/stash/revert yet.
 - No rename-symbol, find-usages, formatting or code actions yet.
 - A single terminal; no extension system.
