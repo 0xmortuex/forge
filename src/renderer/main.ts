@@ -650,15 +650,21 @@ document.querySelectorAll<HTMLButtonElement>('[data-hide]').forEach((b) => {
   b.onclick = () => toggleToolWindow(b.dataset['hide'] ?? '')
 })
 
+const isMac = navigator.platform.startsWith('Mac')
+if (isMac) document.body.classList.add('mac') // window buttons are on the left there
+
 window.addEventListener('keydown', (e) => {
-  if (e.altKey && ['0', '1', '2', '3'].includes(e.key)) {
+  // Physical keys (e.code): on macOS, Alt+1 types a symbol, so e.key would never be "1".
+  const digit = e.altKey && !e.ctrlKey && !e.metaKey ? /^Digit([0-3])$/.exec(e.code)?.[1] : undefined
+  if (digit !== undefined) {
     e.preventDefault()
-    if (e.key === '0') toggleSide('commit')
-    else if (e.key === '1') toggleSide('project')
-    else toggleView(e.key === '2' ? 'output' : 'terminal')
+    if (digit === '0') toggleSide('commit')
+    else if (digit === '1') toggleSide('project')
+    else toggleView(digit === '2' ? 'output' : 'terminal')
     return
   }
-  if (!e.ctrlKey) return
+  // Cmd is the "Ctrl" of macOS.
+  if (!(e.ctrlKey || (isMac && e.metaKey))) return
   if (e.shiftKey && e.key === 'F') { e.preventDefault(); showView('find'); return }
   // e.code, not e.key: with Shift held the key reports '~' (and layouts differ).
   if (e.code === 'Backquote' && e.shiftKey) { e.preventDefault(); showView('terminal'); terminals.newTerminal(); return }

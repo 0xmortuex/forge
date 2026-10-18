@@ -21,7 +21,10 @@ function createWindow(): void {
     backgroundColor: '#101d22',
     title: 'Forge',
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#101d22', symbolColor: '#b0bec5', height: 40 },
+    // Windows/Linux draw their window buttons over our toolbar; macOS keeps its traffic lights on the left.
+    ...(process.platform === 'darwin'
+      ? { trafficLightPosition: { x: 16, y: 13 } }
+      : { titleBarOverlay: { color: '#101d22', symbolColor: '#b0bec5', height: 40 } }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,

@@ -253,3 +253,6 @@ kbd { background: var(--island-2); border: 1px solid #38505a; border-bottom-widt
 .ttab .close:hover { background: var(--hover); color: var(--text-hi); }
 #term-new { width: 24px; height: 24px; border-radius: 7px; color: var(--text-dim); font-size: 16px; line-height: 1; }
 #term-new:hover { background: var(--hover); color: var(--text-hi); }
+
+/* macOS: traffic lights sit on the left, nothing on the right */
+body.mac #toolbar { padding: 0 12px 0 84px; }

@@ -69,7 +69,7 @@ const SERVERS: Record<string, ServerSpec> = {
     id: 'mort',
     launch: () => {
       const custom = process.env['MORTC']
-      if (custom) return custom.endsWith('.py') ? { command: findOnPath('python'), args: [custom, 'lsp'] } : { command: custom, args: ['lsp'] }
+      if (custom) return custom.endsWith('.py') ? { command: findOnPath(process.platform === 'win32' ? 'python' : 'python3'), args: [custom, 'lsp'] } : { command: custom, args: ['lsp'] }
       try {
         return { command: findOnPath('mortc'), args: ['lsp'] }
       } catch {

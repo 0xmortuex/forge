@@ -49,6 +49,9 @@ const TEMPLATE = `{
 }
 `
 
+// macOS and most Linux distributions ship `python3` and no bare `python`.
+const PYTHON = navigator.platform.startsWith('Win') ? 'python' : 'python3'
+
 const NODE_EXTS = ['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts']
 const TYPES: ConfigType[] = ['current-file', 'node', 'python', 'command']
 
@@ -114,7 +117,7 @@ export function resolveConfig(cfg: RunConfig, root: string, activePath: string |
       label: `${cfg.name} (python)`,
       cwd,
       debugKind: 'python',
-      spec: { file: 'python', args: ['-u', joinTo(root, program ?? ''), ...args], env }
+      spec: { file: PYTHON, args: ['-u', joinTo(root, program ?? ''), ...args], env }
     }
   }
   if (debug) throw new Error('Debugging command configurations is not supported — use a node or python configuration')

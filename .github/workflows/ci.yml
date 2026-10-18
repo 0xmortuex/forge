@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Catches platform breakage that has nothing to do with the UI: native modules (node-pty) failing to install,
+  # type errors, and bundling problems. Runs everywhere Forge is meant to build.
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # version comes from "packageManager" in package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm build
+
+  # The end-to-end scenarios drive the real app. They are developed and run on Windows (they assume
+  # PowerShell), and Linux would additionally need a virtual display, so this job is Windows-only.
+  # It is non-blocking until it has proven stable on a hosted runner.
+  e2e:
+    name: End-to-end (windows-latest)
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install debugpy # the Python debugger scenario needs it
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
