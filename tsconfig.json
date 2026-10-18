@@ -6,8 +6,20 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["node", "vite/client"]
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [
+      "node",
+      "vite/client"
+    ],
+    "allowJs": true
   },
-  "include": ["src/**/*", "electron.vite.config.ts"]
+  "include": [
+    "src/**/*",
+    "tests/**/*.cjs",
+    "electron.vite.config.ts"
+  ]
 }
