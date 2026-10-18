@@ -1,5 +1,6 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import type { DirEntry } from '../main/index'
+import type { LoadedUserData } from '../main/settings'
 import type { DebugEvent, DebugEval, DebugKind, DebugScope, DebugVar } from '../main/debug'
 import type { BlameLine, ChangeKind, GitStatus, StashEntry } from '../main/git'
 import type { SearchResult } from '../main/search'
@@ -76,6 +77,13 @@ const api = {
   onDebugEvent: (cb: (evt: DebugEvent) => void): void => {
     ipcRenderer.on('debug:event', (_e, evt: DebugEvent) => cb(evt))
   },
+  settingsLoad: (): Promise<LoadedUserData> => ipcRenderer.invoke('settings:load'),
+  settingsSave: (text: string): Promise<void> => ipcRenderer.invoke('settings:save', text),
+  stateSave: (text: string): Promise<void> => ipcRenderer.invoke('state:save', text),
+  openThemesDir: (): Promise<string> => ipcRenderer.invoke('themes:openDir'),
+  toggleFullscreen: (): Promise<boolean> => ipcRenderer.invoke('win:toggleFullscreen'),
+  /** 1 = 100%. */
+  setZoom: (factor: number): void => webFrame.setZoomFactor(factor),
   /** Each subscription returns a function that removes it. */
   onTermData: (cb: (id: number, data: string) => void): (() => void) => {
     const listener = (_e: unknown, id: number, data: string): void => cb(id, data)

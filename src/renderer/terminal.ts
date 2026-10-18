@@ -1,16 +1,42 @@
-import { Terminal } from '@xterm/xterm'
+import { Terminal, type ITheme } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
-const THEME = {
-  background: '#263238',
-  foreground: '#b0bec5',
-  cursor: '#26c6b0',
-  selectionBackground: '#2f5560',
-  black: '#37474f', red: '#f07178', green: '#c3e88d', yellow: '#ffcb6b',
-  blue: '#82aaff', magenta: '#c792ea', cyan: '#89ddff', white: '#b0bec5',
-  brightBlack: '#546e7a', brightRed: '#ff8b92', brightGreen: '#ddffa7', brightYellow: '#ffe585',
-  brightBlue: '#9cc4ff', brightMagenta: '#e1acff', brightCyan: '#a3f7ff', brightWhite: '#eeffff'
+// Set from the active theme (see themes.ts); until then, a neutral dark default.
+let currentTheme: ITheme = { background: '#263238', foreground: '#b0bec5', cursor: '#26c6b0' }
+
+export interface TerminalSettings {
+  fontFamily: string
+  fontSize: number
+  lineHeight: number
+  cursorStyle: 'block' | 'bar' | 'underline'
+  cursorBlink: boolean
+  scrollback: number
+}
+let currentSettings: TerminalSettings = {
+  fontFamily: '"Cascadia Mono", Consolas, monospace',
+  fontSize: 13,
+  lineHeight: 1,
+  cursorStyle: 'block',
+  cursorBlink: true,
+  scrollback: 5000
+}
+
+/** Every terminal that exists right now, so theme/option changes reach all of them. */
+const live = new Map<Terminal, FitAddon>()
+
+export function setTerminalTheme(theme: ITheme): void {
+  currentTheme = theme
+  for (const term of live.keys()) term.options.theme = theme
+}
+
+export function setTerminalSettings(patch: Partial<TerminalSettings>): void {
+  currentSettings = { ...currentSettings, ...patch }
+  for (const [term, fit] of live) {
+    Object.assign(term.options, currentSettings)
+    // The cell size may have changed. A hidden terminal can't measure itself; it refits when shown again.
+    if (term.element && term.element.offsetParent !== null) fit.fit()
+  }
 }
 
 export interface TerminalView {
@@ -65,15 +91,10 @@ export function createTerminalView(
 
   function ensureTerm(): Terminal {
     if (term) return term
-    term = new Terminal({
-      theme: THEME,
-      fontFamily: '"Cascadia Mono", Consolas, monospace',
-      fontSize: 13,
-      cursorBlink: true,
-      allowProposedApi: false
-    })
+    term = new Terminal({ ...currentSettings, theme: currentTheme, allowProposedApi: false })
     fit = new FitAddon()
     term.loadAddon(fit)
+    live.set(term, fit)
     term.open(container)
     term.onData((data) => {
       if (id !== null) void window.forge.termWrite(id, data)
@@ -124,6 +145,7 @@ export function createTerminalView(
       offData()
       offExit()
       observer.disconnect()
+      if (term) live.delete(term)
       term?.dispose()
       term = null
     }

@@ -26,12 +26,14 @@ export function initTerminals(deps: TerminalsDeps): { show: () => void; newTermi
   const panes: Pane[] = []
   let active: Pane | null = null
   let counter = 0
+  const seen = new WeakSet<Pane>() // only tabs that are new play the entrance animation
 
   function render(): void {
     tabsEl.replaceChildren()
     for (const p of panes) {
       const tab = document.createElement('div')
-      tab.className = 'ttab' + (p === active ? ' active' : '') + (p.exited ? ' exited' : '')
+      tab.className = 'ttab' + (p === active ? ' active' : '') + (p.exited ? ' exited' : '') + (seen.has(p) ? '' : ' enter')
+      seen.add(p)
       const name = document.createElement('span')
       name.className = 'tname'
       name.textContent = p.name

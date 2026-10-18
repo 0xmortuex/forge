@@ -138,6 +138,8 @@ export function initRun(deps: RunDeps): {
   updateButtons: () => void
   /** Called by whoever owns the process (run or debug) when running state changes. */
   setBusy: (busy: boolean) => void
+  /** Creates .forge/run.json from a template if needed, and opens it. */
+  editConfigs: () => Promise<void>
 } {
   const nameEl = document.getElementById('run-config-name')
   const widget = document.getElementById('run-config')
@@ -192,6 +194,7 @@ export function initRun(deps: RunDeps): {
     const running = busy || deps.view.isRunning()
     stopBtn!.disabled = !running
     runBtn!.disabled = running
+    document.body.classList.toggle('busy', running) // drives the pulsing Stop/Run indicators
   }
 
   async function editConfigs(): Promise<void> {
@@ -233,6 +236,7 @@ export function initRun(deps: RunDeps): {
     run,
     stop,
     updateButtons,
+    editConfigs: () => deps.guard('Edit configurations', editConfigs),
     setBusy: (b) => {
       busy = b
       updateButtons()

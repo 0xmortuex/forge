@@ -3,6 +3,7 @@ import { access, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/pro
 import { join } from 'node:path'
 import { registerDebug } from './debug'
 import { registerGit } from './git'
+import { registerSettings } from './settings'
 import { searchProject } from './search'
 import { killAllLsp, registerLsp } from './lsp'
 import { killAllTerminals, registerTerminal } from './terminal'
@@ -82,6 +83,10 @@ ipcMain.handle('fs:writeFile', (_e, path: string, content: string) =>
   writeFile(path, content, 'utf8')
 )
 
+// Tests point this at a temp folder so they never touch the real user's settings.
+if (process.env['FORGE_USER_DATA']) app.setPath('userData', process.env['FORGE_USER_DATA'])
+
+registerSettings()
 registerTerminal()
 registerLsp()
 registerGit()

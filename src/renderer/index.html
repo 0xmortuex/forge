@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <div id="aurora"></div>
     <header id="toolbar">
       <div class="logo">F</div>
       <button class="widget" id="project-widget" title="Open folder (Ctrl+O)">
@@ -24,6 +25,8 @@
       <button class="icon-btn" id="debug-btn" title="Debug (Shift+F9)"></button>
       <button class="icon-btn" id="stop-btn" title="Stop (Ctrl+F2)" disabled></button>
       <button class="icon-btn" id="search-btn" title="Search Everywhere (Shift Shift)"></button>
+      <button class="icon-btn" id="palette-btn" title="Command Palette (Ctrl+Shift+P)"></button>
+      <button class="icon-btn" id="settings-btn" title="Settings (Ctrl+,)"></button>
     </header>
     <div id="app">
       <nav id="stripe">
@@ -76,6 +79,8 @@
             <div class="w-row"><span>Toggle Output</span><span><kbd>Alt</kbd><kbd>2</kbd></span></div>
             <div class="w-row"><span>Terminal</span><span><kbd>Alt</kbd><kbd>3</kbd></span></div>
             <div class="w-row"><span>Find in Project</span><span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span></div>
+            <div class="w-row" style="--i: 6"><span>Command Palette</span><span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>P</kbd></span></div>
+            <div class="w-row" style="--i: 7"><span>Settings &amp; themes</span><span><kbd>Ctrl</kbd><kbd>,</kbd></span></div>
           </div>
         </main>
         <div class="splitter h" id="split-bottom"></div>
@@ -135,15 +140,41 @@
       <span class="sw" id="st-indent"></span>
       <span class="sw" id="st-lang"></span>
     </footer>
-    <div id="search" hidden>
-      <div id="search-box">
+    <div id="search" class="overlay" hidden>
+      <div id="search-box" class="modal">
         <input id="search-input" placeholder="Search files by name" spellcheck="false" autocomplete="off" />
         <div id="search-results"></div>
       </div>
     </div>
+    <div id="palette" class="overlay" hidden>
+      <div id="palette-box" class="modal">
+        <input id="palette-input" placeholder="Type a command…" spellcheck="false" autocomplete="off" />
+        <div id="palette-results"></div>
+      </div>
+    </div>
+    <div id="settings" class="overlay" hidden>
+      <div id="settings-box" class="modal">
+        <nav id="settings-nav"></nav>
+        <section id="settings-main">
+          <div id="settings-top">
+            <input id="settings-search" class="field" placeholder="Search settings…" spellcheck="false" autocomplete="off" />
+          </div>
+          <div id="settings-body"></div>
+          <div id="settings-foot">
+            <span class="left" id="settings-note"></span>
+            <span>
+              <button class="btn" id="settings-reset-all">Reset all</button>
+              <button class="btn" id="settings-open-file">Open settings.json</button>
+              <button class="btn-primary" id="settings-close">Done</button>
+            </span>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div id="toasts"></div>
     <div id="ctx" hidden></div>
-    <div id="ask" hidden>
-      <form id="ask-box">
+    <div id="ask" class="overlay" hidden>
+      <form id="ask-box" class="modal">
         <div id="ask-title"></div>
         <input id="ask-input" spellcheck="false" autocomplete="off" />
         <div id="ask-hint">Enter to confirm &middot; Esc to cancel</div>

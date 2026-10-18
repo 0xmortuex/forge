@@ -14,14 +14,24 @@ const sleep = (/** @type {number} */ ms) => new Promise((resolve) => setTimeout(
  * @param {string} name
  * @param {Record<string, string>} files  fixture project: relative path -> contents
  * @param {(t: any) => Promise<void>} scenario
+ * @param {{ userData?: Record<string, string> }} [options]  files to pre-seed in the app's user-data folder
+ *   (e.g. { 'settings.json': '{...}', 'themes/mine.json': '{...}' })
  */
-async function run(name, files, scenario) {
+async function run(name, files, scenario, options = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'forge-test-'))
   for (const [rel, content] of Object.entries(files)) {
     const p = path.join(root, rel)
     fs.mkdirSync(path.dirname(p), { recursive: true })
     fs.writeFileSync(p, content)
   }
+  // Every run gets its own user-data folder, so tests never touch (or depend on) the real user's settings.
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'forge-userdata-'))
+  for (const [rel, content] of Object.entries(options.userData ?? {})) {
+    const p = path.join(userData, rel)
+    fs.mkdirSync(path.dirname(p), { recursive: true })
+    fs.writeFileSync(p, content)
+  }
+  process.env['FORGE_USER_DATA'] = userData
   dialog.showOpenDialog = /** @type {any} */ (async () => ({ canceled: false, filePaths: [root] }))
   require('../out/main/index.js')
 
@@ -46,6 +56,7 @@ async function run(name, files, scenario) {
     await sleep(2000)
     try {
       fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 })
+      fs.rmSync(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 })
     } catch (err) {
       console.log(`WARN ${name}: could not remove ${root}: ${/** @type {Error} */ (err).message}`)
     }
@@ -96,7 +107,7 @@ async function run(name, files, scenario) {
     if (level >= 3 && process.env['VERBOSE']) console.log('  [renderer error]', message.slice(0, 200))
   })
 
-  const t = { root, wc, sleep, js, key, type, enter, waitFor, check, shot }
+  const t = { root, userData, wc, sleep, js, key, type, enter, waitFor, check, shot }
   try {
     await js('window.confirm = () => true; undefined') // native confirm() would block the driver
     await scenario(t)

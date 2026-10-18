@@ -21,6 +21,8 @@ export const icons = {
   pull: svg('<path d="M8 2.5v8M5 7.8l3 3 3-3M3 13.5h10"/>', 14),
   push: svg('<path d="M8 10.5v-8M5 5.2l3-3 3 3M3 13.5h10"/>', 14),
   stash: svg('<path d="M2.5 6h11v6.5a1 1 0 01-1 1h-9a1 1 0 01-1-1zM4 3.5h8M5.5 1.5h5"/>', 14),
+  gear: svg('<circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.7M8 12.5v1.7M1.8 8h1.7M12.5 8h1.7M3.6 3.6l1.2 1.2M11.2 11.2l1.2 1.2M12.4 3.6l-1.2 1.2M4.8 11.2l-1.2 1.2"/>', 18),
+  command: svg('<path d="M5.5 5.5V4a1.5 1.5 0 10-1.5 1.5zM5.5 5.5h5M10.5 5.5V4A1.5 1.5 0 1112 5.5zM10.5 5.5v5M10.5 10.5H12a1.5 1.5 0 11-1.5 1.5zM10.5 10.5h-5M5.5 10.5V12A1.5 1.5 0 114 10.5zM5.5 10.5v-5"/>', 18),
   minus: svg('<path d="M3.5 8h9"/>', 14),
   close: svg('<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>', 12),
   folder: svg('<path d="M2 4.5A1.5 1.5 0 013.5 3h2.8l1.4 1.5h4.8A1.5 1.5 0 0114 6v5.5a1.5 1.5 0 01-1.5 1.5h-9A1.5 1.5 0 012 11.5z" fill="currentColor" fill-opacity=".18"/>'),
@@ -34,10 +36,15 @@ const EXT_COLORS: Record<string, string> = {
   toml: '#ef9a9a', lock: '#78909c', gitignore: '#78909c'
 }
 
-export function fileIcon(name: string): string {
+/** The accent color for a file type, if it has one. */
+export function fileColor(name: string): string | undefined {
   const ext = name.includes('.') ? (name.split('.').pop() ?? '').toLowerCase() : ''
-  const color = EXT_COLORS[ext] ?? '#78909c'
+  return EXT_COLORS[ext]
+}
+
+export function fileIcon(name: string): string {
+  const color = fileColor(name) ?? '#78909c'
   return `<span class="ficon" style="color:${color}">${icons.file}</span>`
 }
 
-export const folderIcon = `<span class="ficon" style="color:#80cbc4">${icons.folder}</span>`
+export const folderIcon = `<span class="ficon" style="color:var(--folder)">${icons.folder}</span>`

@@ -91,6 +91,8 @@ const docText = (d: string | MarkupContent | undefined): string | monaco.IMarkdo
 export function initLsp(deps: LspDeps): {
   openDoc: (model: monaco.editor.ITextModel, path: string) => void
   closeDoc: (model: monaco.editor.ITextModel) => void
+  /** Runs `fn` (a format request) without complaining when the language has no formatter. */
+  quietFormat: <T>(fn: () => Promise<T>) => Promise<T>
 } {
   const docs = new Map<string, Doc>()
   // Completion items keep their raw LSP form so they can be resolved lazily.
@@ -315,8 +317,11 @@ export function initLsp(deps: LspDeps): {
     doc.caps ??= window.forge.lspCapabilities(doc.uri) as Promise<ServerCapabilities>
     return doc.caps
   }
-  const unsupported = (model: monaco.editor.ITextModel, what: string): void =>
+  let quietFormat = false
+  const unsupported = (model: monaco.editor.ITextModel, what: string): void => {
+    if (quietFormat && what.startsWith('formatting')) return
     deps.report(`The language server for ${model.getLanguageId()} doesn't support ${what}`, true)
+  }
 
   const toMonacoRange = (r: monaco.IRange): LspRange => ({
     start: { line: r.startLineNumber - 1, character: r.startColumn - 1 },
@@ -522,5 +527,16 @@ export function initLsp(deps: LspDeps): {
     }
   })
 
-  return { openDoc, closeDoc }
+  return {
+    openDoc,
+    closeDoc,
+    async quietFormat(fn) {
+      quietFormat = true
+      try {
+        return await fn()
+      } finally {
+        quietFormat = false
+      }
+    }
+  }
 }

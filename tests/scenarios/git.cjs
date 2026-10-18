@@ -38,7 +38,7 @@ run('git', { 'a.txt': 'one\ntwo\n', 'src/b.ts': 'export const b = 1\n' }, async 
 
   // Commit window
   key('0', ['alt'])
-  check('Alt+0 opens the Commit window', await js("!document.getElementById('commit-view').hidden"))
+  check('Alt+0 opens the Commit window', !!(await waitFor(() => js("!document.getElementById('commit-view').hidden"), 3000)))
   check(
     'Commit window lists both changes',
     !!(await waitFor(async () => (await text('commit-summary')) === '2 changes', 5000)),

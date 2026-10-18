@@ -4,9 +4,14 @@ import JsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import CssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import HtmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
-import { THEME, defineTheme } from './theme'
+import { initAppearance, bindEditors, editorOptions } from './appearance'
+import { ensureSettingsFile, settings, userData } from './settings'
+import { initRipples, shouldToast, toast } from './effects'
+import { initPalette } from './commands'
+import { initSettingsUi } from './settings-ui'
+import { registerBuiltinCommands } from './builtin-commands'
 import { fuzzy } from './search'
-import { fileIcon, folderIcon, icons } from './icons'
+import { fileColor, fileIcon, folderIcon, icons } from './icons'
 import { askText, showMenu, type MenuItem } from './menu'
 import { initFind } from './find'
 import { createTerminalView } from './terminal'
@@ -55,8 +60,8 @@ const stEol = $('st-eol')
 const stIndent = $('st-indent')
 const stLang = $('st-lang')
 
-defineTheme()
 registerMort()
+const themeName = initAppearance() // theme, fonts, layout, motion: everything the user chose
 // Monaco's in-browser TS worker can't resolve node_modules, so its results are wrong or duplicated.
 // All TS/JS intelligence comes from the language server (see lsp.ts); only highlighting stays built in.
 for (const defaults of [
@@ -70,19 +75,12 @@ for (const defaults of [
   })
 }
 const editor = monaco.editor.create($('editor'), {
-  theme: THEME,
+  ...editorOptions(), // fonts, minimap, cursor... all from settings
+  theme: themeName,
   automaticLayout: true,
-  fontFamily: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
-  fontSize: 13,
-  lineHeight: 21,
-  minimap: { enabled: false },
   glyphMargin: true,
   padding: { top: 6 },
   renderLineHighlight: 'all',
-  smoothScrolling: true,
-  cursorSmoothCaretAnimation: 'on',
-  guides: { indentation: true, bracketPairs: true },
-  bracketPairColorization: { enabled: true },
   scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10 },
   model: null
 })
@@ -90,13 +88,10 @@ const editor = monaco.editor.create($('editor'), {
 const diffEditor = monaco.editor.createDiffEditor($('diff'), {
   automaticLayout: true,
   originalEditable: false, // the HEAD side never edits; the working-copy side is made editable per tab
-  fontFamily: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
-  fontSize: 13,
-  lineHeight: 21,
-  minimap: { enabled: false },
   scrollBeyondLastLine: false,
   renderSideBySide: true
 })
+bindEditors(editor, diffEditor) // from here on, editor settings apply live to both
 
 // Static icons for buttons declared in index.html.
 const setIcon = (sel: string, html: string): void => {
@@ -111,6 +106,9 @@ setIcon('.tw-btn[data-view="run"]', icons.play)
 setIcon('.tw-btn[data-view="debug"]', icons.bug)
 setIcon('#debug-btn', icons.bug)
 setIcon('#search-btn', icons.search)
+setIcon('#palette-btn', icons.command)
+setIcon('#settings-btn', icons.gear)
+initRipples()
 setIcon('#project-chev', icons.chevronDown)
 setIcon('[data-hide]', icons.minus)
 
@@ -120,8 +118,21 @@ let active: OpenFile | null = null
 const logEl = $('log')
 let rootDir: string | null = null
 
+/** Restarts a CSS entrance animation on an element (tool windows, views). */
+function playEnter(el: HTMLElement): void {
+  el.classList.remove('enter')
+  void el.offsetWidth // forces a reflow so the animation starts over
+  el.classList.add('enter')
+  el.addEventListener('animationend', () => el.classList.remove('enter'), { once: true })
+}
+
 function report(msg: string, isError = false): void {
   statusMsg.textContent = msg
+  statusMsg.classList.remove('flash')
+  void statusMsg.offsetWidth
+  if (!isError) statusMsg.classList.add('flash')
+  const kind = shouldToast(msg, isError)
+  if (kind) toast(msg, kind)
   statusEl.classList.toggle('error', isError)
   if (isError) console.error(msg)
   const line = document.createElement('div')
@@ -177,8 +188,10 @@ function setWindowHidden(name: string, hidden: boolean): void {
   const win = toolWindows[name]
   const split = splitters[name]
   if (!win || !split) throw new Error(`Unknown tool window: ${name}`)
+  const wasHidden = win.hidden
   win.hidden = hidden
   split.hidden = hidden
+  if (wasHidden && !hidden) playEnter(win)
   syncStripe()
 }
 
@@ -188,8 +201,10 @@ function toggleToolWindow(name: string): void {
 
 function showView(view: View): void {
   currentView = view
+  const changed = view !== currentView || toolWindows['bottom']!.hidden
   for (const v of ['output', 'terminal', 'find', 'run', 'debug'] as const) $(`view-${v}`).hidden = v !== view
   setWindowHidden('bottom', false)
+  if (changed) playEnter($(`view-${view}`))
   onViewShown[view]?.()
 }
 
@@ -373,12 +388,20 @@ const basename = (p: string): string => p.split(/[\\/]/).pop() ?? p
 const isDirty = (f: OpenFile): boolean =>
   f.diff ? (f.diff.shared ? isDirty(f.diff.shared) : false) : f.model.getAlternativeVersionId() !== f.savedVersion
 
+const renderedTabs = new Set<string>() // tabs that already exist don't replay their entrance
+
 function renderTabs(): void {
   tabsEl.replaceChildren()
+  const keys = new Set<string>()
   for (const f of openFiles.values()) {
     const tab = document.createElement('div')
-    tab.className = 'tab' + (f === active ? ' active' : '')
+    keys.add(tabKey(f))
+    tab.className = 'tab' + (f === active ? ' active' : '') + (renderedTabs.has(tabKey(f)) ? '' : ' enter')
     const name = basename(f.path)
+    if (settings.get<boolean>('colorful')) {
+      const color = fileColor(name)
+      if (color) tab.style.setProperty('--tab-color', color)
+    }
     tab.innerHTML = fileIcon(name)
     tab.append(f.diff ? `${name} (diff)` : name)
     if (isDirty(f)) {
@@ -398,6 +421,8 @@ function renderTabs(): void {
     tab.onclick = () => activate(f)
     tabsEl.append(tab)
   }
+  renderedTabs.clear()
+  for (const k of keys) renderedTabs.add(k)
   welcomeEl.style.display = openFiles.size ? 'none' : 'flex'
 }
 
@@ -462,11 +487,18 @@ async function openFile(path: string, line?: number, column = 1): Promise<void> 
   }
 }
 
-async function saveActive(): Promise<void> {
+async function saveActive(opts: { format?: boolean } = {}): Promise<void> {
   // From a diff tab, Save writes the file the diff is editing.
   const f = active?.diff ? active.diff.shared : active
   if (!f) return
   await guarded(`Save ${basename(f.path)}`, async () => {
+    // Format first when asked to (not for auto-save, which would move the text under the cursor), and only
+    // when the editor is showing this file. A language without a formatter is skipped quietly.
+    if (opts.format !== false && settings.get<boolean>('formatOnSave') && active && !active.diff) {
+      await lsp.quietFormat(async () => {
+        await editor.getAction('editor.action.formatDocument')?.run()
+      })
+    }
     await window.forge.writeFile(f.path, f.model.getValue())
     f.savedVersion = f.model.getAlternativeVersionId()
     renderTabs()
@@ -510,6 +542,11 @@ async function renderDir(dir: string, into: HTMLElement, depth = 0): Promise<voi
           kids.hidden = !kids.hidden
           twisty.innerHTML = kids.hidden ? icons.chevronRight : icons.chevronDown
           if (kids.childElementCount === 0) await renderDir(e.path, kids, depth + 1)
+          if (!kids.hidden) {
+            kids.classList.remove('kids-enter')
+            void kids.offsetWidth
+            kids.classList.add('kids-enter')
+          }
         })
     } else {
       row.onclick = () => {
@@ -583,7 +620,7 @@ async function renameEntry(path: string): Promise<void> {
 }
 
 async function deleteEntry(path: string): Promise<void> {
-  if (!confirm(`Move "${basename(path)}" to the Recycle Bin?`)) return
+  if (settings.get<boolean>('confirmDelete') && !confirm(`Move "${basename(path)}" to the Recycle Bin?`)) return
   await guarded(`Delete ${basename(path)}`, async () => {
     closeFilesUnder(path)
     await window.forge.trash(path)
@@ -663,8 +700,17 @@ window.addEventListener('keydown', (e) => {
     else toggleView(digit === '2' ? 'output' : 'terminal')
     return
   }
+  if (e.key === 'F11') {
+    e.preventDefault()
+    void window.forge.toggleFullscreen()
+    return
+  }
   // Cmd is the "Ctrl" of macOS.
   if (!(e.ctrlKey || (isMac && e.metaKey))) return
+  if (e.code === 'Comma' && !e.shiftKey && !e.altKey) { e.preventDefault(); settingsUi.open(); return }
+  if (e.altKey && e.code === 'KeyS') { e.preventDefault(); settingsUi.open(); return }
+  if (e.altKey && e.code === 'KeyZ') { e.preventDefault(); toggleZen(); return }
+  if (e.shiftKey && e.code === 'KeyP') { e.preventDefault(); palette.open(); return }
   if (e.shiftKey && e.key === 'F') { e.preventDefault(); showView('find'); return }
   // e.code, not e.key: with Shift held the key reports '~' (and layouts differ).
   if (e.code === 'Backquote' && e.shiftKey) { e.preventDefault(); showView('terminal'); terminals.newTerminal(); return }
@@ -793,7 +839,9 @@ function refreshGit(): void {
   void gitUi.refresh().catch(() => undefined)
 }
 onSideShown.commit = refreshGit
-window.addEventListener('focus', refreshGit) // changes made outside Forge
+window.addEventListener('focus', () => {
+  if (settings.get<boolean>('gitRefreshOnFocus')) refreshGit() // changes made outside Forge
+})
 
 // ---- Run ----
 /** Saves every modified file so a run never executes stale code from disk. */
@@ -866,9 +914,75 @@ window.addEventListener(
     else if (e.key === 'F8' && mods(false, false, false)) act(() => quiet(dbg.control('stepOver')))
     else if (e.key === 'F7' && mods(false, false, false)) act(() => quiet(dbg.control('stepInto')))
     else if (e.key === 'F2' && mods(true, false, false)) act(() => quiet(runUi.stop()))
+    else if (e.key === 'F1' && mods(false, false, false)) act(() => palette.open())
   },
   true
 )
+
+// ---- Settings, command palette, auto save ----
+settings.onSaveError = (err) => report(`Saving settings: ${err.message}`, true)
+for (const problem of settings.problems) report(problem, true) // a broken settings.json or theme file is never silent
+
+function toggleZen(): void {
+  document.body.classList.toggle('zen') // hides everything but the editor; the layout adapts by itself
+}
+
+const settingsUi = initSettingsUi({ openFile, report })
+const palette = initPalette({ report })
+registerBuiltinCommands({
+  openFolder,
+  saveActive: () => saveActive(),
+  closeActiveTab: () => {
+    if (active) closeFile(active)
+  },
+  openSearch: () => void openSearch(),
+  showFind: () => showView('find'),
+  toggleSide,
+  toggleView,
+  newTerminal: () => {
+    showView('terminal')
+    terminals.newTerminal()
+  },
+  toggleZen,
+  toggleFullscreen: async () => void (await window.forge.toggleFullscreen()),
+  openSettings: (category) => settingsUi.open(category),
+  openSettingsFile: async () => {
+    await ensureSettingsFile()
+    await openFile(userData.settingsPath)
+  },
+  openThemesDir: async () => void (await window.forge.openThemesDir()),
+  run: () => runUi.run(),
+  debug: () => dbg.start(),
+  stop: () => runUi.stop(),
+  control: (cmd) => dbg.control(cmd),
+  toggleBreakpoint: () => dbg.toggleAtCursor(),
+  editRunConfigs: () => runUi.editConfigs(),
+  editorAction: (id) => void editor.getAction(id)?.run(),
+  git: (what) => {
+    if (what === 'refresh') refreshGit()
+    else $(`commit-${what}`).click()
+  }
+})
+$('settings-btn').onclick = () => settingsUi.open()
+$('palette-btn').onclick = () => palette.open()
+settings.onChange((key) => {
+  if (key === 'colorful') renderTabs() // tab colors are set per tab
+})
+
+// Auto save: after a pause in typing, or when the window loses focus.
+let autoSaveTimer: number | undefined
+editor.onDidChangeModelContent(() => {
+  if (settings.get<string>('autoSave') !== 'afterDelay') return
+  window.clearTimeout(autoSaveTimer)
+  autoSaveTimer = window.setTimeout(() => {
+    void saveActive({ format: false }).catch(() => undefined) // already reported by guarded()
+  }, settings.get<number>('autoSaveDelay'))
+})
+window.addEventListener('blur', () => {
+  if (settings.get<string>('autoSave') === 'onBlur') {
+    void saveAllDirty().then(refreshGit, (err: unknown) => report(`Auto save: ${err instanceof Error ? err.message : String(err)}`, true))
+  }
+})
 
 syncStripe()
 renderTabs()
