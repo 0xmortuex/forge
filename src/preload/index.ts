@@ -33,6 +33,12 @@ const api = {
   lspClose: (uri: string): Promise<void> => ipcRenderer.invoke('lsp:close', uri),
   lspRequest: (uri: string, method: string, params: unknown): Promise<unknown> =>
     ipcRenderer.invoke('lsp:request', uri, method, params),
+  lspCapabilities: (uri: string): Promise<Record<string, any>> => ipcRenderer.invoke('lsp:capabilities', uri),
+  lspApplyEditResult: (id: number, applied: boolean, failureReason?: string): Promise<void> =>
+    ipcRenderer.invoke('lsp:applyEditResult', id, applied, failureReason),
+  onLspApplyEdit: (cb: (id: number, edit: unknown) => void): void => {
+    ipcRenderer.on('lsp:applyEdit', (_e, id: number, edit: unknown) => cb(id, edit))
+  },
   onLspDiagnostics: (cb: (uri: string, diagnostics: unknown[]) => void): void => {
     ipcRenderer.on('lsp:diagnostics', (_e, uri: string, diagnostics: unknown[]) => cb(uri, diagnostics))
   },

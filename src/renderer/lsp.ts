@@ -1,5 +1,9 @@
 import * as monaco from 'monaco-editor'
+import { askText } from './menu'
+import { applyWorkspaceEdit } from './lsp-edits'
 import type {
+  CodeAction,
+  Command,
   CompletionItem,
   CompletionList,
   Diagnostic,
@@ -11,14 +15,24 @@ import type {
   MarkupContent,
   Position as LspPosition,
   Range as LspRange,
+  ServerCapabilities,
   SignatureHelp,
-  TextEdit
+  TextEdit,
+  WorkspaceEdit
 } from 'vscode-languageserver-protocol'
 
 /** Monaco language ids that Forge can talk to a language server for (see BY_EXT in main/lsp.ts). */
 const LANGUAGES = ['typescript', 'javascript', 'python', 'c', 'cpp', 'mort']
 
+/** An error that has already been shown to the user, so callers must not report it again. */
+class Reported extends Error {}
+
 export interface LspDeps {
+  editor: monaco.editor.IStandaloneCodeEditor
+  /** The open model for a path, if the file is open in a tab. */
+  getModel: (path: string) => monaco.editor.ITextModel | undefined
+  /** Shows Find Usages results (in the Find panel). */
+  showUsages: (symbol: string, hits: { path: string; line: number; text: string }[]) => void
   getRoot: () => string | null
   openFile: (path: string, line?: number, column?: number) => Promise<void>
   report: (msg: string, isError?: boolean) => void
@@ -34,6 +48,8 @@ interface Doc {
   timer: number | undefined
   errors: number
   warnings: number
+  diagnostics: Diagnostic[] // the server's own, kept for code-action requests
+  caps?: Promise<ServerCapabilities>
 }
 
 // Windows paths are case-insensitive and servers differ on drive-letter case, so compare lowercased.
@@ -103,8 +119,9 @@ export function initLsp(deps: LspDeps): {
         ...params
       })) as T | null
     } catch (err) {
-      deps.report(`${method}: ${err instanceof Error ? err.message : String(err)}`, true)
-      throw err
+      const message = `${method}: ${err instanceof Error ? err.message : String(err)}`
+      deps.report(message, true)
+      throw new Reported(message)
     }
   }
 
@@ -114,7 +131,7 @@ export function initLsp(deps: LspDeps): {
     const uri = model.uri.toString()
     const doc: Doc = {
       model, uri, supported: false, sentVersion: model.getVersionId(), timer: undefined,
-      errors: 0, warnings: 0, opening: Promise.resolve()
+      errors: 0, warnings: 0, diagnostics: [], opening: Promise.resolve()
     }
     doc.opening = window.forge
       .lspOpen(root, uri, path, model.getVersionId(), model.getValue())
@@ -159,6 +176,7 @@ export function initLsp(deps: LspDeps): {
     const doc = docs.get(keyOf(uri))
     if (!doc) return
     const diags = raw as Diagnostic[]
+    doc.diagnostics = diags
     monaco.editor.setModelMarkers(
       doc.model,
       'lsp',
@@ -286,6 +304,211 @@ export function initLsp(deps: LspDeps): {
           : { uri: monaco.Uri.parse(l.uri), range: toRange(l.range) }
       )
     }
+  })
+
+  // ---- Refactoring: formatting, find usages, rename, quick fixes ----
+  const capabilities = async (model: monaco.editor.ITextModel): Promise<ServerCapabilities | null> => {
+    const doc = docs.get(keyOf(model.uri))
+    if (!doc) return null
+    await doc.opening
+    if (!doc.supported) return null
+    doc.caps ??= window.forge.lspCapabilities(doc.uri) as Promise<ServerCapabilities>
+    return doc.caps
+  }
+  const unsupported = (model: monaco.editor.ITextModel, what: string): void =>
+    deps.report(`The language server for ${model.getLanguageId()} doesn't support ${what}`, true)
+
+  const toMonacoRange = (r: monaco.IRange): LspRange => ({
+    start: { line: r.startLineNumber - 1, character: r.startColumn - 1 },
+    end: { line: r.endLineNumber - 1, character: r.endColumn - 1 }
+  })
+  const toEdits = (edits: TextEdit[] | null): monaco.languages.TextEdit[] =>
+    (edits ?? []).map((e) => ({ range: toRange(e.range), text: e.newText }))
+  const formatOptions = (o: monaco.languages.FormattingOptions): object => ({ tabSize: o.tabSize, insertSpaces: o.insertSpaces })
+
+  monaco.languages.registerDocumentFormattingEditProvider(LANGUAGES, {
+    displayName: 'Language server',
+    async provideDocumentFormattingEdits(model, options) {
+      if (!(await capabilities(model))?.documentFormattingProvider) {
+        unsupported(model, 'formatting')
+        return []
+      }
+      return toEdits(await request<TextEdit[]>(model, 'textDocument/formatting', { options: formatOptions(options) }))
+    }
+  })
+  monaco.languages.registerDocumentRangeFormattingEditProvider(LANGUAGES, {
+    displayName: 'Language server',
+    async provideDocumentRangeFormattingEdits(model, range, options) {
+      if (!(await capabilities(model))?.documentRangeFormattingProvider) {
+        unsupported(model, 'formatting a selection')
+        return []
+      }
+      return toEdits(
+        await request<TextEdit[]>(model, 'textDocument/rangeFormatting', { range: toMonacoRange(range), options: formatOptions(options) })
+      )
+    }
+  })
+
+  /** User-triggered actions report their own failures; requests already reported theirs. */
+  const safe = (label: string, fn: () => Promise<void>) => async (): Promise<void> => {
+    try {
+      await fn()
+    } catch (err) {
+      if (!(err instanceof Reported)) deps.report(`${label}: ${err instanceof Error ? err.message : String(err)}`, true)
+    }
+  }
+
+  async function lineTexts(path: string): Promise<string[]> {
+    const open = deps.getModel(path)
+    const text = open ? open.getValue() : await window.forge.readFile(path)
+    return text.split('\n').map((l) => (l.endsWith('\r') ? l.slice(0, -1) : l))
+  }
+
+  async function findUsages(): Promise<void> {
+    const model = deps.editor.getModel()
+    const pos = deps.editor.getPosition()
+    if (!model || !pos) return
+    if (!(await capabilities(model))?.referencesProvider) return unsupported(model, 'Find Usages')
+    const locations = await request<Location[]>(model, 'textDocument/references', {
+      position: toLsp(pos),
+      context: { includeDeclaration: true }
+    })
+    const word = model.getWordAtPosition(pos)?.word ?? ''
+    const cache = new Map<string, string[]>()
+    const hits: { path: string; line: number; text: string }[] = []
+    for (const loc of locations ?? []) {
+      const path = monaco.Uri.parse(loc.uri).fsPath
+      let lines = cache.get(path)
+      if (!lines) {
+        lines = await lineTexts(path)
+        cache.set(path, lines)
+      }
+      hits.push({ path, line: loc.range.start.line + 1, text: (lines[loc.range.start.line] ?? '').trim() })
+    }
+    hits.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line)
+    if (!hits.length) deps.report(`No usages of ${word || 'the symbol'} found`)
+    deps.showUsages(word, hits)
+  }
+
+  async function renameSymbol(): Promise<void> {
+    const model = deps.editor.getModel()
+    const pos = deps.editor.getPosition()
+    if (!model || !pos) return
+    const caps = await capabilities(model)
+    if (!caps?.renameProvider) return unsupported(model, 'Rename')
+    const word = model.getWordAtPosition(pos)
+    if (!word) return deps.report('Put the cursor on a symbol to rename it', true)
+    let placeholder = word.word
+    if (typeof caps.renameProvider === 'object' && caps.renameProvider.prepareProvider) {
+      const prep = await request<{ placeholder?: string } | null>(model, 'textDocument/prepareRename', { position: toLsp(pos) })
+      if (!prep) return deps.report(`"${word.word}" can't be renamed here`, true)
+      placeholder = prep.placeholder ?? placeholder
+    }
+    const name = await askText('Rename symbol', placeholder)
+    if (!name || name === placeholder) return
+    const edit = await request<WorkspaceEdit>(model, 'textDocument/rename', { position: toLsp(pos), newName: name })
+    if (!edit) return deps.report('The language server returned no edits for the rename', true)
+    const res = await applyWorkspaceEdit(edit, { getModel: deps.getModel })
+    deps.report(
+      `Renamed ${placeholder} → ${name}: ${res.edits} edit${res.edits === 1 ? '' : 's'} in ${res.files} file${res.files === 1 ? '' : 's'} (open files are unsaved)`
+    )
+  }
+
+  deps.editor.addAction({
+    id: 'forge.findUsages',
+    label: 'Find Usages',
+    keybindings: [monaco.KeyMod.Alt | monaco.KeyCode.F7, monaco.KeyMod.Shift | monaco.KeyCode.F12],
+    contextMenuGroupId: 'navigation',
+    contextMenuOrder: 1.6,
+    run: safe('Find Usages', findUsages)
+  })
+  deps.editor.addAction({
+    id: 'forge.rename',
+    label: 'Rename Symbol…',
+    keybindings: [monaco.KeyCode.F2, monaco.KeyMod.Shift | monaco.KeyCode.F6],
+    contextMenuGroupId: '1_modification',
+    contextMenuOrder: 1.1,
+    run: safe('Rename', renameSymbol)
+  })
+  deps.editor.addAction({
+    id: 'forge.reformat',
+    label: 'Reformat Code',
+    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.KeyL],
+    contextMenuGroupId: '1_modification',
+    contextMenuOrder: 1.2,
+    run: (ed) => {
+      const hasSelection = !ed.getSelection()?.isEmpty()
+      return ed.getAction(hasSelection ? 'editor.action.formatSelection' : 'editor.action.formatDocument')?.run()
+    }
+  })
+
+  // Quick fixes and other code actions (Ctrl+.). The server's raw diagnostics are used as context, because
+  // servers match fixes on their own diagnostic codes.
+  const overlaps = (a: LspRange, b: LspRange): boolean =>
+    !(a.end.line < b.start.line || (a.end.line === b.start.line && a.end.character < b.start.character) ||
+      b.end.line < a.start.line || (b.end.line === a.start.line && b.end.character < a.start.character))
+
+  monaco.languages.registerCodeActionProvider(LANGUAGES, {
+    async provideCodeActions(model, range, context) {
+      const none = { actions: [], dispose: () => undefined }
+      if (!(await capabilities(model))?.codeActionProvider) return none
+      const doc = docs.get(keyOf(model.uri))
+      if (!doc) return none
+      const lspRange = toMonacoRange(range)
+      const res = await request<(CodeAction | Command)[]>(model, 'textDocument/codeAction', {
+        range: lspRange,
+        context: {
+          diagnostics: doc.diagnostics.filter((d) => overlaps(d.range, lspRange)),
+          only: context.only ? [context.only] : undefined,
+          triggerKind: context.trigger
+        }
+      })
+      const actions = (res ?? []).map((item): monaco.languages.CodeAction => {
+        // The protocol allows a bare Command here; treat it as an action that only runs that command.
+        const action: CodeAction = typeof (item as Command).command === 'string' ? { title: item.title, command: item as Command } : (item as CodeAction)
+        return {
+          title: action.title,
+          kind: action.kind,
+          isPreferred: action.isPreferred,
+          command: { id: 'forge.applyCodeAction', title: action.title, arguments: [doc.uri, action] }
+        }
+      })
+      return { actions, dispose: () => undefined }
+    }
+  })
+
+  monaco.editor.registerCommand('forge.applyCodeAction', (_accessor, uri: string, action: CodeAction) =>
+    safe(`Quick fix "${action.title}"`, async () => {
+      let a = action
+      if (!a.edit && !a.command) {
+        // Many servers send fixes without their edit and fill it in on demand.
+        const caps = await window.forge.lspCapabilities(uri)
+        const provider = (caps as ServerCapabilities).codeActionProvider
+        if (typeof provider === 'object' && provider.resolveProvider) {
+          a = (await window.forge.lspRequest(uri, 'codeAction/resolve', a)) as CodeAction
+        }
+      }
+      if (a.edit) {
+        const res = await applyWorkspaceEdit(a.edit, { getModel: deps.getModel })
+        deps.report(`${a.title}: ${res.edits} edit${res.edits === 1 ? '' : 's'}`)
+      }
+      if (a.command) {
+        await window.forge.lspRequest(uri, 'workspace/executeCommand', { command: a.command.command, arguments: a.command.arguments })
+      }
+      if (!a.edit && !a.command) throw new Error('The language server offered no edit or command for this fix')
+    })()
+  )
+
+  // A server can also push edits itself (workspace/applyEdit), e.g. after running a command.
+  window.forge.onLspApplyEdit((id, edit) => {
+    applyWorkspaceEdit(edit as WorkspaceEdit, { getModel: deps.getModel }).then(
+      () => void window.forge.lspApplyEditResult(id, true),
+      (err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err)
+        deps.report(`Applying a server edit failed: ${message}`, true)
+        void window.forge.lspApplyEditResult(id, false, message)
+      }
+    )
   })
 
   // Go-to-definition into a file that isn't open: open it in a tab instead of Monaco's own model.

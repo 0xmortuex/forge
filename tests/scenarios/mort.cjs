@@ -19,6 +19,8 @@ const { run } = require('../harness.cjs')
 run(
   'mort',
   {
+    // Mort's formatter normalizes indentation to 4 spaces and strips trailing blanks.
+    'sloppy.mx': 'fn main() -> int {\n        return 0;   \n}\n\n\n',
     'hello.mx': [
       'fn add(a: i32, b: i32) -> i32 {',
       '    return a + b;',
@@ -76,6 +78,23 @@ run(
     check(
       'completion offers print/println',
       !!(await waitFor(async () => (await js("document.querySelector('.suggest-widget.visible')?.textContent ?? ''")).includes('print'), 15000))
+    )
+    key('Escape')
+
+    // Mort's own formatter, through Ctrl+Alt+L
+    await js("[...document.querySelectorAll('.node')].find(n => n.textContent === 'sloppy.mx').click()")
+    await waitFor(async () => (await text('tabs')).includes('sloppy.mx'), 5000)
+    await t.sleep(1500)
+    const before = (await js("document.querySelector('#editor .view-lines')?.textContent ?? ''")).split('\u00a0').join(' ')
+    await js("document.querySelector('#editor .monaco-editor textarea').focus(); undefined")
+    key('L', ['control', 'alt'])
+    check(
+      "Ctrl+Alt+L formats Mort code with Mort's formatter",
+      !!(await waitFor(async () => {
+        const after = (await js("document.querySelector('#editor .view-lines')?.textContent ?? ''")).split('\u00a0').join(' ')
+        return after !== before && after.includes('{    return 0;}') // exactly 4 spaces of indent now
+      }, 20000)),
+      before
     )
   }
 )

@@ -9,7 +9,7 @@ export interface FindDeps {
 }
 
 /** Wires up the Find-in-project view. Search runs on Enter. */
-export function initFind(d: FindDeps): void {
+export function initFind(d: FindDeps): { show: (title: string, query: string, hits: { path: string; line: number; text: string }[]) => void } {
   let runId = 0 // drops results from a search that was superseded while running
 
   const render = (query: string, hits: { path: string; line: number; text: string }[]): void => {
@@ -54,5 +54,14 @@ export function initFind(d: FindDeps): void {
       render(query, hits)
       d.count.textContent = `${hits.length}${truncated ? '+' : ''} match${hits.length === 1 ? '' : 'es'}`
     })
+  }
+
+  return {
+    /** Shows results that came from somewhere else (e.g. Find Usages), highlighting `query` on each line. */
+    show(title, query, hits) {
+      runId++ // an in-flight text search must not overwrite these
+      render(query, hits)
+      d.count.textContent = title
+    }
   }
 }

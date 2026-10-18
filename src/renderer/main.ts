@@ -242,7 +242,8 @@ let hits: { path: string; idx: number[] }[] = []
 let selected = 0
 
 function relPath(p: string): string {
-  return rootDir && p.startsWith(rootDir) ? p.slice(rootDir.length + 1) : p
+  // Case-insensitive: language servers report a lowercase drive letter ("c:\...") where the root has "C:\...".
+  return rootDir && p.toLowerCase().startsWith(rootDir.toLowerCase()) ? p.slice(rootDir.length + 1) : p
 }
 
 function renderResults(): void {
@@ -669,6 +670,12 @@ window.addEventListener('keydown', (e) => {
 
 const stProblems = $('st-problems')
 const lsp = initLsp({
+  editor,
+  getModel: (path) => [...openFiles.values()].find((f) => !f.diff && samePath(f.path, path))?.model,
+  showUsages: (symbol, hits) => {
+    showView('find')
+    finder.show(`${hits.length} usage${hits.length === 1 ? '' : 's'} of ${symbol || 'symbol'}`, symbol, hits)
+  },
   getRoot: () => rootDir,
   openFile,
   report,
@@ -682,7 +689,7 @@ const terminals = initTerminals({ getCwd: () => rootDir, guard: guarded })
 onViewShown.terminal = () => terminals.show()
 
 const findInput = $<HTMLInputElement>('find-input')
-initFind({
+const finder = initFind({
   input: findInput,
   results: $('find-results'),
   count: $('find-count'),
@@ -841,14 +848,18 @@ window.addEventListener(
       fn()
     }
     const quiet = (p: Promise<unknown>): void => void p.catch(() => undefined) // errors are reported by guard
-    if (e.key === 'F10' && e.shiftKey) act(() => quiet(runUi.run()))
-    else if (e.key === 'F9' && e.shiftKey) act(() => quiet(dbg.start()))
-    else if (e.key === 'F9') act(() => quiet(dbg.control('resume')))
-    else if (e.key === 'F8' && e.ctrlKey) act(() => dbg.toggleAtCursor())
-    else if (e.key === 'F8' && e.shiftKey) act(() => quiet(dbg.control('stepOut')))
-    else if (e.key === 'F8') act(() => quiet(dbg.control('stepOver')))
-    else if (e.key === 'F7') act(() => quiet(dbg.control('stepInto')))
-    else if (e.key === 'F2' && e.ctrlKey) act(() => quiet(runUi.stop()))
+    // Exact modifier matches only: this runs before Monaco, so a loose match would steal keys such as
+    // Alt+F7 (Find Usages) or Shift+F12 from the editor.
+    const mods = (ctrl: boolean, shift: boolean, alt: boolean): boolean =>
+      e.ctrlKey === ctrl && e.shiftKey === shift && e.altKey === alt && !e.metaKey
+    if (e.key === 'F10' && mods(false, true, false)) act(() => quiet(runUi.run()))
+    else if (e.key === 'F9' && mods(false, true, false)) act(() => quiet(dbg.start()))
+    else if (e.key === 'F9' && mods(false, false, false)) act(() => quiet(dbg.control('resume')))
+    else if (e.key === 'F8' && mods(true, false, false)) act(() => dbg.toggleAtCursor())
+    else if (e.key === 'F8' && mods(false, true, false)) act(() => quiet(dbg.control('stepOut')))
+    else if (e.key === 'F8' && mods(false, false, false)) act(() => quiet(dbg.control('stepOver')))
+    else if (e.key === 'F7' && mods(false, false, false)) act(() => quiet(dbg.control('stepInto')))
+    else if (e.key === 'F2' && mods(true, false, false)) act(() => quiet(runUi.stop()))
   },
   true
 )

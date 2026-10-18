@@ -26,6 +26,28 @@ interface ServerSpec {
 
 const nodeRequire = createRequire(__filename)
 
+// Servers can ask the client to apply an edit (e.g. after a command). The renderer owns the editor models,
+// so the request is forwarded there and answered through 'lsp:applyEditResult'.
+const APPLY_EDIT_TIMEOUT_MS = 30000
+const pendingEdits = new Map<number, (r: { applied: boolean; failureReason?: string }) => void>()
+let nextEditId = 1
+
+function requestApplyEdit(wc: WebContents, edit: unknown): Promise<{ applied: boolean; failureReason?: string }> {
+  return new Promise((resolve) => {
+    const id = nextEditId++
+    const timer = setTimeout(() => {
+      pendingEdits.delete(id)
+      resolve({ applied: false, failureReason: 'The editor did not answer in time' })
+    }, APPLY_EDIT_TIMEOUT_MS)
+    pendingEdits.set(id, (r) => {
+      clearTimeout(timer)
+      resolve(r)
+    })
+    if (wc.isDestroyed()) return resolve({ applied: false, failureReason: 'The window is gone' })
+    wc.send('lsp:applyEdit', id, edit)
+  })
+}
+
 /** Runs an npm package's bin script with Electron's own Node, so users need no separate Node install. */
 function npmBin(pkg: string, binName: string): Launch {
   const pkgJsonPath = nodeRequire.resolve(`${pkg}/package.json`)
@@ -77,6 +99,10 @@ const REQUEST_CANCELLED = -32800
 
 class Client {
   readonly ready: Promise<void>
+  /** What the server said it can do, from its initialize response. */
+  capabilities: Record<string, unknown> = {}
+  /** tsserver only: whether the one-off project-loading query has been sent. */
+  warmedUp = false
   private child: ChildProcessWithoutNullStreams
   private conn: MessageConnection
 
@@ -128,6 +154,7 @@ class Client {
     this.conn.onRequest('client/registerCapability', () => null)
     this.conn.onRequest('client/unregisterCapability', () => null)
     this.conn.onRequest('window/workDoneProgress/create', () => null)
+    this.conn.onRequest('workspace/applyEdit', (p: { edit: unknown }) => requestApplyEdit(wc, p.edit))
     this.conn.listen()
 
     this.ready = spawned.then(() => this.initialize())
@@ -144,13 +171,13 @@ class Client {
   }
 
   private async initialize(): Promise<void> {
-    await this.conn.sendRequest('initialize', {
+    const init = (await this.conn.sendRequest('initialize', {
       processId: process.pid,
       rootUri: this.folder().uri,
       workspaceFolders: [this.folder()],
       clientInfo: { name: 'Forge' },
       capabilities: {
-        workspace: { configuration: true, workspaceFolders: true },
+        workspace: { configuration: true, workspaceFolders: true, applyEdit: true, workspaceEdit: { documentChanges: true } },
         textDocument: {
           synchronization: { dynamicRegistration: false, didSave: false },
           completion: {
@@ -168,10 +195,25 @@ class Client {
             }
           },
           definition: { linkSupport: true },
+          references: {},
+          rename: { prepareSupport: true },
+          formatting: {},
+          rangeFormatting: {},
+          codeAction: {
+            isPreferredSupport: true,
+            dataSupport: true,
+            resolveSupport: { properties: ['edit'] },
+            codeActionLiteralSupport: {
+              codeActionKind: {
+                valueSet: ['', 'quickfix', 'refactor', 'refactor.extract', 'refactor.inline', 'refactor.rewrite', 'source', 'source.organizeImports']
+              }
+            }
+          },
           publishDiagnostics: {}
         }
       }
-    })
+    })) as { capabilities: Record<string, unknown> }
+    this.capabilities = init.capabilities
     await this.conn.sendNotification('initialized', {})
   }
 
@@ -236,6 +278,17 @@ export function registerLsp(): void {
       )
       docs.set(uri, { client: c, opened })
       await opened
+      // tsserver loads the rest of the project lazily and answers early cross-file queries (references,
+      // rename) with only what it has seen so far. One throwaway query when the first file opens makes it
+      // load the project in the background, so the user's first real query gets complete answers.
+      if (serverId === 'typescript' && !c.warmedUp) {
+        c.warmedUp = true
+        c.request('textDocument/references', {
+          textDocument: { uri },
+          position: { line: 0, character: 0 },
+          context: { includeDeclaration: false }
+        }).catch(() => undefined) // a failed warm-up is invisible by design; real queries report their own errors
+      }
       return true
     }
   )
@@ -255,6 +308,17 @@ export function registerLsp(): void {
     docs.delete(uri)
     await d.opened
     await d.client.notify('textDocument/didClose', { textDocument: { uri } })
+  })
+
+  ipcMain.handle('lsp:capabilities', async (_e, uri: string) => {
+    const d = getDoc(uri)
+    await d.opened
+    return d.client.capabilities
+  })
+
+  ipcMain.handle('lsp:applyEditResult', (_e, id: number, applied: boolean, failureReason?: string) => {
+    pendingEdits.get(id)?.({ applied, failureReason })
+    pendingEdits.delete(id)
   })
 
   ipcMain.handle('lsp:request', async (_e, uri: string, method: string, params: unknown) => {
