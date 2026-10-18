@@ -10,6 +10,7 @@ import { initRipples, shouldToast, toast } from './effects'
 import { initPalette } from './commands'
 import { initSettingsUi } from './settings-ui'
 import { session } from './session'
+import { keymap } from './keymap'
 import { registerBuiltinCommands } from './builtin-commands'
 import { fuzzy } from './search'
 import { fileColor, fileIcon, folderIcon, icons } from './icons'
@@ -1006,6 +1007,7 @@ registerBuiltinCommands({
     else $(`commit-${what}`).click()
   }
 })
+keymap.init(report) // custom shortcuts, now that every command exists
 $('settings-btn').onclick = () => settingsUi.open()
 $('open-folder-btn').onclick = () => void openFolder()
 $('palette-btn').onclick = () => palette.open()

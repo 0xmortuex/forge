@@ -14,6 +14,12 @@ export interface Command {
   revert?: () => void
 }
 
+/** Shortcuts the user assigned (command id -> "Ctrl+Alt+M"); see keymap.ts. */
+export const customKeys = new Map<string, string>()
+
+/** The shortcut to show for a command: the user's own if they set one, else the default. */
+export const effectiveKeys = (c: Command): string | undefined => customKeys.get(c.id) ?? c.keys
+
 const registry = new Map<string, Command>()
 const recent: string[] = [] // most recent first
 
@@ -98,10 +104,11 @@ export function initPalette(deps: PaletteDeps): { open: (query?: string) => void
         } else left.append(ch)
       }
       row.append(left)
-      if (cmd.keys) {
+      const shown = effectiveKeys(cmd)
+      if (shown) {
         const keys = document.createElement('span')
         keys.className = 'keys'
-        for (const k of cmd.keys.split('+')) {
+        for (const k of shown.split('+')) {
           const kbd = document.createElement('kbd')
           kbd.textContent = k
           keys.append(kbd)

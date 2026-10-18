@@ -149,6 +149,9 @@ export interface Store {
   reset(key: string): void
   resetAll(): void
   isChanged(key: string): boolean
+  /** Structured values that aren't individual settings (keybindings...). Kept in settings.json too. */
+  getJson<T>(key: string, fallback: T): T
+  setJson(key: string, value: unknown): void
   onChange(fn: Listener): () => void
   /** Problems found while reading settings.json (unknown type, out of range, ...). */
   problems: string[]
@@ -200,6 +203,14 @@ export const settings: Store = {
     for (const k of keys) changed(k, defOf(k).default)
   },
   isChanged: (key) => overrides.has(key),
+  getJson<T>(key: string, fallback: T): T {
+    return key in extra ? (extra[key] as T) : fallback
+  },
+  setJson(key, value) {
+    if (value === undefined || (typeof value === 'object' && value !== null && Object.keys(value).length === 0)) delete extra[key]
+    else extra[key] = value
+    changed(key, JSON.stringify(value ?? null))
+  },
   onChange(fn) {
     listeners.add(fn)
     return () => listeners.delete(fn)

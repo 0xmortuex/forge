@@ -1,4 +1,5 @@
-import { commands } from './commands'
+import { commands, customKeys, effectiveKeys } from './commands'
+import { keymap } from './keymap'
 import { icons } from './icons'
 import { CATEGORIES, DEFS, ensureSettingsFile, settings, userData, type SettingDef, type Value } from './settings'
 import { allThemes, BUILTIN_THEMES, type Palette } from './themes'
@@ -268,19 +269,61 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
     body.append(box)
   }
 
-  function keymap(): void {
+  /** Every command, with its shortcut. "Set" records a new one; a custom shortcut is added to the default. */
+  function keymapPage(): void {
     const g = el('div', 'sgroup')
     g.append(el('h3', '', 'Keyboard shortcuts'))
+    const q = search.value.trim().toLowerCase()
     const table = el('table', 'keytable')
-    for (const c of commands().filter((x) => x.keys)) {
+    for (const c of commands().filter((x) => !q || `${x.category} ${x.title}`.toLowerCase().includes(q))) {
       const tr = el('tr')
+      tr.dataset['id'] = c.id
       tr.append(el('td', '', `${c.category}: ${c.title}`))
-      const td = el('td')
-      for (const k of (c.keys as string).split('+')) td.append(el('kbd', '', k))
-      tr.append(td)
+      const keysCell = el('td', 'keys-cell')
+      const paint = (): void => {
+        keysCell.replaceChildren()
+        const shown = effectiveKeys(c)
+        if (c.keys) for (const k of c.keys.split('+')) keysCell.append(el('kbd', '', k))
+        const mine = customKeys.get(c.id)
+        if (mine) {
+          keysCell.append(el('span', 'desc', ' + '))
+          for (const k of mine.split('+')) keysCell.append(el('kbd', 'custom', k))
+        } else if (!shown) keysCell.append(el('span', 'desc', '—'))
+      }
+      paint()
+      const actions = el('td', 'key-actions')
+      const set = el('button', 'btn', 'Set')
+      set.onclick = () => {
+        set.textContent = 'Press keys… (Esc cancels)'
+        keymap
+          .record(c.id)
+          .then((combo) => {
+            if (combo) keymap.set(c.id, combo)
+          })
+          .catch((err: unknown) => deps.report(err instanceof Error ? err.message : String(err), true))
+          .finally(() => {
+            set.textContent = 'Set'
+            paint()
+            clear.hidden = !customKeys.has(c.id)
+          })
+      }
+      const clear = el('button', 'btn', 'Remove')
+      clear.hidden = !customKeys.has(c.id)
+      clear.onclick = () => {
+        keymap.set(c.id, null)
+        paint()
+        clear.hidden = true
+      }
+      actions.append(set, clear)
+      tr.append(keysCell, actions)
       table.append(tr)
     }
-    g.append(table, el('div', 'desc', 'Open the Command Palette (Ctrl+Shift+P) to find any action, with or without a shortcut.'))
+    const reset = el('button', 'btn', 'Remove all custom shortcuts')
+    reset.onclick = () => {
+      keymap.resetAll()
+      render()
+    }
+    g.append(table, el('div', 'desc', 'A shortcut you set is added to the default one. Open the Command Palette (Ctrl+Shift+P) to find any action.'), reset)
     body.append(g)
   }
 
@@ -302,8 +345,8 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
     body.scrollTop = 0
     problems()
     const q = search.value.trim().toLowerCase()
-    nav.querySelectorAll('.snav').forEach((n) => n.classList.toggle('active', !q && (n as HTMLElement).dataset['cat'] === category))
-    if (q) {
+    nav.querySelectorAll('.snav').forEach((n) => n.classList.toggle('active', (!q || category === 'Keymap') && (n as HTMLElement).dataset['cat'] === category))
+    if (q && category !== 'Keymap') {
       const hits = DEFS.filter((d) => `${d.label} ${d.description ?? ''} ${d.group} ${d.category} ${d.key}`.toLowerCase().includes(q))
       note.textContent = `${hits.length} setting${hits.length === 1 ? '' : 's'} match`
       for (const cat of CATEGORIES) {
@@ -314,7 +357,7 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
       return
     }
     note.textContent = ''
-    if (category === 'Keymap') return keymap()
+    if (category === 'Keymap') return keymapPage()
     if (category === 'About') return about()
     const defs = DEFS.filter((d) => d.category === category)
     const groups = [...new Set(defs.map((d) => d.group))]
