@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:"
+    />
+    <title>Forge</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <aside id="project"><div class="tw-header">Project</div><div id="tree"></div></aside>
+      <main id="editor-area">
+        <div id="tabs"></div>
+        <div id="editor"></div>
+        <div id="welcome">Open a folder with <kbd>Ctrl</kbd>+<kbd>O</kbd></div>
+      </main>
+    </div>
+    <footer id="status"><span id="status-msg"></span><span id="status-pos"></span></footer>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
