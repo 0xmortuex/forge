@@ -9,6 +9,7 @@ import { ensureSettingsFile, settings, userData } from './settings'
 import { initRipples, shouldToast, toast } from './effects'
 import { initPalette } from './commands'
 import { initSettingsUi } from './settings-ui'
+import { session } from './session'
 import { registerBuiltinCommands } from './builtin-commands'
 import { fuzzy } from './search'
 import { fileColor, fileIcon, folderIcon, icons } from './icons'
@@ -193,6 +194,7 @@ function setWindowHidden(name: string, hidden: boolean): void {
   split.hidden = hidden
   if (wasHidden && !hidden) playEnter(win)
   syncStripe()
+  saveSession()
 }
 
 function toggleToolWindow(name: string): void {
@@ -240,6 +242,7 @@ function makeSplitter(split: HTMLElement, target: HTMLElement, axis: 'x' | 'y'):
     const up = (): void => {
       window.removeEventListener('mousemove', move)
       window.removeEventListener('mouseup', up)
+      saveSession()
     }
     window.addEventListener('mousemove', move)
     window.addEventListener('mouseup', up)
@@ -423,6 +426,7 @@ function renderTabs(): void {
   }
   renderedTabs.clear()
   for (const k of keys) renderedTabs.add(k)
+  saveSession()
   welcomeEl.style.display = openFiles.size ? 'none' : 'flex'
 }
 
@@ -654,7 +658,10 @@ treeEl.oncontextmenu = (ev) => {
 
 async function openFolder(): Promise<void> {
   const dir = await window.forge.openFolder()
-  if (!dir) return
+  if (dir) await openFolderAt(dir)
+}
+
+async function openFolderAt(dir: string): Promise<void> {
   await guarded('Open folder', async () => {
     treeEl.replaceChildren()
     dirs.clear()
@@ -664,6 +671,9 @@ async function openFolder(): Promise<void> {
     document.title = `${basename(dir)} – Forge`
     $('project-name').textContent = basename(dir)
     report(`Opened ${dir}`)
+    session.addRecent(dir)
+    session.update({ lastFolder: dir })
+    renderRecents()
   })
   refreshGit()
 }
@@ -921,6 +931,7 @@ window.addEventListener(
 
 // ---- Settings, command palette, auto save ----
 settings.onSaveError = (err) => report(`Saving settings: ${err.message}`, true)
+session.onError = (err) => report(`Saving session: ${err.message}`, true)
 for (const problem of settings.problems) report(problem, true) // a broken settings.json or theme file is never silent
 
 function toggleZen(): void {
@@ -984,5 +995,86 @@ window.addEventListener('blur', () => {
   }
 })
 
+// ---- Session: reopen the last project, tabs and layout; recent projects on the welcome screen ----
+let restoring = true // the session isn't saved while it's still being restored (that would overwrite it)
+
+function saveSession(): void {
+  if (restoring) return
+  const layout = session.get().layout
+  const width = $('project').offsetWidth
+  const height = $('bottom').offsetHeight
+  session.update({
+    openFiles: [...openFiles.values()].filter((f) => !f.diff).map((f) => f.path),
+    activeFile: (active?.diff ? active.diff.shared : active)?.path,
+    layout: {
+      projectWidth: width > 0 ? width : layout.projectWidth, // a hidden window measures 0: keep the last real size
+      bottomHeight: height > 0 ? height : layout.bottomHeight,
+      projectHidden: toolWindows['project']!.hidden,
+      bottomHidden: toolWindows['bottom']!.hidden,
+      side: currentSide,
+      view: currentView
+    }
+  })
+}
+
+function renderRecents(): void {
+  const box = $('recents')
+  box.replaceChildren()
+  const list = session.get().recents
+  if (!list.length) return
+  const h = document.createElement('h4')
+  h.textContent = 'Recent projects'
+  box.append(h)
+  list.forEach((dir, i) => {
+    const b = document.createElement('button')
+    b.className = 'recent'
+    b.style.setProperty('--i', String(i))
+    const name = document.createElement('span')
+    name.className = 'rn'
+    name.textContent = basename(dir)
+    const where = document.createElement('span')
+    where.className = 'rp'
+    where.textContent = dir
+    b.append(name, where)
+    b.onclick = () => void openFolderAt(dir).catch(() => undefined) // reported by guarded()
+    box.append(b)
+  })
+}
+
+async function restoreSession(): Promise<void> {
+  const s = session.get()
+  renderRecents()
+  try {
+    if (!settings.get<boolean>('restoreSession') || !s.lastFolder) return
+    const l = s.layout
+    if (l.projectWidth) $('project').style.width = `${l.projectWidth}px`
+    if (l.bottomHeight) $('bottom').style.height = `${l.bottomHeight}px`
+    showSide(l.side ?? 'project')
+    // Only the passive views come back by themselves; a terminal, run or debug session shouldn't start unasked.
+    showView(l.view === 'find' ? 'find' : 'output')
+    if (l.projectHidden) setWindowHidden('project', true)
+    if (l.bottomHidden) setWindowHidden('bottom', true)
+    try {
+      await openFolderAt(s.lastFolder)
+    } catch {
+      session.removeRecent(s.lastFolder) // reported by guarded(); don't keep trying a folder that is gone
+      renderRecents()
+      return
+    }
+    for (const path of s.openFiles) {
+      try {
+        await openFile(path)
+      } catch {
+        // A file that was deleted since last time is reported by guarded(); the others still reopen.
+      }
+    }
+    if (s.activeFile) await openFile(s.activeFile).catch(() => undefined) // reported by guarded()
+  } finally {
+    restoring = false
+    saveSession()
+  }
+}
+
 syncStripe()
 renderTabs()
+void restoreSession()

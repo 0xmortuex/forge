@@ -431,3 +431,13 @@ body.reduced #aurora, body.reduced .logo, body.reduced .w-title, body.reduced.bu
 
 /* ripples need a positioned, clipping host */
 .btab, .ttab, .btn, .btn-primary, #commit-btn { position: relative; overflow: hidden; }
+
+/* Recent projects on the welcome screen */
+#recents { width: 320px; margin-top: 18px; }
+#recents h4 { margin: 0 0 6px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); }
+.recent { display: flex; flex-direction: column; padding: 5px 10px; border-radius: 8px; text-align: left; width: 100%;
+  transition: background var(--t-fast), transform var(--t-fast) var(--ease); animation: rise var(--t-slow) var(--ease) both;
+  animation-delay: calc((8 + var(--i, 0)) * 70ms * var(--speed)); }
+.recent:hover { background: var(--hover); transform: translateX(3px); }
+.recent .rn { color: var(--text-hi); font-weight: 600; }
+.recent .rp { color: var(--text-dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

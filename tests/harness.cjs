@@ -26,10 +26,12 @@ async function run(name, files, scenario, options = {}) {
   }
   // Every run gets its own user-data folder, so tests never touch (or depend on) the real user's settings.
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'forge-userdata-'))
+  // {{ROOT}} in seeded files becomes the fixture project's path, so a test can point saved state at it.
+  const rootJson = JSON.stringify(root).slice(1, -1)
   for (const [rel, content] of Object.entries(options.userData ?? {})) {
     const p = path.join(userData, rel)
     fs.mkdirSync(path.dirname(p), { recursive: true })
-    fs.writeFileSync(p, content)
+    fs.writeFileSync(p, content.split('{{ROOT}}').join(rootJson))
   }
   process.env['FORGE_USER_DATA'] = userData
   dialog.showOpenDialog = /** @type {any} */ (async () => ({ canceled: false, filePaths: [root] }))
