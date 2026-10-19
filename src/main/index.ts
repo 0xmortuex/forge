@@ -2,6 +2,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
 import { access, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { registerDebug } from './debug'
+import { registerExtensions, registerExtensionScheme } from './extensions'
 import { registerGit } from './git'
 import { registerSettings } from './settings'
 import { searchProject } from './search'
@@ -85,10 +86,13 @@ ipcMain.handle('fs:writeFile', (_e, path: string, content: string) =>
   writeFile(path, content, 'utf8')
 )
 
+registerExtensionScheme() // has to happen before the app is ready
+
 // Tests point this at a temp folder so they never touch the real user's settings.
 if (process.env['FORGE_USER_DATA']) app.setPath('userData', process.env['FORGE_USER_DATA'])
 
 registerSettings()
+registerExtensions()
 registerTerminal()
 registerLsp()
 registerGit()

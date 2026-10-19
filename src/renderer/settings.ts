@@ -27,6 +27,7 @@ export const CATEGORIES = [
   { id: 'Terminal', color: 'var(--ok)' },
   { id: 'Behavior', color: 'var(--warn)' },
   { id: 'Keymap', color: 'var(--syn-keyword)' },
+  { id: 'Extensions', color: 'var(--syn-func)' },
   { id: 'About', color: 'var(--err)' }
 ] as const
 

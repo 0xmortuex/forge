@@ -1,4 +1,5 @@
 import { commands, customKeys, effectiveKeys } from './commands'
+import { extensions } from './extensions'
 import { keymap } from './keymap'
 import { icons } from './icons'
 import { CATEGORIES, DEFS, ensureSettingsFile, settings, userData, type SettingDef, type Value } from './settings'
@@ -327,6 +328,50 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
     body.append(g)
   }
 
+  /** Installed extensions, each with an on/off switch. They are off until the user turns them on. */
+  function extensionsPage(): void {
+    const g = el('div', 'sgroup')
+    g.append(el('h3', '', 'Extensions'))
+    const warn = el('div', 'srow')
+    warn.style.color = 'var(--warn)'
+    warn.textContent =
+      'Extensions run with the same access as Forge itself (your files, terminals and git). Only turn on extensions you trust.'
+    g.append(warn)
+    const list = extensions.list()
+    if (!list.length) g.append(el('div', 'hint', 'No extensions installed. Put an extension folder in the extensions folder (button below), then reopen this page.'))
+    list.forEach((ext, i) => {
+      const r = el('div', 'srow')
+      r.style.setProperty('--i', String(Math.min(i, 14)))
+      const info = el('div', 'info')
+      info.append(el('div', 'label', `${ext.info.name}${ext.info.version ? ' ' + ext.info.version : ''}`))
+      if (ext.info.description) info.append(el('div', 'desc', ext.info.description))
+      const status = el('div', 'desc', ext.status === 'active' ? 'Active' : ext.status === 'error' ? `Problem: ${ext.error ?? 'unknown'}` : 'Off')
+      if (ext.status === 'error') status.style.color = 'var(--err)'
+      if (ext.status === 'active') status.style.color = 'var(--ok)'
+      info.append(status)
+      const sw = el('button', 'switch')
+      sw.setAttribute('role', 'switch')
+      sw.dataset['ext'] = ext.info.id
+      sw.classList.toggle('on', ext.status === 'active')
+      sw.disabled = Boolean(ext.info.error)
+      sw.onclick = () => {
+        extensions.setEnabled(ext.info.id, ext.status !== 'active').catch((err: unknown) => deps.report(err instanceof Error ? err.message : String(err), true))
+      }
+      const ctl = el('div', 'ctl')
+      ctl.append(sw)
+      r.append(info, ctl)
+      g.append(r)
+    })
+    const tools = el('div', 'srow')
+    const open = el('button', 'btn', 'Open extensions folder')
+    open.onclick = () => {
+      window.forge.openExtensionsDir().catch((err: unknown) => deps.report(err instanceof Error ? err.message : String(err), true))
+    }
+    tools.append(el('div', 'desc', 'An extension is a folder with an extension.json and an ES module that exports activate(forge).'), open)
+    g.append(tools)
+    body.append(g)
+  }
+
   function about(): void {
     const box = el('div', 'about')
     box.append(el('div', 'big', 'Forge'))
@@ -358,6 +403,7 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
     }
     note.textContent = ''
     if (category === 'Keymap') return keymapPage()
+    if (category === 'Extensions') return extensionsPage()
     if (category === 'About') return about()
     const defs = DEFS.filter((d) => d.category === category)
     const groups = [...new Set(defs.map((d) => d.group))]
@@ -413,6 +459,10 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
   }
   // A change from elsewhere (command palette, shortcut) while the window is open.
   settings.onChange((key) => syncs.get(key)?.())
+  // The Extensions page re-draws itself when an extension starts, stops or fails.
+  extensions.onChange(() => {
+    if (!overlay.hidden && category === 'Extensions' && !search.value.trim()) render()
+  })
 
   function close(): void {
     overlay.hidden = true

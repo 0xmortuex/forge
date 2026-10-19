@@ -71,6 +71,8 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'settings.open', category: 'Settings', title: 'Open Settings', keys: 'Ctrl+,', run: () => d.openSettings() })
   register({ id: 'settings.file', category: 'Settings', title: 'Open settings.json', run: d.openSettingsFile })
   register({ id: 'settings.themes', category: 'Settings', title: 'Open Themes Folder', run: d.openThemesDir })
+  register({ id: 'settings.extensions', category: 'Settings', title: 'Manage Extensions', run: () => d.openSettings('Extensions') })
+  register({ id: 'window.reload', category: 'Settings', title: 'Reload Window', run: () => location.reload() })
   register({ id: 'settings.keymap', category: 'Settings', title: 'Show Keyboard Shortcuts', run: () => d.openSettings('Keymap') })
   register({ id: 'settings.reset', category: 'Settings', title: 'Reset All Settings', run: () => settings.resetAll() })
 

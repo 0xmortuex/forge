@@ -27,6 +27,10 @@ export function register(c: Command): void {
   if (registry.has(c.id)) throw new Error(`Duplicate command id: ${c.id}`)
   registry.set(c.id, c)
 }
+export function unregister(id: string): void {
+  registry.delete(id)
+  customKeys.delete(id)
+}
 export const commands = (): Command[] => [...registry.values()]
 export const commandById = (id: string): Command | undefined => registry.get(id)
 

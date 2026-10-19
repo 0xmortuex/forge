@@ -11,6 +11,7 @@ import { initPalette } from './commands'
 import { initSettingsUi } from './settings-ui'
 import { session } from './session'
 import { keymap } from './keymap'
+import { extensions, initExtensions } from './extensions'
 import { registerBuiltinCommands } from './builtin-commands'
 import { fuzzy } from './search'
 import { fileColor, fileIcon, folderIcon, icons } from './icons'
@@ -510,6 +511,7 @@ async function openFile(path: string, line?: number, column = 1): Promise<void> 
       model.onDidChangeContent(() => renderTabs())
       openFiles.set(path, f)
       activate(f)
+      extensions.emit('open', { path })
       lsp.openDoc(model, path)
       dbg.onModelOpened(model, path)
     })
@@ -536,6 +538,7 @@ async function saveActive(opts: { format?: boolean } = {}): Promise<void> {
     f.savedVersion = f.model.getAlternativeVersionId()
     renderTabs()
     report(`Saved ${basename(f.path)}`)
+    extensions.emit('save', { path: f.path })
   })
   refreshGit()
 }
@@ -1008,6 +1011,28 @@ registerBuiltinCommands({
   }
 })
 keymap.init(report) // custom shortcuts, now that every command exists
+initExtensions({
+  report,
+  editor: {
+    getText: () => (active && !active.diff ? active.model.getValue() : null),
+    getSelectedText: () => {
+      const model = editor.getModel()
+      const sel = editor.getSelection()
+      return model && sel ? model.getValueInRange(sel) : ''
+    },
+    replaceSelection: (text) => {
+      const sel = editor.getSelection()
+      if (sel) editor.executeEdits('extension', [{ range: sel, text, forceMoveMarkers: true }])
+    },
+    insertText: (text) => {
+      const p = editor.getPosition()
+      if (p) editor.executeEdits('extension', [{ range: new monaco.Range(p.lineNumber, p.column, p.lineNumber, p.column), text, forceMoveMarkers: true }])
+    },
+    getFilePath: () => (active && !active.diff ? active.path : null),
+    getLanguage: () => (active && !active.diff ? active.model.getLanguageId() : null),
+    root: () => rootDir
+  }
+}).catch((err: unknown) => report(`Extensions: ${err instanceof Error ? err.message : String(err)}`, true))
 $('settings-btn').onclick = () => settingsUi.open()
 $('open-folder-btn').onclick = () => void openFolder()
 $('palette-btn').onclick = () => palette.open()

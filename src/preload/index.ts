@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import type { DirEntry } from '../main/index'
+import type { ExtensionInfo } from '../main/extensions'
 import type { LoadedUserData } from '../main/settings'
 import type { DebugEvent, DebugEval, DebugKind, DebugScope, DebugVar } from '../main/debug'
 import type { BlameLine, ChangeKind, GitStatus, StashEntry } from '../main/git'
@@ -85,6 +86,8 @@ const api = {
   stateSave: (text: string): Promise<void> => ipcRenderer.invoke('state:save', text),
   openThemesDir: (): Promise<string> => ipcRenderer.invoke('themes:openDir'),
   toggleFullscreen: (): Promise<boolean> => ipcRenderer.invoke('win:toggleFullscreen'),
+  extensionsList: (): Promise<ExtensionInfo[]> => ipcRenderer.invoke('extensions:list'),
+  openExtensionsDir: (): Promise<string> => ipcRenderer.invoke('extensions:openDir'),
   /** 1 = 100%. */
   setZoom: (factor: number): void => webFrame.setZoomFactor(factor),
   /** Each subscription returns a function that removes it. */

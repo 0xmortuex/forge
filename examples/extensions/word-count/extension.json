@@ -1,0 +1,6 @@
+{
+  "name": "Word Count",
+  "version": "1.0.0",
+  "description": "Shows the word count of the active file in the status bar, and adds a few text commands.",
+  "main": "index.js"
+}
