@@ -1,10 +1,10 @@
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
 import { ipcMain } from 'electron'
 
 // "Inspect Code": the language servers only report the files that are open, so this runs the project's own checkers
-// over everything: `tsc --noEmit` (TypeScript projects) and ESLint (when the project has it installed).
+// over everything: `tsc --noEmit` (TypeScript projects), ESLint (when the project has it installed) and pyright (Python).
 
 export interface InspectProblem {
   path: string
@@ -14,7 +14,7 @@ export interface InspectProblem {
   message: string
   /** e.g. "TS2322" or an ESLint rule id. */
   code: string
-  source: 'tsc' | 'eslint'
+  source: 'tsc' | 'eslint' | 'pyright'
 }
 
 export interface InspectResult {
@@ -81,6 +81,28 @@ export function parseEslint(json: string): InspectProblem[] {
   )
 }
 
+interface PyrightReport {
+  generalDiagnostics: { file: string; severity: 'error' | 'warning' | 'information'; message: string; rule?: string; range?: { start: { line: number; character: number } } }[]
+}
+
+export function parsePyright(json: string): InspectProblem[] {
+  const report = JSON.parse(json) as PyrightReport
+  return report.generalDiagnostics.map((d) => ({
+    path: d.file,
+    line: (d.range?.start.line ?? 0) + 1,
+    col: (d.range?.start.character ?? 0) + 1,
+    severity: d.severity === 'information' ? ('info' as const) : d.severity,
+    message: d.message,
+    code: d.rule ?? '',
+    source: 'pyright' as const
+  }))
+}
+
+/** A Python project: a pyright or pyproject config, or Python files at the top level. */
+function isPythonProject(root: string): boolean {
+  return existsSync(join(root, 'pyrightconfig.json')) || existsSync(join(root, 'pyproject.toml')) || readdirSync(root).some((n) => n.endsWith('.py'))
+}
+
 export async function inspectProject(root: string): Promise<InspectResult> {
   const problems: InspectProblem[] = []
   const ran: string[] = []
@@ -99,7 +121,12 @@ export async function inspectProject(root: string): Promise<InspectResult> {
     ran.push('eslint')
   }
 
-  if (!ran.length) throw new Error('Nothing to inspect: the project has no tsconfig.json and no ESLint installed (node_modules/eslint)')
+  if (isPythonProject(root)) {
+    problems.push(...parsePyright(await runNode(require.resolve('pyright/index.js'), ['--outputjson', root], root)))
+    ran.push('pyright')
+  }
+
+  if (!ran.length) throw new Error('Nothing to inspect: no tsconfig.json, no ESLint installed (node_modules/eslint), and no Python project (pyproject.toml, pyrightconfig.json or .py files)')
   return { problems, ran }
 }
 

@@ -35,7 +35,7 @@ with an end-to-end test suite that drives the real UI.
 | **Languages** | TypeScript/JavaScript (`typescript-language-server`) and Python (`pyright`) are bundled. C/C++ uses `clangd` if it is on your `PATH`. Mort uses its own `mortc lsp`. Find usages, rename, reformat, quick fixes, format on save. |
 | **Terminal** | Real shells (node-pty + xterm.js), as many as you like, in renamable tabs; choose PowerShell, cmd, Git Bash or WSL in Settings. |
 | **Git** | Branch widget with ahead/behind, Git window (graph log, commit details, branches), Commit window with amend, editable diffs, gutter hunks with rollback, blame, merge conflicts with Accept Yours/Theirs, file history, colored tree, push (publishes new branches, force-with-lease), pull (merge, rebase or fast-forward), stash, revert, reset, tags. Uses the `git` CLI. |
-| **Search & refactor** | Find/Replace in the file and in the project (case, whole word, regex, file mask), rename with import updates when files are renamed or moved, find usages, go to implementation / type definition, call and type hierarchy, TODO window, and Inspect Code (runs `tsc` and ESLint over the whole project into the Problems window). |
+| **Search & refactor** | Find/Replace in the file and in the project (case, whole word, regex, file mask), rename with import updates when files are renamed or moved, find usages, go to implementation / type definition, call and type hierarchy, TODO window, and Inspect Code (runs `tsc`, ESLint and pyright over the whole project into the Problems window). |
 | **Run & debug** | `.forge/run.json` configurations (Node, Python, shell commands, or the current file) with a dialog to edit them, run arrows next to Vitest/Jest/node:test/pytest tests, a Run tab with a real terminal, Node debugger (V8 inspector) and Python debugger (`debugpy`, over DAP) with conditional breakpoints, logpoints and watches. |
 | **Customization** | Themes, accent, fonts, layout density, panel shape, motion, editor and terminal options, custom shortcuts, command palette. |
 
@@ -156,7 +156,7 @@ Python debugging needs `debugpy` (`uv pip install debugpy`). Mort support needs 
 - There is no packaged installer yet; run it from source.
 - Debugging covers Node and Python only.
 - The split editor (two panes) has Monaco's built-in features but not Forge's refactor actions; Problems lists the open files only, not the whole project.
-- Inspect Code runs `tsc` and ESLint only; there is no Python or C++ project-wide analysis.
+- Inspect Code runs `tsc`, ESLint and pyright only; there is no project-wide analysis for C/C++ or Mort.
 - Markdown preview does not load remote images (the content security policy blocks them).
 - The pytest runner and the `clangd` integration have not been exercised end to end.
 - The built-in IDE shortcuts (Alt+digit, F-keys, Ctrl+Shift+P …) work inside the terminal; your own custom shortcuts do not.
