@@ -5,7 +5,7 @@ import CssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import HtmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { initAppearance, bindEditors, editorOptions } from './appearance'
-import { ensureSettingsFile, settings, userData } from './settings'
+import { ensureSettingsFile, flushSettings, settings, userData } from './settings'
 import { initRipples, shouldToast, toast } from './effects'
 import { initPalette } from './commands'
 import { initSettingsUi } from './settings-ui'
@@ -966,6 +966,12 @@ window.addEventListener(
 )
 
 // ---- Settings, command palette, auto save ----
+// The window is closing: write pending settings and session first, then tell the main process it may close.
+window.forge.onFlush(() => {
+  Promise.all([flushSettings(), session.flush()])
+    .catch((err: unknown) => console.error('Flush on close failed', err)) // closing must not hang on this
+    .finally(() => window.forge.flushed())
+})
 settings.onSaveError = (err) => report(`Saving settings: ${err.message}`, true)
 session.onError = (err) => report(`Saving session: ${err.message}`, true)
 for (const problem of settings.problems) report(problem, true) // a broken settings.json or theme file is never silent

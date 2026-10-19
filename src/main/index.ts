@@ -22,6 +22,8 @@ function createWindow(): void {
     height: 900,
     backgroundColor: '#101d22',
     title: 'Forge',
+    minWidth: 900,
+    minHeight: 560,
     titleBarStyle: 'hidden',
     // Windows/Linux draw their window buttons over our toolbar; macOS keeps its traffic lights on the left.
     ...(process.platform === 'darwin'
@@ -35,6 +37,24 @@ function createWindow(): void {
     }
   })
   win.setMenuBarVisibility(false)
+
+  // Settings and the session are saved a moment after each change. Before the window goes away, ask the page to
+  // write anything still pending, and wait for it (but never for long: a stuck page must not block closing).
+  let flushed = false
+  win.on('close', (e) => {
+    if (flushed || win.webContents.isDestroyed()) return
+    e.preventDefault()
+    const finish = (): void => {
+      if (flushed) return
+      flushed = true
+      win.close()
+    }
+    ipcMain.once('app:flushed', (ev) => {
+      if (ev.sender === win.webContents) finish()
+    })
+    win.webContents.send('app:flush')
+    setTimeout(finish, 1500)
+  })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
     void win.loadURL(process.env['ELECTRON_RENDERER_URL'])

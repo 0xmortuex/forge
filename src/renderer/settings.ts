@@ -160,7 +160,15 @@ export interface Store {
   onSaveError: (err: Error) => void
 }
 
-const data = await window.forge.settingsLoad()
+// If the user-data folder can't be read at all, start with defaults and say why (the page must still render).
+const data: Awaited<ReturnType<typeof window.forge.settingsLoad>> = await window.forge.settingsLoad().catch((err: unknown) => ({
+  settings: {},
+  state: {},
+  themes: [],
+  errors: [`Could not read your settings: ${err instanceof Error ? err.message : String(err)} — using defaults`],
+  dir: '',
+  settingsPath: ''
+}))
 export const userData = data
 
 const overrides = new Map<string, Value>()

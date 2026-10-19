@@ -56,6 +56,13 @@ export const session = {
       window.forge.stateSave(JSON.stringify(state, null, 2)).catch((err: unknown) => session.onError(err as Error))
     }, 300)
   },
+  /** Writes any pending change right now (the window is closing). */
+  flush(): Promise<void> {
+    if (timer === undefined) return Promise.resolve()
+    window.clearTimeout(timer)
+    timer = undefined
+    return window.forge.stateSave(JSON.stringify(state, null, 2))
+  },
   addRecent(folder: string): void {
     const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase() // Windows paths ignore case
     this.update({ recents: [folder, ...state.recents.filter((r) => !same(r, folder))].slice(0, MAX_RECENTS) })

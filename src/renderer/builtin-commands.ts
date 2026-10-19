@@ -1,5 +1,6 @@
 import { register } from './commands'
-import { settings } from './settings'
+import { session } from './session'
+import { flushSettings, settings } from './settings'
 import { activeTheme, allThemes, applyTheme, findTheme } from './themes'
 
 /** What the commands need from the rest of the app. main.ts supplies these. */
@@ -72,7 +73,10 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'settings.file', category: 'Settings', title: 'Open settings.json', run: d.openSettingsFile })
   register({ id: 'settings.themes', category: 'Settings', title: 'Open Themes Folder', run: d.openThemesDir })
   register({ id: 'settings.extensions', category: 'Settings', title: 'Manage Extensions', run: () => d.openSettings('Extensions') })
-  register({ id: 'window.reload', category: 'Settings', title: 'Reload Window', run: () => location.reload() })
+  register({ id: 'window.reload', category: 'Settings', title: 'Reload Window', run: async () => {
+      await Promise.all([flushSettings(), session.flush()]) // don't lose what's about to be saved
+      location.reload()
+    } })
   register({ id: 'settings.keymap', category: 'Settings', title: 'Show Keyboard Shortcuts', run: () => d.openSettings('Keymap') })
   register({ id: 'settings.reset', category: 'Settings', title: 'Reset All Settings', run: () => settings.resetAll() })
 

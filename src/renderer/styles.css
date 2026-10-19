@@ -46,7 +46,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: def
 ::-webkit-scrollbar-thumb:hover { background: var(--scroll-hover); background-clip: content-box; border: 2px solid transparent; }
 
 /* ---- Background ---- */
-#aurora { position: fixed; inset: -25%; z-index: -1; pointer-events: none; filter: blur(40px);
+#aurora { position: fixed; inset: -25%; z-index: -1; pointer-events: none; filter: blur(40px); will-change: transform;
   background:
     radial-gradient(38% 38% at 18% 28%, var(--aurora-1), transparent 70%),
     radial-gradient(34% 34% at 82% 18%, var(--aurora-2), transparent 70%),

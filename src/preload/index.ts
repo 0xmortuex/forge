@@ -88,6 +88,11 @@ const api = {
   toggleFullscreen: (): Promise<boolean> => ipcRenderer.invoke('win:toggleFullscreen'),
   extensionsList: (): Promise<ExtensionInfo[]> => ipcRenderer.invoke('extensions:list'),
   openExtensionsDir: (): Promise<string> => ipcRenderer.invoke('extensions:openDir'),
+  /** The window is closing: write anything pending, then call flushed(). */
+  onFlush: (cb: () => void): void => {
+    ipcRenderer.on('app:flush', () => cb())
+  },
+  flushed: (): void => ipcRenderer.send('app:flushed'),
   /** 1 = 100%. */
   setZoom: (factor: number): void => webFrame.setZoomFactor(factor),
   /** Each subscription returns a function that removes it. */
