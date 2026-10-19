@@ -7,6 +7,12 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
+// The scenarios drive a real window on the developer's desktop. If another window covers it (or the screen dims),
+// Chromium would throttle its timers and input, which makes key-driven checks flaky; so never treat it as hidden.
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
+
 const CR = String.fromCharCode(13)
 const sleep = (/** @type {number} */ ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -76,6 +82,20 @@ async function run(name, files, scenario, options = {}) {
   }
   const wc = win.webContents
   if (wc.isLoading()) await new Promise((resolve) => wc.once('did-finish-load', () => resolve(undefined)))
+  // Key events only behave like real typing in a focused, visible page: bring the window to the front and keep it
+  // there, because another app covering it makes the page "hidden" and the checks flaky.
+  const front = () => {
+    if (win.isDestroyed()) return
+    if (win.isMinimized()) win.restore()
+    if (!win.isVisible()) win.show()
+    if (!win.isFocused()) {
+      win.focus()
+      wc.focus()
+    }
+  }
+  win.setAlwaysOnTop(true, 'screen-saver')
+  front()
+  setInterval(front, 200).unref() // something else on the desktop may minimize or defocus it mid-run
   await sleep(1500) // let the renderer finish initializing
 
   /** Evaluate in the renderer. Must not return functions or DOM nodes. */
