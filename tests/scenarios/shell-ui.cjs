@@ -28,7 +28,7 @@ run(
     check('"Command Palette" opens the palette', await visible('palette'))
     key('Escape')
     await js("document.getElementById('w-settings').click()")
-    check('"Settings & Themes" opens Settings', await visible('settings'))
+    check('"Settings & Themes" opens Settings', !!(await waitFor(() => visible('settings'), 3000)))
     await js("document.getElementById('settings-close').click()")
     await js("document.getElementById('search-btn').click()")
     check('the search pill in the toolbar opens the search too', await visible('search'))

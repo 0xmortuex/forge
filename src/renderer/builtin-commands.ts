@@ -13,7 +13,7 @@ export interface BuiltinDeps {
   openSearchScope: (scope: 'all' | 'files' | 'symbols' | 'actions', classesOnly?: boolean) => void
   showFind: () => void
   toggleSide: (side: 'project' | 'commit') => void
-  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy') => void
+  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git') => void
   newTerminal: () => void
   toggleZen: () => void
   toggleFullscreen: () => Promise<void>
@@ -27,6 +27,8 @@ export interface BuiltinDeps {
   compareWithFile: () => void
   compareWithClipboard: () => void
   showNotifications: () => void
+  gitFileHistory: () => void
+  gitFetch: () => void
   showHistory: () => void
   restoreHistory: () => void
   insertTemplate: () => void
@@ -223,6 +225,9 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'code.compareFile', category: 'Code', title: 'Compare with File…', run: d.compareWithFile })
   register({ id: 'code.compareClipboard', category: 'Code', title: 'Compare with Clipboard', run: d.compareWithClipboard })
   register({ id: 'view.notifications', category: 'View', title: 'Show Notifications', run: d.showNotifications })
+  register({ id: 'view.git', category: 'View', title: 'Toggle Git Window', keys: 'Alt+9', run: () => d.toggleView('git') })
+  register({ id: 'git.fileHistory', category: 'Git', title: 'Show Git History for File', run: d.gitFileHistory })
+  register({ id: 'git.fetch', category: 'Git', title: 'Fetch', run: d.gitFetch })
   register({ id: 'history.show', category: 'Code', title: 'Show Local History', run: d.showHistory })
   register({ id: 'history.restore', category: 'Code', title: 'Restore from Local History', run: d.restoreHistory })
   register({ id: 'code.surround', category: 'Code', title: 'Surround With…', keys: 'Ctrl+Alt+T', run: d.surround })

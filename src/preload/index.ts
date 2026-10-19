@@ -3,7 +3,7 @@ import type { DirEntry } from '../main/index'
 import type { ExtensionInfo } from '../main/extensions'
 import type { LoadedUserData } from '../main/settings'
 import type { DebugEvent, DebugEval, DebugKind, DebugScope, DebugVar } from '../main/debug'
-import type { BlameLine, ChangeKind, GitStatus, StashEntry } from '../main/git'
+import type { BlameLine, BranchInfo, ChangeKind, CommitDetails, CommitFile, CommitInfo, GitStatus, LogQuery, OpResult, StashEntry } from '../main/git'
 import type { SearchResult } from '../main/search'
 import type { Snapshot } from '../main/history'
 import type { PtySpec } from '../main/terminal'
@@ -60,6 +60,26 @@ const api = {
   onLspLog: (cb: (server: string, type: number, message: string) => void): void => {
     ipcRenderer.on('lsp:log', (_e, server: string, type: number, message: string) => cb(server, type, message))
   },
+  gitLog: (root: string, q: LogQuery): Promise<CommitInfo[]> => ipcRenderer.invoke('git:log', root, q),
+  gitCommitDetails: (root: string, sha: string): Promise<CommitDetails> => ipcRenderer.invoke('git:commit-details', root, sha),
+  gitFileAt: (root: string, sha: string, path: string): Promise<string> => ipcRenderer.invoke('git:file-at', root, sha, path),
+  gitBranchesFull: (root: string): Promise<BranchInfo[]> => ipcRenderer.invoke('git:branches-full', root),
+  gitTags: (root: string): Promise<string[]> => ipcRenderer.invoke('git:tags', root),
+  gitCheckout: (root: string, target: string, kind: 'local' | 'remote' | 'detached'): Promise<void> => ipcRenderer.invoke('git:checkout', root, target, kind),
+  gitBranchFrom: (root: string, name: string, from: string): Promise<void> => ipcRenderer.invoke('git:branch-from', root, name, from),
+  gitDeleteBranch: (root: string, name: string, force: boolean, remote: boolean): Promise<void> => ipcRenderer.invoke('git:delete-branch', root, name, force, remote),
+  gitRenameBranch: (root: string, from: string, to: string): Promise<void> => ipcRenderer.invoke('git:rename-branch', root, from, to),
+  gitFetch: (root: string): Promise<void> => ipcRenderer.invoke('git:fetch', root),
+  gitMerge: (root: string, branch: string): Promise<OpResult> => ipcRenderer.invoke('git:merge', root, branch),
+  gitRebase: (root: string, onto: string): Promise<OpResult> => ipcRenderer.invoke('git:rebase', root, onto),
+  gitCherryPick: (root: string, sha: string): Promise<OpResult> => ipcRenderer.invoke('git:cherry-pick', root, sha),
+  gitRevertCommit: (root: string, sha: string): Promise<OpResult> => ipcRenderer.invoke('git:revert-commit', root, sha),
+  gitContinue: (root: string): Promise<OpResult> => ipcRenderer.invoke('git:continue', root),
+  gitAbort: (root: string): Promise<void> => ipcRenderer.invoke('git:abort', root),
+  gitInProgress: (root: string): Promise<string | null> => ipcRenderer.invoke('git:in-progress', root),
+  gitReset: (root: string, sha: string, mode: 'soft' | 'mixed' | 'hard'): Promise<void> => ipcRenderer.invoke('git:reset', root, sha, mode),
+  gitTag: (root: string, name: string, sha: string): Promise<void> => ipcRenderer.invoke('git:tag', root, name, sha),
+  gitDiffFiles: (root: string, ref: string): Promise<CommitFile[]> => ipcRenderer.invoke('git:diff-files', root, ref),
   gitStatus: (root: string): Promise<GitStatus | null> => ipcRenderer.invoke('git:status', root),
   gitShow: (root: string, path: string): Promise<string> => ipcRenderer.invoke('git:show', root, path),
   gitBlame: (root: string, path: string): Promise<BlameLine[] | null> =>

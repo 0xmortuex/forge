@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
-import { relative, resolve } from 'node:path'
+import { existsSync } from 'node:fs'
+import { join, relative, resolve } from 'node:path'
 import { ipcMain } from 'electron'
 
 export type ChangeKind = 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | 'conflict'
@@ -28,6 +29,59 @@ export interface BlameLine {
   author: string
   time: number // unix seconds; 0 for uncommitted
   summary: string
+}
+
+export interface CommitInfo {
+  sha: string
+  parents: string[]
+  author: string
+  email: string
+  time: number // unix seconds
+  subject: string
+  /** Branches and tags pointing at it, e.g. "HEAD -> main", "origin/main", "tag: v1". */
+  refs: string[]
+}
+
+export interface LogQuery {
+  /** '' = the current branch, 'all' = every branch, otherwise a branch/ref name. */
+  branch?: string
+  /** Only commits that touched this file (absolute path); follows renames. */
+  path?: string
+  author?: string
+  /** Matches the commit message. */
+  text?: string
+  skip?: number
+  limit?: number
+}
+
+export interface CommitFile {
+  /** M, A, D, R (renamed), C (copied), T. */
+  status: string
+  path: string // absolute
+  oldPath?: string // absolute, for renames
+}
+
+export interface CommitDetails extends CommitInfo {
+  body: string
+  files: CommitFile[]
+}
+
+export interface BranchInfo {
+  name: string // "main" or "origin/main"
+  remote: boolean
+  current: boolean
+  upstream: string | null
+  sha: string
+  ahead: number
+  behind: number
+}
+
+/** The result of an operation that can stop half way for the user to resolve (merge, rebase, cherry-pick...). */
+export interface OpResult {
+  ok: boolean
+  /** True when it stopped on conflicts: resolve them, then continue or abort. */
+  conflicts: boolean
+  message: string
 }
 
 interface Repo {
@@ -174,8 +228,235 @@ function parseBlame(out: string): BlameLine[] {
   return lines
 }
 
+const FS = '\x1f' // field separator for --pretty output
+const RS = '\x1e' // record separator
+
+function parseLog(out: string): CommitInfo[] {
+  return out
+    .split(RS)
+    .map((r) => r.replace(/^\n/, ''))
+    .filter(Boolean)
+    .map((r) => {
+      const [sha = '', parents = '', author = '', email = '', time = '0', refs = '', subject = ''] = r.split(FS)
+      return {
+        sha,
+        parents: parents.split(' ').filter(Boolean),
+        author,
+        email,
+        time: Number(time),
+        subject,
+        refs: refs.split(', ').map((x) => x.trim()).filter(Boolean)
+      }
+    })
+}
+
+const PRETTY = `--pretty=format:%H${FS}%P${FS}%an${FS}%ae${FS}%at${FS}%D${FS}%s${RS}`
+
+/** git exits non-zero when a merge-like operation stops on conflicts; that is a state, not a failure. */
+async function operation(root: string, args: string[], what: string): Promise<OpResult> {
+  try {
+    const out = await git(root, args)
+    return { ok: true, conflicts: false, message: out.trim() || `${what} done` }
+  } catch (err) {
+    const message = (err as Error).message
+    const st = await status(root)
+    if (st?.changes.some((c) => c.kind === 'conflict')) return { ok: false, conflicts: true, message: `${what} stopped on conflicts. Resolve them, then continue — or abort.` }
+    throw err
+  }
+}
+
+function parseNameStatus(repo: Repo, out: string): CommitFile[] {
+  // With -z: "M\0path\0", renames: "R100\0old\0new\0".
+  const t = out.split('\0')
+  const files: CommitFile[] = []
+  for (let i = 0; i < t.length; ) {
+    const status = (t[i] ?? '')[0] ?? ''
+    if (!status) {
+      i++
+      continue
+    }
+    if (status === 'R' || status === 'C') {
+      files.push({ status, oldPath: resolve(repo.top, t[i + 1] ?? ''), path: resolve(repo.top, t[i + 2] ?? '') })
+      i += 3
+    } else {
+      files.push({ status, path: resolve(repo.top, t[i + 1] ?? '') })
+      i += 2
+    }
+  }
+  return files
+}
+
 export function registerGit(): void {
   ipcMain.handle('git:status', (_e, root: string) => status(root))
+
+  ipcMain.handle('git:log', async (_e, root: string, q: LogQuery): Promise<CommitInfo[]> => {
+    const repo = await needRepo(root)
+    const args = ['log', '--date-order', PRETTY, `--skip=${q.skip ?? 0}`, `-n${q.limit ?? 200}`]
+    if (q.author) args.push(`--author=${q.author}`)
+    if (q.text) args.push(`--grep=${q.text}`, '-i')
+    if (q.branch === 'all') args.push('--all')
+    else if (q.branch) args.push(q.branch)
+    if (q.path) args.push('--follow', '--', toGitPath(repo, q.path))
+    try {
+      return parseLog(await git(root, args))
+    } catch (err) {
+      // A repository with no commits yet has an empty history.
+      if (/does not have any commits yet|bad default revision/i.test((err as Error).message)) return []
+      throw err
+    }
+  })
+
+  ipcMain.handle('git:commit-details', async (_e, root: string, sha: string): Promise<CommitDetails> => {
+    const repo = await needRepo(root)
+    const [info] = parseLog(await git(root, ['show', '-s', PRETTY, sha]))
+    if (!info) throw new Error(`Unknown commit ${sha}`)
+    const body = (await git(root, ['show', '-s', '--format=%b', sha])).trim()
+    // A merge commit has no plain diff of its own: show what it changed relative to its first parent.
+    const files = parseNameStatus(
+      repo,
+      info.parents.length > 1
+        ? await git(root, ['diff', '--name-status', '-M', '-z', `${sha}^1`, sha])
+        : await git(root, ['show', '--name-status', '-M', '--format=', '-z', sha])
+    )
+    return { ...info, body, files }
+  })
+
+  /** A file as it was in a commit ('' if it did not exist there). */
+  ipcMain.handle('git:file-at', async (_e, root: string, sha: string, abs: string): Promise<string> => {
+    const repo = await needRepo(root)
+    try {
+      return await git(root, ['show', `${sha}:${toGitPath(repo, abs)}`])
+    } catch (err) {
+      if (/exists on disk, but not in|does not exist in|Path '.*' does not exist/i.test((err as Error).message)) return ''
+      throw err
+    }
+  })
+
+  ipcMain.handle('git:branches-full', async (_e, root: string): Promise<BranchInfo[]> => {
+    await needRepo(root)
+    const fmt = ['%(HEAD)', '%(refname)', '%(refname:short)', '%(upstream:short)', '%(objectname)', '%(upstream:track,nobracket)'].join(FS)
+    const out = await git(root, ['for-each-ref', `--format=${fmt}`, 'refs/heads', 'refs/remotes'])
+    const list: BranchInfo[] = []
+    for (const line of out.split('\n').filter(Boolean)) {
+      const [head = '', ref = '', name = '', upstream = '', sha = '', track = ''] = line.split(FS)
+      if (ref.endsWith('/HEAD')) continue // origin/HEAD is an alias, not a branch
+      const ahead = /ahead (\d+)/.exec(track)?.[1]
+      const behind = /behind (\d+)/.exec(track)?.[1]
+      list.push({ name, remote: ref.startsWith('refs/remotes/'), current: head === '*', upstream: upstream || null, sha, ahead: Number(ahead ?? 0), behind: Number(behind ?? 0) })
+    }
+    return list
+  })
+
+  ipcMain.handle('git:tags', async (_e, root: string): Promise<string[]> => {
+    await needRepo(root)
+    return (await git(root, ['tag', '--list', '--sort=-creatordate'])).split('\n').map((s) => s.trim()).filter(Boolean)
+  })
+
+  /** Checks out a branch, a remote branch (creating a local tracking branch), a tag or a commit. */
+  ipcMain.handle('git:checkout', async (_e, root: string, target: string, kind: 'local' | 'remote' | 'detached') => {
+    await needRepo(root)
+    if (kind === 'remote') await git(root, ['switch', '--track', '-c', target.slice(target.indexOf('/') + 1), target])
+    else if (kind === 'detached') await git(root, ['switch', '--detach', target])
+    else await git(root, ['switch', target])
+  })
+
+  ipcMain.handle('git:branch-from', async (_e, root: string, name: string, from: string) => {
+    await needRepo(root)
+    await git(root, ['switch', '-c', name, from])
+  })
+
+  ipcMain.handle('git:delete-branch', async (_e, root: string, name: string, force: boolean, remote: boolean) => {
+    await needRepo(root)
+    if (remote) {
+      const [remoteName, ...rest] = name.split('/')
+      await git(root, ['push', remoteName ?? 'origin', '--delete', rest.join('/')], true)
+    } else await git(root, ['branch', force ? '-D' : '-d', name])
+  })
+
+  ipcMain.handle('git:rename-branch', async (_e, root: string, from: string, to: string) => {
+    await needRepo(root)
+    await git(root, ['branch', '-m', from, to])
+  })
+
+  ipcMain.handle('git:fetch', async (_e, root: string) => {
+    await needRepo(root)
+    await git(root, ['fetch', '--all', '--prune'], true)
+  })
+
+  ipcMain.handle('git:merge', async (_e, root: string, branch: string): Promise<OpResult> => {
+    await needRepo(root)
+    return operation(root, ['merge', '--no-edit', branch], `Merging ${branch}`)
+  })
+
+  ipcMain.handle('git:rebase', async (_e, root: string, onto: string): Promise<OpResult> => {
+    await needRepo(root)
+    return operation(root, ['rebase', onto], `Rebasing onto ${onto}`)
+  })
+
+  ipcMain.handle('git:cherry-pick', async (_e, root: string, sha: string): Promise<OpResult> => {
+    await needRepo(root)
+    return operation(root, ['cherry-pick', sha], `Cherry-picking ${sha.slice(0, 7)}`)
+  })
+
+  ipcMain.handle('git:revert-commit', async (_e, root: string, sha: string): Promise<OpResult> => {
+    await needRepo(root)
+    return operation(root, ['revert', '--no-edit', sha], `Reverting ${sha.slice(0, 7)}`)
+  })
+
+  /** After resolving conflicts: finish the operation that is in progress. */
+  ipcMain.handle('git:continue', async (_e, root: string): Promise<OpResult> => {
+    const repo = await needRepo(root)
+    const gitDir = (await git(root, ['rev-parse', '--git-dir'])).trim()
+    const dir = resolve(repo.top, gitDir)
+    const has = (name: string): boolean => existsSync(join(dir, name))
+    // core.editor=true keeps the prepared message instead of opening an editor nobody can see.
+    const run = (args: string[]): Promise<OpResult> => operation(root, ['-c', 'core.editor=true', ...args], 'Continuing')
+    if (has('rebase-merge') || has('rebase-apply')) return run(['rebase', '--continue'])
+    if (has('MERGE_HEAD')) return run(['commit', '--no-edit'])
+    if (has('CHERRY_PICK_HEAD')) return run(['cherry-pick', '--continue'])
+    if (has('REVERT_HEAD')) return run(['revert', '--continue'])
+    throw new Error('Nothing to continue: no merge, rebase, cherry-pick or revert is in progress')
+  })
+
+  ipcMain.handle('git:abort', async (_e, root: string) => {
+    const repo = await needRepo(root)
+    const dir = resolve(repo.top, (await git(root, ['rev-parse', '--git-dir'])).trim())
+    const has = (name: string): boolean => existsSync(join(dir, name))
+    if (has('rebase-merge') || has('rebase-apply')) await git(root, ['rebase', '--abort'])
+    else if (has('MERGE_HEAD')) await git(root, ['merge', '--abort'])
+    else if (has('CHERRY_PICK_HEAD')) await git(root, ['cherry-pick', '--abort'])
+    else if (has('REVERT_HEAD')) await git(root, ['revert', '--abort'])
+    else throw new Error('Nothing to abort: no merge, rebase, cherry-pick or revert is in progress')
+  })
+
+  /** Which operation is stopped half way, if any (so the UI can offer Continue / Abort). */
+  ipcMain.handle('git:in-progress', async (_e, root: string): Promise<string | null> => {
+    const repo = await repoFor(root)
+    if (!repo) return null
+    const dir = resolve(repo.top, (await git(root, ['rev-parse', '--git-dir'])).trim())
+    const has = (name: string): boolean => existsSync(join(dir, name))
+    if (has('rebase-merge') || has('rebase-apply')) return 'rebase'
+    if (has('MERGE_HEAD')) return 'merge'
+    if (has('CHERRY_PICK_HEAD')) return 'cherry-pick'
+    if (has('REVERT_HEAD')) return 'revert'
+    return null
+  })
+
+  ipcMain.handle('git:reset', async (_e, root: string, sha: string, mode: 'soft' | 'mixed' | 'hard') => {
+    await needRepo(root)
+    await git(root, ['reset', `--${mode}`, sha])
+  })
+
+  ipcMain.handle('git:tag', async (_e, root: string, name: string, sha: string) => {
+    await needRepo(root)
+    await git(root, ['tag', name, sha])
+  })
+
+  /** What differs between the working tree and another branch/commit (absolute paths). */
+  ipcMain.handle('git:diff-files', async (_e, root: string, ref: string): Promise<CommitFile[]> => {
+    const repo = await needRepo(root)
+    return parseNameStatus(repo, await git(root, ['diff', '--name-status', '-M', '-z', ref]))
+  })
 
   /** File content at HEAD. The renderer only asks for files that exist there. */
   ipcMain.handle('git:show', async (_e, root: string, abs: string) => {

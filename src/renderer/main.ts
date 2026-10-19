@@ -41,6 +41,7 @@ import { initSearchEverywhere, type SearchScope } from './searchall'
 import { initHierarchy } from './hierarchy'
 import { initTemplates, templateProblems } from './templates'
 import { initHistory } from './history'
+import { initGitLog } from './gitlog'
 import type { ChangeKind, GitChange } from '../main/git'
 
 self.MonacoEnvironment = {
@@ -110,7 +111,8 @@ const diffEditor = monaco.editor.createDiffEditor($('diff'), {
   automaticLayout: true,
   originalEditable: false, // the HEAD side never edits; the working-copy side is made editable per tab
   scrollBeyondLastLine: false,
-  renderSideBySide: true
+  renderSideBySide: true,
+  useInlineViewWhenSpaceIsLimited: false // always two panes, even in a narrow window
 })
 bindEditors(editor, diffEditor) // from here on, editor settings apply live to both
 // The bundled coding fonts load asynchronously; once they have, tell Monaco to re-measure its characters.
@@ -188,12 +190,13 @@ tw.register({ id: 'terminal', title: 'Terminal', icon: icons.terminal, root: $('
 tw.register({ id: 'find', title: 'Find', icon: icons.search, root: $('view-find'), dock: 'bottom', shortcut: 'Ctrl+Shift+F' })
 tw.register({ id: 'run', title: 'Run', icon: icons.play, root: $('view-run'), dock: 'bottom', shortcut: 'Shift+F10', passive: false })
 tw.register({ id: 'debug', title: 'Debug', icon: icons.bug, root: $('view-debug'), dock: 'bottom', passive: false })
+tw.register({ id: 'git', title: 'Git', icon: icons.git, root: $('view-git'), dock: 'bottom', shortcut: 'Alt+9' })
 tw.register({ id: 'problems', title: 'Problems', icon: icons.problems, root: $('view-problems'), dock: 'bottom', shortcut: 'Alt+6' })
 tw.register({ id: 'hierarchy', title: 'Hierarchy', icon: icons.hierarchy, root: $('view-hierarchy'), dock: 'bottom' })
 tw.register({ id: 'structure', title: 'Structure', icon: icons.structure, root: $('view-structure'), dock: 'right', shortcut: 'Alt+7' })
 tw.register({ id: 'bookmarks', title: 'Bookmarks', icon: icons.bookmark, root: $('view-bookmarks'), dock: 'right' })
 
-type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy'
+type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git'
 type Side = 'project' | 'commit'
 const showSide = (side: Side): void => tw.show(side)
 const toggleSide = (side: Side): void => tw.toggle(side)
@@ -257,7 +260,8 @@ function tabMenu(f: OpenFile): (MenuItem | 'sep')[] {
     { label: 'Close All', run: () => closeAll() },
     'sep',
     { label: 'Copy Path', run: () => void window.forge.copyText(f.path) },
-    { label: 'Reveal in File Explorer', run: () => void window.forge.reveal(f.path) }
+    { label: 'Reveal in File Explorer', run: () => void window.forge.reveal(f.path) },
+    ...(f.diff ? [] : [{ label: 'Git History', run: () => showFileHistory(f.path) }])
   ]
 }
 
@@ -730,10 +734,10 @@ if (isMac) document.body.classList.add('mac') // window buttons are on the left 
 
 window.addEventListener('keydown', (e) => {
   // Physical keys (e.code): on macOS, Alt+1 types a symbol, so e.key would never be "1".
-  const digit = e.altKey && !e.ctrlKey && !e.metaKey ? /^Digit([012367])$/.exec(e.code)?.[1] : undefined
+  const digit = e.altKey && !e.ctrlKey && !e.metaKey ? /^Digit([0123679])$/.exec(e.code)?.[1] : undefined
   if (digit !== undefined) {
     e.preventDefault()
-    tw.toggle({ '0': 'commit', '1': 'project', '2': 'output', '3': 'terminal', '6': 'problems', '7': 'structure' }[digit]!)
+    tw.toggle({ '0': 'commit', '1': 'project', '2': 'output', '3': 'terminal', '6': 'problems', '7': 'structure', '9': 'git' }[digit]!)
     return
   }
   if (e.key === 'F11' && e.shiftKey && !e.ctrlKey && !e.altKey) {
@@ -1014,6 +1018,26 @@ async function showDiffTab(path: string, original: string, deleted = false): Pro
   activate(f)
 }
 
+/** A read-only diff of two texts (a file at two commits, say). `label` names the revision in the tab. */
+async function showStaticDiff(path: string, label: string, left: string, right: string): Promise<void> {
+  const shown = `${path} @ ${label}` // one tab per file and revision
+  const existing = openFiles.get(`diff:${shown}`)
+  if (existing) {
+    activate(existing)
+    return
+  }
+  const uriPath = `/${label}/${norm(path)}` // keeps the file's extension, so it gets the right syntax coloring
+  const f: OpenFile = {
+    path: shown,
+    savedVersion: 0,
+    model: monaco.editor.createModel(right, undefined, monaco.Uri.from({ scheme: 'forge-rev', path: uriPath })),
+    diff: { original: monaco.editor.createModel(left, undefined, monaco.Uri.from({ scheme: 'forge-rev-old', path: uriPath })) }
+  }
+  f.savedVersion = f.model.getAlternativeVersionId()
+  openFiles.set(tabKey(f), f)
+  activate(f)
+}
+
 /** After a commit or branch switch: diffs are stale snapshots, and files on disk may have changed. */
 async function onWorktreeChanged(): Promise<void> {
   for (const f of [...openFiles.values()]) if (f.diff) closeFile(f)
@@ -1054,6 +1078,20 @@ tw.setOnShow('commit', refreshGit)
 window.addEventListener('focus', () => {
   if (settings.get<boolean>('gitRefreshOnFocus')) refreshGit() // changes made outside Forge
 })
+
+const gitLog = initGitLog({
+  root: $('view-git'),
+  getRoot: () => rootDir,
+  report,
+  guard: guarded,
+  showStaticDiff,
+  reveal: () => showView('git'),
+  onWorktreeChanged,
+  refreshStatus: () => gitUi.refresh().catch(() => undefined) // gitUi reports its own failures
+})
+tw.setOnShow('git', () => void gitLog.refresh().catch(() => undefined)) // reported where it fails
+const showFileHistory = (path: string): void =>
+  void gitLog.showFileHistory(path).catch((err: unknown) => report(`Git history: ${err instanceof Error ? err.message : String(err)}`, true))
 
 // ---- Run ----
 /** Saves every modified file so a run never executes stale code from disk. */
@@ -1189,6 +1227,19 @@ registerBuiltinCommands({
   compareWithFile: () => void compareWithFile().catch((err: unknown) => report(`Compare: ${String(err)}`, true)),
   compareWithClipboard: () => void compareWithClipboard().catch((err: unknown) => report(`Compare: ${String(err)}`, true)),
   showNotifications,
+  gitFileHistory: () => {
+    if (active && !active.diff) showFileHistory(active.path)
+    else report('Open a file to see its git history', true)
+  },
+  gitFetch: () => {
+    const root = rootDir
+    if (!root) return report('Open a project first', true)
+    void guarded('Fetch', async () => {
+      await window.forge.gitFetch(root)
+      report('Fetched')
+      await gitUi.refresh()
+    }).catch(() => undefined)
+  },
   showHistory: () => void history.show().catch((err: unknown) => report(`Local history: ${err instanceof Error ? err.message : String(err)}`, true)),
   restoreHistory: () => void history.restore().catch((err: unknown) => report(`Local history: ${err instanceof Error ? err.message : String(err)}`, true)),
   insertTemplate: () => templates.pickTemplate(),
