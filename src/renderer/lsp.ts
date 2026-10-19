@@ -7,6 +7,7 @@ import type {
   CompletionItem,
   CompletionList,
   Diagnostic,
+  DocumentSymbol,
   Hover,
   InsertReplaceEdit,
   Location,
@@ -17,6 +18,7 @@ import type {
   Range as LspRange,
   ServerCapabilities,
   SignatureHelp,
+  SymbolInformation,
   TextEdit,
   WorkspaceEdit
 } from 'vscode-languageserver-protocol'
@@ -93,6 +95,8 @@ export function initLsp(deps: LspDeps): {
   closeDoc: (model: monaco.editor.ITextModel) => void
   /** Runs `fn` (a format request) without complaining when the language has no formatter. */
   quietFormat: <T>(fn: () => Promise<T>) => Promise<T>
+  /** The file's symbols as a tree; null when no language server handles it. */
+  documentSymbols: (model: monaco.editor.ITextModel) => Promise<monaco.languages.DocumentSymbol[] | null>
 } {
   const docs = new Map<string, Doc>()
   // Completion items keep their raw LSP form so they can be resolved lazily.
@@ -317,6 +321,37 @@ export function initLsp(deps: LspDeps): {
     doc.caps ??= window.forge.lspCapabilities(doc.uri) as Promise<ServerCapabilities>
     return doc.caps
   }
+
+  // ---- Symbols: the Structure window, Go to Symbol in File (Ctrl+Shift+O) and sticky scroll ----
+  // LSP SymbolKind is Monaco's SymbolKind plus one.
+  const toSymbol = (s: DocumentSymbol | SymbolInformation): monaco.languages.DocumentSymbol => {
+    const tags = s.tags?.includes(1) ? [monaco.languages.SymbolTag.Deprecated] : []
+    const kind = (s.kind - 1) as monaco.languages.SymbolKind
+    if ('location' in s) {
+      // The older, flat form: the range is the whole symbol and the container is only a name.
+      const range = toRange(s.location.range)
+      return { name: s.name, detail: '', kind, tags, containerName: s.containerName, range, selectionRange: range }
+    }
+    return {
+      name: s.name, detail: s.detail ?? '', kind, tags,
+      range: toRange(s.range), selectionRange: toRange(s.selectionRange),
+      children: s.children?.map(toSymbol)
+    }
+  }
+
+  /** The file's symbols as a tree. Null when no language server handles the file (or it can't list symbols). */
+  async function documentSymbols(model: monaco.editor.ITextModel): Promise<monaco.languages.DocumentSymbol[] | null> {
+    if (!(await capabilities(model))?.documentSymbolProvider) return null
+    const res = await request<(DocumentSymbol | SymbolInformation)[]>(model, 'textDocument/documentSymbol', {})
+    return (res ?? []).map(toSymbol)
+  }
+
+  monaco.languages.registerDocumentSymbolProvider(LANGUAGES, {
+    displayName: 'Language server',
+    async provideDocumentSymbols(model) {
+      return (await documentSymbols(model)) ?? []
+    }
+  })
   let quietFormat = false
   const unsupported = (model: monaco.editor.ITextModel, what: string): void => {
     if (quietFormat && what.startsWith('formatting')) return
@@ -530,6 +565,7 @@ export function initLsp(deps: LspDeps): {
   return {
     openDoc,
     closeDoc,
+    documentSymbols,
     async quietFormat(fn) {
       quietFormat = true
       try {

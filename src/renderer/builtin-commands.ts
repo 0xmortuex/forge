@@ -116,6 +116,7 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   toggle('Appearance', 'Glass Panels', 'glass')
   toggle('Appearance', 'Status Bar', 'showStatusBar')
   toggle('Appearance', 'Tool Window Buttons', 'showStripe')
+  toggle('Appearance', 'Select Open File in Project Tree', 'treeFollow')
   choose('Background', 'background', 'aurora', 'Animated Aurora')
   choose('Background', 'background', 'gradient', 'Soft Gradient')
   choose('Background', 'background', 'solid', 'Solid Color')
@@ -141,6 +142,7 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   toggle('Editor', 'Indent Guides', 'indentGuides')
   toggle('Editor', 'Font Ligatures', 'fontLigatures')
   toggle('Editor', 'Sticky Scroll', 'stickyScroll')
+  toggle('Editor', 'Breadcrumbs', 'breadcrumbs')
   toggle('Editor', 'Format on Save', 'formatOnSave')
   register({
     id: 'editor.wrap',

@@ -70,6 +70,8 @@ export interface ToolWindows {
   activeIn: (dock: DockName) => string | undefined
   layout: () => Required<DockLayout>
   restore: (layout: DockLayout) => void
+  /** A small count shown on the window's tab and stripe button (empty text removes it). */
+  setBadge: (id: string, text: string, tone?: 'err' | 'warn' | 'info') => void
   /** Re-reads visibility into the stripes and tabs (after something else changed a panel). */
   render: () => void
 }
@@ -94,6 +96,16 @@ export function createToolWindows(deps: ToolWindowDeps): ToolWindows {
     const w = get(id)
     const d = docks[w.dock]
     return !d.panel.hidden && d.active === id
+  }
+
+  const badges = new Map<string, { text: string; tone: string }>()
+  const withBadge = (el: HTMLElement, id: string): void => {
+    const badge = badges.get(id)
+    if (!badge) return
+    const b = document.createElement('span')
+    b.className = `badge ${badge.tone}`
+    b.textContent = badge.text
+    el.append(b)
   }
 
   const tooltip = (w: ToolWindowDef): string => (w.shortcut ? `${w.title} (${w.shortcut})` : w.title)
@@ -130,6 +142,7 @@ export function createToolWindows(deps: ToolWindowDeps): ToolWindows {
         const tab = document.createElement('button')
         tab.className = 'btab' + (!d.panel.hidden && d.active === w.id ? ' active' : '')
         tab.textContent = w.title
+        withBadge(tab, w.id)
         tab.onclick = () => show(w.id)
         decorate(tab, w)
         d.tabs.append(tab)
@@ -139,6 +152,7 @@ export function createToolWindows(deps: ToolWindowDeps): ToolWindows {
       const b = document.createElement('button')
       b.className = 'tw-btn' + (isOpen(w.id) ? ' active' : '')
       b.innerHTML = w.icon
+      withBadge(b, w.id)
       b.title = tooltip(w)
       b.draggable = true
       b.ondragstart = (ev) => {
@@ -279,6 +293,13 @@ export function createToolWindows(deps: ToolWindowDeps): ToolWindows {
         if (typeof hidden === 'boolean') docks[name].userHidden = hidden
       }
       render()
+    },
+    setBadge(id, text, tone = 'info') {
+      get(id)
+      const had = badges.get(id)
+      if (!text) badges.delete(id)
+      else badges.set(id, { text, tone })
+      if (had?.text !== text || had?.tone !== tone) render()
     },
     render
   }

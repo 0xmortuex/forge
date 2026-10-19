@@ -80,6 +80,7 @@ export const DEFS: SettingDef[] = [
   { key: 'zoom', category: 'Appearance', group: 'Layout', label: 'Interface zoom', default: 100, control: { type: 'number', min: 60, max: 220, step: 10, unit: '%' } },
   { key: 'showStatusBar', category: 'Appearance', group: 'Layout', label: 'Show status bar', default: true, control: onOff },
   { key: 'showStripe', category: 'Appearance', group: 'Layout', label: 'Show tool window buttons', default: true, control: onOff },
+  { key: 'treeFollow', category: 'Appearance', group: 'Layout', label: 'Select the open file in the Project tree', default: false, control: onOff, description: 'Switching tabs expands the tree to that file.' },
 
   // ---- Editor ----
   { key: 'fontFamily', category: 'Editor', group: 'Font', label: 'Font family', default: DEFAULT_EDITOR_FONT,
@@ -100,6 +101,7 @@ export const DEFS: SettingDef[] = [
   { key: 'indentGuides', category: 'Editor', group: 'Display', label: 'Indent guides', default: true, control: onOff },
   { key: 'bracketColors', category: 'Editor', group: 'Display', label: 'Rainbow brackets', default: true, control: onOff, description: 'Colors matching bracket pairs by nesting depth.' },
   { key: 'stickyScroll', category: 'Editor', group: 'Display', label: 'Sticky scroll', default: true, control: onOff, description: 'Keeps the enclosing function or class pinned at the top.' },
+  { key: 'breadcrumbs', category: 'Editor', group: 'Display', label: 'Breadcrumbs', default: true, control: onOff, description: 'The file path and the class or function around the cursor, above the editor.' },
   { key: 'folding', category: 'Editor', group: 'Display', label: 'Code folding', default: true, control: onOff },
   { key: 'scrollBeyondLastLine', category: 'Editor', group: 'Display', label: 'Scroll past the last line', default: false, control: onOff },
 

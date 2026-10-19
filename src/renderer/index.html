@@ -35,8 +35,11 @@
           <div class="dock-tabs" id="side-tabs"></div>
           <button class="icon-btn small" data-hide="left" title="Hide"></button>
         </div>
-        <div id="tree">
-          <div class="empty-tree" id="empty-tree"><p>No folder is open</p><button class="btn-primary" id="open-folder-btn">Open Folder…</button></div>
+        <div id="project-view" class="view">
+          <div class="tool-bar" id="tree-bar"></div>
+          <div id="tree">
+            <div class="empty-tree" id="empty-tree"><p>No folder is open</p><button class="btn-primary" id="open-folder-btn">Open Folder…</button></div>
+          </div>
         </div>
         <div id="commit-view" hidden>
           <div id="commit-head">
@@ -59,6 +62,7 @@
       <section id="center">
         <main id="editor-area" class="island">
           <div id="tabs"></div>
+          <div id="breadcrumbs" hidden></div>
           <div id="editor"></div>
           <div id="diff" hidden></div>
           <div id="welcome">
@@ -81,7 +85,7 @@
             <button class="icon-btn small" data-hide="bottom" title="Hide"></button>
           </div>
           <div id="view-output" class="view"><div id="log"></div></div>
-          <div id="view-problems" class="view" hidden><div id="problems-list"></div></div>
+          <div id="view-problems" class="view" hidden></div>
           <div id="view-terminal" class="view" hidden>
             <div id="term-tabs"></div>
             <div id="term"></div>
@@ -120,7 +124,7 @@
           <div class="dock-tabs" id="right-tabs"></div>
           <button class="icon-btn small" data-hide="right" title="Hide"></button>
         </div>
-        <div id="view-structure" class="view" hidden><div id="structure-list"></div></div>
+        <div id="view-structure" class="view" hidden></div>
       </aside>
       <nav id="stripe-right" hidden></nav>
     </div>

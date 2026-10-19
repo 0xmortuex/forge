@@ -30,6 +30,9 @@ import { registerMort } from './mort'
 import { initDebug } from './debug'
 import { initRun } from './run'
 import { createToolWindows, type DockName } from './docks'
+import { initStructure } from './structure'
+import { initProblems } from './problems'
+import { initBreadcrumbs } from './breadcrumbs'
 import type { ChangeKind, GitChange } from '../main/git'
 
 self.MonacoEnvironment = {
@@ -168,7 +171,7 @@ const tw = createToolWindows({
     stripeRight: $('stripe-right')
   }
 })
-tw.register({ id: 'project', title: 'Project', icon: icons.project, root: treeEl, dock: 'left', shortcut: 'Alt+1' })
+tw.register({ id: 'project', title: 'Project', icon: icons.project, root: $('project-view'), dock: 'left', shortcut: 'Alt+1' })
 tw.register({ id: 'commit', title: 'Commit', icon: icons.commit, root: $('commit-view'), dock: 'left', shortcut: 'Alt+0' })
 tw.register({ id: 'output', title: 'Output', icon: icons.output, root: $('view-output'), dock: 'bottom', shortcut: 'Alt+2' })
 tw.register({ id: 'terminal', title: 'Terminal', icon: icons.terminal, root: $('view-terminal'), dock: 'bottom', shortcut: 'Alt+3', passive: false })
@@ -341,6 +344,26 @@ function tabMenu(f: OpenFile): (MenuItem | 'sep')[] {
   ]
 }
 
+/** Drops the tab `fromKey` where the tab `toKey` is. */
+function moveTab(fromKey: string, toKey: string): void {
+  if (fromKey === toKey) return
+  const entries = [...openFiles.entries()]
+  const from = entries.findIndex(([k]) => k === fromKey)
+  const to = entries.findIndex(([k]) => k === toKey)
+  if (from < 0 || to < 0) return
+  const [moved] = entries.splice(from, 1)
+  entries.splice(to, 0, moved!)
+  openFiles.clear()
+  for (const [k, v] of entries) openFiles.set(k, v)
+  renderTabs()
+}
+// The mouse wheel scrolls a crowded tab bar sideways.
+tabsEl.addEventListener('wheel', (e) => {
+  if (!e.deltaY) return
+  e.preventDefault()
+  tabsEl.scrollLeft += e.deltaY
+}, { passive: false })
+
 const renderedTabs = new Set<string>() // tabs that already exist don't replay their entrance
 
 function renderTabs(): void {
@@ -372,12 +395,31 @@ function renderTabs(): void {
     }
     tab.append(close)
     tab.onclick = () => activate(f)
+    tab.onauxclick = (e) => {
+      if (e.button !== 1) return
+      e.preventDefault()
+      requestClose(f)
+    }
+    tab.draggable = true
+    tab.ondragstart = (e) => e.dataTransfer?.setData('text/forge-tab', tabKey(f))
+    tab.ondragover = (e) => {
+      if (!e.dataTransfer?.types.includes('text/forge-tab')) return
+      e.preventDefault()
+      tab.classList.add('drop')
+    }
+    tab.ondragleave = () => tab.classList.remove('drop')
+    tab.ondrop = (e) => {
+      e.preventDefault()
+      const from = e.dataTransfer?.getData('text/forge-tab')
+      if (from) moveTab(from, tabKey(f))
+    }
     tab.oncontextmenu = (ev) => {
       ev.preventDefault()
       showMenu(ev.clientX, ev.clientY, tabMenu(f))
     }
     tabsEl.append(tab)
   }
+  tabsEl.querySelector('.tab.active')?.scrollIntoView({ inline: 'nearest', block: 'nearest' })
   renderedTabs.clear()
   for (const k of keys) renderedTabs.add(k)
   saveSession()
@@ -400,6 +442,8 @@ function activate(f: OpenFile | null): void {
   renderTabs()
   if (f) (f.diff ? diffEditor.getModifiedEditor() : editor).focus()
   updateStatus()
+  breadcrumbs.refresh()
+  if (f && !f.diff && settings.get<boolean>('treeFollow')) void locateInTree(f.path).catch((err: unknown) => report(`Locate in tree: ${String(err)}`, true))
 }
 
 /** User-initiated close: asks first if that would throw away unsaved edits. */
@@ -442,9 +486,9 @@ async function openFile(path: string, line?: number, column = 1): Promise<void> 
       const f: OpenFile = { path, model, savedVersion: model.getAlternativeVersionId() }
       model.onDidChangeContent(() => renderTabs())
       openFiles.set(path, f)
+      lsp.openDoc(model, path) // before activate(): views that react to the new model (Structure) already find the document
       activate(f)
       extensions.emit('open', { path })
-      lsp.openDoc(model, path)
       dbg.onModelOpened(model, path)
     })
   }
@@ -480,7 +524,7 @@ async function saveActive(opts: { format?: boolean } = {}): Promise<void> {
 // Every rendered directory, so one folder can be refreshed after a file operation.
 const norm = (p: string): string => p.replace(/\\/g, '/').replace(/\/$/, '')
 const parentOf = (p: string): string => p.replace(/[\\/][^\\/]*$/, '')
-const dirs = new Map<string, { kids: HTMLElement; depth: number }>()
+const dirs = new Map<string, { kids: HTMLElement; depth: number; setOpen?: (open: boolean) => Promise<void> }>()
 
 async function renderDir(dir: string, into: HTMLElement, depth = 0): Promise<void> {
   const entries = await window.forge.readDir(dir)
@@ -505,18 +549,18 @@ async function renderDir(dir: string, into: HTMLElement, depth = 0): Promise<voi
       const kids = document.createElement('div')
       kids.hidden = true
       into.append(kids)
-      dirs.set(norm(e.path), { kids, depth })
-      row.onclick = () =>
-        void guarded(`Read ${e.name}`, async () => {
-          kids.hidden = !kids.hidden
-          twisty.innerHTML = kids.hidden ? icons.chevronRight : icons.chevronDown
-          if (kids.childElementCount === 0) await renderDir(e.path, kids, depth + 1)
-          if (!kids.hidden) {
-            kids.classList.remove('kids-enter')
-            void kids.offsetWidth
-            kids.classList.add('kids-enter')
-          }
-        })
+      const setOpen = async (open: boolean): Promise<void> => {
+        kids.hidden = !open
+        twisty.innerHTML = open ? icons.chevronDown : icons.chevronRight
+        if (open && kids.childElementCount === 0) await renderDir(e.path, kids, depth + 1)
+        if (open) {
+          kids.classList.remove('kids-enter')
+          void kids.offsetWidth
+          kids.classList.add('kids-enter')
+        }
+      }
+      dirs.set(norm(e.path), { kids, depth, setOpen })
+      row.onclick = () => void guarded(`Read ${e.name}`, () => setOpen(kids.hidden))
     } else {
       row.onclick = () => {
         treeEl.querySelectorAll('.node.active').forEach((n) => n.classList.remove('active'))
@@ -526,6 +570,28 @@ async function renderDir(dir: string, into: HTMLElement, depth = 0): Promise<voi
     }
   }
   decorateTree()
+}
+
+/** Expands the tree down to `path` and selects it. */
+async function locateInTree(path: string): Promise<void> {
+  if (!rootDir) return
+  const parts = relPath(path).split(/[\\/]/)
+  let dir = rootDir
+  for (const part of parts.slice(0, -1)) {
+    dir = joinPath(dir, part)
+    const d = dirs.get(norm(dir))
+    if (!d?.setOpen) return // outside the project
+    if (d.kids.hidden) await d.setOpen(true)
+  }
+  const node = [...treeEl.querySelectorAll<HTMLElement>('.node')].find((n) => samePath(n.dataset['path'] ?? '', path))
+  if (!node) return
+  treeEl.querySelectorAll('.node.active').forEach((n) => n.classList.remove('active'))
+  node.classList.add('active')
+  node.scrollIntoView({ block: 'nearest' })
+}
+
+async function collapseTree(): Promise<void> {
+  for (const [key, d] of dirs) if (d.setOpen && !d.kids.hidden && key !== norm(rootDir ?? '')) await d.setOpen(false)
 }
 
 /** Re-reads one directory's listing. Expanded subfolders inside it collapse. */
@@ -639,6 +705,7 @@ async function openFolderAt(dir: string): Promise<void> {
     await renderDir(dir, treeEl)
     document.title = `${basename(dir)} – Forge`
     $('project-name').textContent = basename(dir)
+    $('tree-title').textContent = basename(dir)
     report(`Opened ${dir}`)
     session.addRecent(dir)
     session.update({ lastFolder: dir })
@@ -661,6 +728,24 @@ editor.onDidChangeModel(updateStatus)
 editor.onDidChangeModelContent(refreshBlame)
 
 $('project-widget').onclick = () => void openFolder()
+{
+  const bar = $('tree-bar')
+  const btn = (title: string, html: string, run: () => void): void => {
+    const b = document.createElement('button')
+    b.className = 'icon-btn small'
+    b.title = title
+    b.innerHTML = html
+    b.onclick = run
+    bar.append(b)
+  }
+  const label = document.createElement('span')
+  label.className = 'tool-title'
+  label.id = 'tree-title'
+  bar.append(label)
+  btn('New file in the project root', icons.newFile, () => rootDir && void createEntry(rootDir, 'file'))
+  btn('Select the open file', icons.locate, () => active && !active.diff && void locateInTree(active.path))
+  btn('Collapse all', icons.collapseAll, () => void collapseTree())
+}
 $('search-btn').onclick = () => void openSearch()
 document.querySelectorAll<HTMLButtonElement>('[data-hide]').forEach((b) => {
   b.onclick = () => tw.hideDock(b.dataset['hide'] as DockName)
@@ -713,6 +798,27 @@ const lsp = initLsp({
     stProblems.classList.toggle('has-errors', errors > 0)
   }
 })
+
+const structure = initStructure({
+  root: $('view-structure'),
+  editor,
+  getSymbols: (model) => lsp.documentSymbols(model),
+  isVisible: () => tw.isOpen('structure')
+})
+tw.setOnShow('structure', () => void structure.refresh())
+const breadcrumbs = initBreadcrumbs({
+  el: $('breadcrumbs'),
+  editor,
+  currentPath: () => (active && !active.diff ? relPath(active.path) : null),
+  getSymbols: (model) => lsp.documentSymbols(model)
+})
+initProblems({
+  root: $('view-problems'),
+  relPath,
+  openAt: openFile,
+  onCounts: (errors, warnings) => tw.setBadge('problems', String(errors || warnings || ''), errors ? 'err' : 'warn')
+})
+stProblems.onclick = () => showView('problems')
 
 const terminals = initTerminals({ getCwd: () => rootDir, guard: guarded })
 tw.setOnShow('terminal', () => terminals.show())
@@ -1081,6 +1187,7 @@ async function restoreSession(): Promise<void> {
   } finally {
     restoring = false
     saveSession()
+    if (tw.isOpen('structure')) void structure.refresh()
   }
 }
 

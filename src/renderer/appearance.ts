@@ -101,6 +101,7 @@ function applyBodyClasses(): void {
   body.classList.toggle('glass', bool('glass'))
   body.classList.toggle('no-status', !bool('showStatusBar'))
   body.classList.toggle('no-stripe', !bool('showStripe'))
+  body.classList.toggle('no-breadcrumbs', !bool('breadcrumbs'))
 }
 
 function applyLayout(): void {
@@ -204,7 +205,7 @@ export function initAppearance(): string {
       applyBodyClasses()
       syncAccentCycle()
     } else if (key === 'accentCycle' || key === 'animations' || key === 'animSpeed') applyMotion()
-    else if (['background', 'colorful', 'showStatusBar', 'showStripe'].includes(key)) applyBodyClasses()
+    else if (['background', 'colorful', 'showStatusBar', 'showStripe', 'breadcrumbs'].includes(key)) applyBodyClasses()
     else if (['radius', 'gap', 'density', 'uiFont', 'uiFontSize'].includes(key)) applyLayout()
     else if (key === 'zoom') applyZoom()
     else if (EDITOR_KEYS.has(key)) applyEditor(key)

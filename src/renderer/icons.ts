@@ -26,6 +26,11 @@ export const icons = {
   minus: svg('<path d="M3.5 8h9"/>', 14),
   structure: svg('<path d="M3 3h5M5 6.5h5M5 10h5M7 13.5h6"/><path d="M3 3v7a1 1 0 001 1h1M5 6.5V10"/>', 18),
   problems: svg('<path d="M8 2.2l6 10.6a.5.5 0 01-.45.7H2.45a.5.5 0 01-.45-.7z"/><path d="M8 6.4v3.2M8 11.4v.1"/>', 18),
+  sort: svg('<path d="M4 3v10M2 11l2 2 2-2M9 4h5M9 8h3.5M9 12h2"/>', 14),
+  expandAll: svg('<path d="M4.5 6.5L8 3l3.5 3.5M4.5 9.5L8 13l3.5-3.5"/>', 14),
+  collapseAll: svg('<path d="M4.5 3.5L8 7l3.5-3.5M4.5 12.5L8 9l3.5 3.5"/>', 14),
+  locate: svg('<circle cx="8" cy="8" r="3.2"/><circle cx="8" cy="8" r=".6" fill="currentColor"/><path d="M8 1.5v2.2M8 12.3v2.2M1.5 8h2.2M12.3 8h2.2"/>', 14),
+  newFile: svg('<path d="M4 2h5l3 3v8.5a.5.5 0 01-.5.5h-7.5a.5.5 0 01-.5-.5v-11a.5.5 0 01.5-.5zM8 7.5v4M6 9.5h4"/>', 14),
   close: svg('<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>', 12),
   folder: svg('<path d="M2 4.5A1.5 1.5 0 013.5 3h2.8l1.4 1.5h4.8A1.5 1.5 0 0114 6v5.5a1.5 1.5 0 01-1.5 1.5h-9A1.5 1.5 0 012 11.5z" fill="currentColor" fill-opacity=".18"/>'),
   file: svg('<path d="M4 2h5l3 3v8.5a.5.5 0 01-.5.5h-7.5a.5.5 0 01-.5-.5v-11a.5.5 0 01.5-.5z"/><path d="M9 2v3h3"/>')

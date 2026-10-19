@@ -196,6 +196,10 @@ class Client {
           },
           definition: { linkSupport: true },
           references: {},
+          documentSymbol: {
+            hierarchicalDocumentSymbolSupport: true,
+            symbolKind: { valueSet: Array.from({ length: 26 }, (_, i) => i + 1) }
+          },
           rename: { prepareSupport: true },
           formatting: {},
           rangeFormatting: {},
