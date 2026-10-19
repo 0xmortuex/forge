@@ -19,6 +19,10 @@
       <button class="widget" id="branch-widget" hidden title="Git branch">
         <span id="branch-icon"></span><span id="branch-name"></span>
       </button>
+      <span class="nav-group">
+        <button class="icon-btn small" id="nav-back" title="Back (Ctrl+Alt+Left)" disabled></button>
+        <button class="icon-btn small" id="nav-forward" title="Forward (Ctrl+Alt+Right)" disabled></button>
+      </span>
       <span class="grow"></span>
       <button class="search-pill" id="search-btn" title="Search Everywhere (Shift Shift)"><span class="ico" id="search-ico"></span><span class="lbl">Search everywhere</span><span class="keys"><kbd>Shift</kbd><kbd>Shift</kbd></span></button>
       <span class="grow"></span>
@@ -144,6 +148,7 @@
           <button class="icon-btn small" data-hide="right" title="Hide"></button>
         </div>
         <div id="view-structure" class="view" hidden></div>
+        <div id="view-bookmarks" class="view" hidden></div>
       </aside>
       <nav id="stripe-right" hidden></nav>
     </div>
@@ -162,6 +167,13 @@
       <div id="search-box" class="modal">
         <input id="search-input" placeholder="Search files by name" spellcheck="false" autocomplete="off" />
         <div id="search-results"></div>
+      </div>
+    </div>
+    <div id="quick" class="overlay" hidden>
+      <div id="quick-box" class="modal">
+        <div id="quick-title"></div>
+        <input id="quick-input" spellcheck="false" autocomplete="off" />
+        <div id="quick-results"></div>
       </div>
     </div>
     <div id="palette" class="overlay" hidden>

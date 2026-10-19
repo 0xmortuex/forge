@@ -92,7 +92,14 @@ export function registerTerminal(): void {
   ipcMain.handle('term:kill', (_e, id: number) => killTree(getTerm(id)))
 }
 
-export function killAllTerminals(): void {
-  for (const t of terms.values()) killTree(t)
-  terms.clear()
+/**
+ * Ends every terminal and resolves once node-pty has seen them exit (or after a short wait). Quitting while a
+ * pseudo-console is still being torn down crashes natively on some Windows machines, so the app waits for this.
+ */
+export function killAllTerminals(): Promise<void> {
+  const all = [...terms.values()]
+  if (!all.length) return Promise.resolve()
+  const exited = Promise.all(all.map((t) => new Promise<void>((resolve) => t.onExit(() => resolve()))))
+  for (const t of all) killTree(t)
+  return Promise.race([exited.then(() => undefined), new Promise<void>((resolve) => setTimeout(resolve, 1500))])
 }

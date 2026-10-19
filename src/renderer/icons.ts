@@ -31,6 +31,9 @@ export const icons = {
   collapseAll: svg('<path d="M4.5 3.5L8 7l3.5-3.5M4.5 12.5L8 9l3.5 3.5"/>', 14),
   locate: svg('<circle cx="8" cy="8" r="3.2"/><circle cx="8" cy="8" r=".6" fill="currentColor"/><path d="M8 1.5v2.2M8 12.3v2.2M1.5 8h2.2M12.3 8h2.2"/>', 14),
   newFile: svg('<path d="M4 2h5l3 3v8.5a.5.5 0 01-.5.5h-7.5a.5.5 0 01-.5-.5v-11a.5.5 0 01.5-.5zM8 7.5v4M6 9.5h4"/>', 14),
+  back: svg('<path d="M9.5 3.5L5 8l4.5 4.5M5.5 8H13"/>', 14),
+  forward: svg('<path d="M6.5 3.5L11 8l-4.5 4.5M10.5 8H3"/>', 14),
+  bookmark: svg('<path d="M4.5 2.5h7v11L8 10.6 4.5 13.5z"/>', 18),
   close: svg('<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>', 12),
   folder: svg('<path d="M2 4.5A1.5 1.5 0 013.5 3h2.8l1.4 1.5h4.8A1.5 1.5 0 0114 6v5.5a1.5 1.5 0 01-1.5 1.5h-9A1.5 1.5 0 012 11.5z" fill="currentColor" fill-opacity=".18"/>'),
   file: svg('<path d="M4 2h5l3 3v8.5a.5.5 0 01-.5.5h-7.5a.5.5 0 01-.5-.5v-11a.5.5 0 01.5-.5z"/><path d="M9 2v3h3"/>')

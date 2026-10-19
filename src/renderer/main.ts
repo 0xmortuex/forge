@@ -34,6 +34,9 @@ import { initStructure } from './structure'
 import { initProblems } from './problems'
 import { initBreadcrumbs } from './breadcrumbs'
 import { initTooltips } from './tooltips'
+import { initQuick } from './quick'
+import { initNavigation } from './navigation'
+import { initBookmarks } from './bookmarks'
 import type { ChangeKind, GitChange } from '../main/git'
 
 self.MonacoEnvironment = {
@@ -182,8 +185,9 @@ tw.register({ id: 'run', title: 'Run', icon: icons.play, root: $('view-run'), do
 tw.register({ id: 'debug', title: 'Debug', icon: icons.bug, root: $('view-debug'), dock: 'bottom', passive: false })
 tw.register({ id: 'problems', title: 'Problems', icon: icons.problems, root: $('view-problems'), dock: 'bottom', shortcut: 'Alt+6' })
 tw.register({ id: 'structure', title: 'Structure', icon: icons.structure, root: $('view-structure'), dock: 'right', shortcut: 'Alt+7' })
+tw.register({ id: 'bookmarks', title: 'Bookmarks', icon: icons.bookmark, root: $('view-bookmarks'), dock: 'right' })
 
-type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure'
+type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks'
 type Side = 'project' | 'commit'
 const showSide = (side: Side): void => tw.show(side)
 const toggleSide = (side: Side): void => tw.toggle(side)
@@ -445,6 +449,7 @@ function activate(f: OpenFile | null): void {
   if (f) (f.diff ? diffEditor.getModifiedEditor() : editor).focus()
   updateStatus()
   breadcrumbs.refresh()
+  if (f && !f.diff) nav.visit()
   if (f && !f.diff && settings.get<boolean>('treeFollow')) void locateInTree(f.path).catch((err: unknown) => report(`Locate in tree: ${String(err)}`, true))
 }
 
@@ -468,6 +473,7 @@ function closeFile(f: OpenFile): void {
     if (!f.diff.shared) f.model.dispose() // a shared model belongs to the file tab
   } else {
     lsp.closeDoc(f.model)
+    bookmarks.onModelClosing(f.model)
     dbg.onModelClosing(f.model, f.path)
     f.model.dispose()
   }
@@ -488,6 +494,7 @@ async function openFile(path: string, line?: number, column = 1): Promise<void> 
       const f: OpenFile = { path, model, savedVersion: model.getAlternativeVersionId() }
       model.onDidChangeContent(() => renderTabs())
       openFiles.set(path, f)
+      bookmarks.onModelOpened(model, path)
       lsp.openDoc(model, path) // before activate(): views that react to the new model (Structure) already find the document
       activate(f)
       extensions.emit('open', { path })
@@ -707,6 +714,7 @@ async function openFolderAt(dir: string): Promise<void> {
     dirs.clear()
     dirs.set(norm(dir), { kids: treeEl, depth: -1 })
     rootDir = dir
+    bookmarks.refresh()
     await renderDir(dir, treeEl)
     document.title = `${basename(dir)} – Forge`
     $('project-name').textContent = basename(dir)
@@ -815,6 +823,16 @@ window.addEventListener('keydown', (e) => {
     tw.toggle({ '0': 'commit', '1': 'project', '2': 'output', '3': 'terminal', '6': 'problems', '7': 'structure' }[digit]!)
     return
   }
+  if (e.key === 'F11' && e.shiftKey && !e.ctrlKey && !e.altKey) {
+    e.preventDefault()
+    bookmarks.list()
+    return
+  }
+  if (e.key === 'F11' && e.ctrlKey && !e.shiftKey && !e.altKey) {
+    e.preventDefault()
+    bookmarks.toggle()
+    return
+  }
   if (e.key === 'F11') {
     e.preventDefault()
     void window.forge.toggleFullscreen()
@@ -823,6 +841,12 @@ window.addEventListener('keydown', (e) => {
   // Cmd is the "Ctrl" of macOS.
   if (!(e.ctrlKey || (isMac && e.metaKey))) return
   if (e.code === 'Comma' && !e.shiftKey && !e.altKey) { e.preventDefault(); settingsUi.open(); return }
+  if (e.altKey && !e.shiftKey && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
+    e.preventDefault()
+    void (e.code === 'ArrowLeft' ? nav.back() : nav.forward()).catch(() => undefined) // reported by the opener
+    return
+  }
+  if (e.code === 'KeyE' && !e.altKey) { e.preventDefault(); if (e.shiftKey) nav.recentLocations(); else nav.recentFiles(); return }
   if (e.altKey && e.code === 'KeyS') { e.preventDefault(); settingsUi.open(); return }
   if (e.altKey && e.code === 'KeyZ') { e.preventDefault(); toggleZen(); return }
   if (e.shiftKey && e.code === 'KeyP') { e.preventDefault(); palette.open(); return }
@@ -859,6 +883,42 @@ const structure = initStructure({
   isVisible: () => tw.isOpen('structure')
 })
 tw.setOnShow('structure', () => void structure.refresh())
+initQuick({ restoreFocus: () => (active ? editor.focus() : undefined) })
+const nav = initNavigation({
+  editor,
+  currentPath: () => (active && !active.diff ? active.path : null),
+  openAt: openFile,
+  relPath,
+  lineText: (path, line) => {
+    const m = [...openFiles.values()].find((f) => !f.diff && samePath(f.path, path))?.model
+    return m && line <= m.getLineCount() ? m.getLineContent(line) : undefined
+  },
+  getRoot: () => rootDir,
+  onChange: () => {
+    ;($('nav-back') as HTMLButtonElement).disabled = !nav.canBack()
+    ;($('nav-forward') as HTMLButtonElement).disabled = !nav.canForward()
+  }
+})
+const bookmarks = initBookmarks({
+  editor,
+  root: $('view-bookmarks'),
+  currentPath: () => (active && !active.diff ? active.path : null),
+  getModel: (path) => [...openFiles.values()].find((f) => !f.diff && samePath(f.path, path))?.model,
+  openAt: openFile,
+  relPath,
+  getRoot: () => rootDir,
+  onCount: (n) => tw.setBadge('bookmarks', n ? String(n) : '')
+})
+setIcon('#nav-back', icons.back)
+setIcon('#nav-forward', icons.forward)
+$('nav-back').onclick = () => void nav.back().catch(() => undefined) // reported by the opener
+$('nav-forward').onclick = () => void nav.forward().catch(() => undefined)
+window.addEventListener('mouseup', (e) => {
+  // The mouse's back/forward buttons.
+  if (e.button === 3) void nav.back().catch(() => undefined)
+  else if (e.button === 4) void nav.forward().catch(() => undefined)
+})
+
 const breadcrumbs = initBreadcrumbs({
   el: $('breadcrumbs'),
   editor,
@@ -1057,6 +1117,7 @@ window.addEventListener(
 // ---- Settings, command palette, auto save ----
 // The window is closing: write pending settings and session first, then tell the main process it may close.
 window.forge.onFlush(() => {
+  bookmarks.snapshot() // lines may have moved since the last save
   Promise.all([flushSettings(), session.flush()])
     .catch((err: unknown) => console.error('Flush on close failed', err)) // closing must not hang on this
     .finally(() => window.forge.flushed())
@@ -1085,6 +1146,12 @@ registerBuiltinCommands({
   showFind: () => showView('find'),
   toggleSide,
   toggleView,
+  navBack: () => void nav.back().catch(() => undefined),
+  navForward: () => void nav.forward().catch(() => undefined),
+  recentFiles: () => nav.recentFiles(),
+  recentLocations: () => nav.recentLocations(),
+  toggleBookmark: () => bookmarks.toggle(),
+  showBookmarks: () => bookmarks.list(),
   newTerminal: () => {
     showView('terminal')
     terminals.newTerminal()

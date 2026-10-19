@@ -18,7 +18,9 @@ const sleep = (/** @type {number} */ ms) => new Promise((resolve) => setTimeout(
  *   (e.g. { 'settings.json': '{...}', 'themes/mine.json': '{...}' })
  */
 async function run(name, files, scenario, options = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'forge-test-'))
+  // The real path (on Windows runners the temp folder is reached through a short name like RUNNER~1): Forge works
+  // with real paths, so the tests must compare against them too.
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'forge-test-')))
   for (const [rel, content] of Object.entries(files)) {
     const p = path.join(root, rel)
     fs.mkdirSync(path.dirname(p), { recursive: true })

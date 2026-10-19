@@ -128,9 +128,16 @@ registerTerminal()
 registerLsp()
 registerGit()
 registerDebug()
-app.on('before-quit', () => {
-  killAllTerminals()
+let terminalsEnded = false
+app.on('before-quit', (e) => {
   killAllLsp()
+  if (terminalsEnded) return
+  // Hold the quit until the terminals have exited, then quit again (see killAllTerminals).
+  e.preventDefault()
+  terminalsEnded = true
+  killAllTerminals()
+    .catch((err: unknown) => console.error('Ending the terminals failed', err))
+    .finally(() => app.quit())
 })
 
 app.whenReady().then(() => {

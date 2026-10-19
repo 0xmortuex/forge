@@ -68,7 +68,9 @@ export function initTooltips(): void {
     timer = window.setTimeout(() => show(el, text), DELAY)
   })
   document.addEventListener('mouseout', (e) => {
-    if (current && !current.contains(e.relatedTarget as Node | null)) hide()
+    // Only leaving the element itself counts; a stray mouseout from elsewhere (e.g. after the layout shifted under a
+    // resting pointer) must not hide a tooltip that is about to show.
+    if (current && current.contains(e.target as Node | null) && !current.contains(e.relatedTarget as Node | null)) hide()
   })
   window.addEventListener('mousedown', hide, true)
   window.addEventListener('keydown', hide, true)

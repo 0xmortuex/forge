@@ -22,6 +22,9 @@ export interface SessionState {
   recents: string[]
   openFiles: string[]
   activeFile?: string
+  /** Most recently opened files first (Recent Files). */
+  recentFiles?: string[]
+  bookmarks?: { path: string; line: number }[]
   layout: Layout
 }
 
@@ -36,6 +39,16 @@ function record(v: unknown): Record<string, string> | undefined {
   return out
 }
 
+function bookmarkList(v: unknown): { path: string; line: number }[] {
+  if (!Array.isArray(v)) return []
+  const out: { path: string; line: number }[] = []
+  for (const b of v) {
+    const o = b as { path?: unknown; line?: unknown }
+    if (typeof o?.path === 'string' && typeof o.line === 'number' && o.line > 0) out.push({ path: o.path, line: o.line })
+  }
+  return out
+}
+
 function load(raw: Record<string, unknown>): SessionState {
   const layout = (typeof raw['layout'] === 'object' && raw['layout'] !== null ? raw['layout'] : {}) as Record<string, unknown>
   const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined)
@@ -44,6 +57,8 @@ function load(raw: Record<string, unknown>): SessionState {
     recents: strings(raw['recents']).slice(0, MAX_RECENTS),
     openFiles: strings(raw['openFiles']),
     activeFile: typeof raw['activeFile'] === 'string' ? raw['activeFile'] : undefined,
+    recentFiles: strings(raw['recentFiles']),
+    bookmarks: bookmarkList(raw['bookmarks']),
     layout: {
       projectWidth: num(layout['projectWidth']),
       bottomHeight: num(layout['bottomHeight']),

@@ -94,16 +94,6 @@ const BY_EXT: Record<string, [string, string]> = {
 }
 
 // LSP error codes that mean "the document changed / request was superseded"; not real failures.
-/**
- * How serious a line a server wrote to stderr is. clangd prefixes its lines with a level letter ("I[12:00:00] ..." is
- * routine information, "E[...]" an error); anything else on stderr is treated as an error, as before.
- */
-function stderrLevel(line: string): number {
-  const m = /^([IVDEW])\[/.exec(line)
-  if (!m) return 1
-  return m[1] === 'E' ? 1 : m[1] === 'W' ? 2 : 4
-}
-
 const CONTENT_MODIFIED = -32801
 const REQUEST_CANCELLED = -32800
 
@@ -113,6 +103,12 @@ class Client {
   capabilities: Record<string, unknown> = {}
   /** tsserver only: whether the one-off project-loading query has been sent. */
   warmedUp = false
+  /**
+   * The level of the last stderr entry. clangd prefixes an entry with a level letter ("I[12:00:00] ..." is routine
+   * information, "E[...]" an error) and may continue it on further lines, which keep that level. A server that doesn't
+   * prefix its lines has everything on stderr treated as an error, as before.
+   */
+  private stderrLevel = 1
   private child: ChildProcessWithoutNullStreams
   private conn: MessageConnection
 
@@ -140,7 +136,12 @@ class Client {
       )
     })
     this.child.stderr.on('data', (d: Buffer) => {
-      for (const line of d.toString().split(/\r?\n/)) if (line.trim()) this.log(stderrLevel(line), line)
+      for (const line of d.toString().split(/\r?\n/)) {
+        if (!line.trim()) continue
+        const m = /^([IVDEW])\[/.exec(line)
+        if (m) this.stderrLevel = m[1] === 'E' ? 1 : m[1] === 'W' ? 2 : 4
+        this.log(this.stderrLevel, line)
+      }
     })
     this.child.once('exit', (code) => {
       this.log(code === 0 ? 3 : 1, `${spec.id} language server exited (code ${code})`)

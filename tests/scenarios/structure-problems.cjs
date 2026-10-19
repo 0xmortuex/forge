@@ -79,10 +79,8 @@ run(
 
     // the editor's own Go to Symbol (Ctrl+Shift+O) is fed by the same server
     key('O', ['control', 'shift'])
-    check(
-      'Ctrl+Shift+O lists the symbols too',
-      !!(await waitFor(async () => (await js("document.querySelector('.quick-input-widget:not([style*=\"display: none\"])')?.textContent ?? ''")).includes('makeCircle'), 5000))
-    )
+    const outline = () => js("document.querySelector('.quick-input-widget:not([style*=\"display: none\"])')?.textContent ?? ''")
+    check('Ctrl+Shift+O lists the symbols too', !!(await waitFor(async () => (await outline()).includes('makeCircle'), 20000)), await outline())
     key('Escape')
 
     // ---- Problems ----

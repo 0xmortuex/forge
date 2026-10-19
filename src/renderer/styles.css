@@ -195,12 +195,12 @@ body.no-status #status { display: none; }
   animation: pop var(--t-med) var(--spring); }
 @keyframes fade { from { opacity: 0; } }
 @keyframes pop { from { opacity: 0; transform: translateY(-8px) scale(0.97); } }
-#search, #palette { z-index: 10; padding-top: 110px; }
+#search, #palette, #quick { z-index: 10; padding-top: 110px; }
 #ask { z-index: 30; padding-top: 140px; }
-#search-box, #palette-box { width: 640px; max-width: 90vw; }
-#search-input, #palette-input { width: 100%; padding: 14px 16px; background: transparent; color: var(--text-hi); border: 0;
+#search-box, #palette-box, #quick-box { width: 640px; max-width: 90vw; }
+#search-input, #palette-input, #quick-input { width: 100%; padding: 14px 16px; background: transparent; color: var(--text-hi); border: 0;
   border-bottom: 1px solid var(--border); outline: 0; font: 16px var(--ui); }
-#search-results, #palette-results { max-height: 380px; overflow: auto; padding: 6px; }
+#search-results, #palette-results, #quick-results { max-height: 380px; overflow: auto; padding: 6px; }
 .result { padding: 6px 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; gap: 16px;
   transition: background var(--t-fast); animation: rise var(--t-med) var(--ease) both; animation-delay: calc(var(--i, 0) * 14ms * var(--speed)); }
 .result.sel { background: var(--sel); color: var(--text-hi); }
@@ -567,3 +567,16 @@ body.no-breadcrumbs #breadcrumbs { display: none; }
 #status .sw { border-radius: 7px; padding: 2px 9px; }
 #status .sw:not(#st-blame):hover { background: var(--hover); color: var(--text-hi); }
 #st-problems:not(:empty) { font-weight: 600; }
+
+/* ---- Quick pick, navigation buttons, bookmarks ---- */
+#quick-title { padding: 10px 16px 0; color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+.qleft { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.nav-group { display: flex; gap: 0; }
+.nav-group .icon-btn:disabled { opacity: 0.3; }
+.bookmark-glyph { margin-left: 5px; width: 12px !important; background: var(--warn); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 72%, 0 100%); opacity: 0.95; }
+.bm { display: flex; align-items: center; gap: 8px; height: var(--row-lg); padding: 0 6px 0 8px; border-radius: 6px; white-space: nowrap; user-select: none;
+  transition: background var(--t-fast); }
+.bm:hover { background: var(--hover); }
+.bm .bm-name { color: var(--text-hi); }
+.bm .bm-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-dim); font-size: 12px; }
+.bm .icon-btn { opacity: 0; } .bm:hover .icon-btn { opacity: 1; }

@@ -12,7 +12,7 @@ export interface BuiltinDeps {
   openSearch: () => void
   showFind: () => void
   toggleSide: (side: 'project' | 'commit') => void
-  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure') => void
+  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks') => void
   newTerminal: () => void
   toggleZen: () => void
   toggleFullscreen: () => Promise<void>
@@ -29,6 +29,12 @@ export interface BuiltinDeps {
   /** Runs a Monaco editor action by id (rename, reformat, find usages...). */
   editorAction: (id: string) => void
   git: (what: 'refresh' | 'pull' | 'push' | 'stash') => void
+  navBack: () => void
+  navForward: () => void
+  recentFiles: () => void
+  recentLocations: () => void
+  toggleBookmark: () => void
+  showBookmarks: () => void
 }
 
 const ACCENTS: [string, string][] = [
@@ -54,6 +60,12 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'file.save', category: 'File', title: 'Save', keys: 'Ctrl+S', run: d.saveActive })
   register({ id: 'file.close', category: 'File', title: 'Close Tab', keys: 'Ctrl+W', run: d.closeActiveTab })
   register({ id: 'nav.search', category: 'Navigate', title: 'Search Everywhere', keys: 'Shift+Shift', run: d.openSearch })
+  register({ id: 'nav.back', category: 'Navigate', title: 'Back', keys: 'Ctrl+Alt+Left', run: d.navBack })
+  register({ id: 'nav.forward', category: 'Navigate', title: 'Forward', keys: 'Ctrl+Alt+Right', run: d.navForward })
+  register({ id: 'nav.recentFiles', category: 'Navigate', title: 'Recent Files', keys: 'Ctrl+E', run: d.recentFiles })
+  register({ id: 'nav.recentLocations', category: 'Navigate', title: 'Recent Locations', keys: 'Ctrl+Shift+E', run: d.recentLocations })
+  register({ id: 'bookmark.toggle', category: 'Navigate', title: 'Toggle Bookmark', keys: 'Ctrl+F11', run: d.toggleBookmark })
+  register({ id: 'bookmark.list', category: 'Navigate', title: 'Show Bookmarks', keys: 'Shift+F11', run: d.showBookmarks })
   register({ id: 'nav.find', category: 'Navigate', title: 'Find in Project', keys: 'Ctrl+Shift+F', run: d.showFind })
 
   // ---- View ----
@@ -63,6 +75,7 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'view.terminal', category: 'View', title: 'Toggle Terminal', keys: 'Alt+3', run: () => d.toggleView('terminal') })
   register({ id: 'view.problems', category: 'View', title: 'Toggle Problems', keys: 'Alt+6', run: () => d.toggleView('problems') })
   register({ id: 'view.structure', category: 'View', title: 'Toggle Structure', keys: 'Alt+7', run: () => d.toggleView('structure') })
+  register({ id: 'view.bookmarks', category: 'View', title: 'Toggle Bookmarks', run: () => d.toggleView('bookmarks') })
   register({ id: 'view.run', category: 'View', title: 'Toggle Run Window', run: () => d.toggleView('run') })
   register({ id: 'view.debug', category: 'View', title: 'Toggle Debug Window', run: () => d.toggleView('debug') })
   register({ id: 'view.newTerminal', category: 'View', title: 'New Terminal', keys: 'Ctrl+Shift+`', run: d.newTerminal })
