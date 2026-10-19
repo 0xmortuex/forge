@@ -100,7 +100,7 @@ async function run(name, files, scenario, options = {}) {
   front()
   // Layout-dependent checks (how many editor lines or gutter marks are rendered) must not depend on the display:
   // a small screen clamps the window, so emulate the app's default 1400x900 viewport whenever the real one is smaller.
-  const [cw, ch] = win.getContentSize()
+  const [cw = 0, ch = 0] = win.getContentSize()
   if (cw < 1400 || ch < 860) {
     wc.enableDeviceEmulation({
       screenPosition: 'desktop',
