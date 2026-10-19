@@ -52,6 +52,8 @@ with an end-to-end test suite that drives the real UI.
 
 ![The built-in HTTP client: a .http file with a run arrow, and the response](docs/http-client.png)
 
+![The AI Assistant answering a question about the selected code, shown against a local test server](docs/ai-chat.png)
+
 ## Make it yours
 
 Open **Settings** with <kbd>Ctrl</kbd>+<kbd>,</kbd>, or press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> for the

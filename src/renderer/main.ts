@@ -1444,7 +1444,12 @@ const runAiAction = (action: Action): void => {
 for (const [i, [id, label, action]] of ([['ai.explain', 'Explain Code', 'explain'], ['ai.fix', 'Find and Fix Problems', 'fix'], ['ai.tests', 'Write Tests', 'tests'], ['ai.document', 'Write Documentation', 'document'], ['ai.refactor', 'Suggest Refactoring', 'refactor']] as [string, string, Action][]).entries()) {
   editor.addAction({ id: `forge.${id}`, label: `AI: ${label}`, contextMenuGroupId: 'ai', contextMenuOrder: 1 + i / 10, run: () => runAiAction(action) })
 }
-tw.setOnShow('ai', () => aiChat.focus())
+tw.setOnShow('ai', () => {
+  // A chat with code blocks needs room: widen a narrow right dock the first time it is used.
+  const dock = $('right')
+  if (dock.offsetWidth > 0 && dock.offsetWidth < 380) dock.style.width = '380px'
+  aiChat.focus()
+})
 initAiInline({ report })
 {
   // Extensions hear about edits a moment after typing stops, not on every keystroke.

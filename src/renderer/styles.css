@@ -782,7 +782,7 @@ body.no-breadcrumbs #breadcrumbs { display: none; }
 #editors > .splitter:hover { background: var(--accent); }
 
 /* ---- AI Assistant ---- */
-.ai-model { color: var(--text-dim); font-size: 12px; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+.ai-model { flex: 1; min-width: 0; color: var(--text-dim); font-size: 12px; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ai-thread { flex: 1; min-height: 0; overflow: auto; padding: 4px 10px 10px; display: flex; flex-direction: column; gap: 10px; user-select: text; }
 .ai-empty { margin: auto; max-width: 320px; text-align: center; display: flex; flex-direction: column; gap: 12px; align-items: center; }
 .ai-msg { border-radius: 10px; padding: 8px 12px; background: var(--island-2); border: 1px solid var(--outline); }

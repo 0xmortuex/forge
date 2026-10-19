@@ -42,12 +42,11 @@ export function initAiChat(d: AiChatDeps): AiChatView {
 
   // ---- layout ----
   const bar = el('div', 'tool-bar')
-  const title = el('span', 'tool-title', 'AI Assistant')
   const model = el('span', 'ai-model')
   model.id = 'ai-model'
   const fresh = el('button', 'btn', 'New Chat')
   fresh.id = 'ai-new'
-  bar.append(title, model, fresh)
+  bar.append(model, fresh)
 
   const thread = el('div', 'ai-thread')
   thread.id = 'ai-thread'
@@ -55,7 +54,8 @@ export function initAiChat(d: AiChatDeps): AiChatView {
   const composer = el('div', 'ai-composer')
   const attach = el('select', 'field ai-attach')
   attach.id = 'ai-attach'
-  for (const [v, label] of [['auto', 'Attach: selection or file'], ['file', 'Attach: whole file'], ['none', 'Attach: nothing']] as const) {
+  attach.title = 'What to send along with your question'
+  for (const [v, label] of [['auto', 'Selection or file'], ['file', 'Whole file'], ['none', 'No context']] as const) {
     const o = el('option', '', label)
     o.value = v
     attach.append(o)
