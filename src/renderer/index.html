@@ -114,6 +114,7 @@
           </div>
           <div id="view-output" class="view"><div id="log"></div></div>
           <div id="view-git" class="view" hidden></div>
+          <div id="view-http" class="view" hidden></div>
           <div id="view-breakpoints" class="view" hidden></div>
           <div id="view-problems" class="view" hidden></div>
           <div id="view-hierarchy" class="view" hidden></div>
@@ -226,6 +227,28 @@
             </span>
           </div>
         </section>
+      </div>
+    </div>
+    <div id="runcfg" class="overlay" hidden>
+      <div id="runcfg-box" class="modal">
+        <div id="runcfg-side">
+          <div id="runcfg-tools">
+            <button class="icon-btn small" id="runcfg-add" title="Add a configuration">＋</button>
+            <button class="icon-btn small" id="runcfg-dup" title="Duplicate">⧉</button>
+            <button class="icon-btn small" id="runcfg-del" title="Remove">－</button>
+          </div>
+          <div id="runcfg-list"></div>
+        </div>
+        <div id="runcfg-main">
+          <div id="runcfg-form"></div>
+          <div id="runcfg-error"></div>
+          <div id="runcfg-foot">
+            <button class="btn" id="runcfg-json">Open run.json</button>
+            <span class="grow"></span>
+            <button class="btn" id="runcfg-cancel">Cancel</button>
+            <button class="btn-primary" id="runcfg-save">Save</button>
+          </div>
+        </div>
       </div>
     </div>
     <div id="toasts"></div>

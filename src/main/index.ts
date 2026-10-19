@@ -9,6 +9,7 @@ import { registerSettings } from './settings'
 import { replaceInFiles, searchProject, type SearchOptions } from './search'
 import { killAllLsp, registerLsp } from './lsp'
 import { registerHistory } from './history'
+import { registerHttp } from './http'
 import { registerWatch, stopWatching } from './watch'
 import { registerScratch } from './scratch'
 import { killAllTerminals, registerTerminal } from './terminal'
@@ -158,6 +159,7 @@ registerLsp()
 registerGit()
 registerDebug()
 registerHistory()
+registerHttp()
 registerWatch()
 registerScratch()
 let terminalsEnded = false

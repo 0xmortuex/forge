@@ -2,6 +2,7 @@ import type { PtySpec } from '../main/terminal'
 import { icons } from './icons'
 import { showMenu, type MenuItem } from './menu'
 import type { TerminalView } from './terminal'
+import { openRunConfigs } from './runconfigs'
 
 export type ConfigType = 'current-file' | 'node' | 'python' | 'command'
 
@@ -138,8 +139,12 @@ export function initRun(deps: RunDeps): {
   updateButtons: () => void
   /** Called by whoever owns the process (run or debug) when running state changes. */
   setBusy: (busy: boolean) => void
-  /** Creates .forge/run.json from a template if needed, and opens it. */
+  /** Creates .forge/run.json from a template if needed, and opens it as text. */
+  editConfigsJson: () => Promise<void>
+  /** The Run Configurations dialog. */
   editConfigs: () => Promise<void>
+  /** Runs a shell command line in the Run window (used for tests). */
+  runCommandLine: (label: string, cwd: string, command: string) => Promise<void>
 } {
   const nameEl = document.getElementById('run-config-name')
   const widget = document.getElementById('run-config')
@@ -185,6 +190,19 @@ export function initRun(deps: RunDeps): {
     })
   }
 
+  async function runCommandLine(label: string, cwd: string, command: string): Promise<void> {
+    await deps.guard('Run', async () => {
+      const spec: PtySpec = navigator.platform.startsWith('Win')
+        ? { file: 'powershell.exe', args: ['-NoProfile', '-Command', command] }
+        : { file: 'sh', args: ['-c', command] }
+      await deps.saveAll()
+      deps.showRunView()
+      await deps.view.begin((cols, rows) => window.forge.termCreate(cwd, cols, rows, spec))
+      deps.report(`Running ${label}`)
+      updateButtons()
+    })
+  }
+
   async function stop(): Promise<void> {
     await deps.view.kill()
     updateButtons()
@@ -210,6 +228,27 @@ export function initRun(deps: RunDeps): {
     await deps.openFile(path)
   }
 
+  /** The dialog: edits the list from run.json (or the template if there is none yet) and writes it back. */
+  async function editConfigsDialog(): Promise<void> {
+    const root = deps.getRoot()
+    if (!root) throw new Error('Open a folder first (Ctrl+O)')
+    const path = configPath(root)
+    const existing = (await window.forge.exists(path)) ? parseConfigs(await window.forge.readFile(path)) : parseConfigs(TEMPLATE)
+    openRunConfigs({
+      configs: existing,
+      openJson: () => void deps.guard('Edit configurations', editConfigs).catch(() => undefined),
+      onSave: async (list) => {
+        const text = JSON.stringify({ configurations: list.map((c) => ({ ...c, args: c.args?.length ? c.args : undefined, env: c.env && Object.keys(c.env).length ? c.env : undefined })) }, null, 2) + '\n'
+        parseConfigs(text) // the same checks as when it is read back: a name, a script or command where needed
+        const dir = joinTo(root, CONFIG_DIR)
+        if (!(await window.forge.exists(dir))) await window.forge.createDir(dir)
+        await window.forge.writeFile(path, text)
+        await loadConfigs()
+        deps.report(`Saved ${list.length} run configuration${list.length === 1 ? '' : 's'}`)
+      }
+    })
+  }
+
   widget.onclick = () => {
     void deps
       .guard('Run configurations', async () => {
@@ -222,7 +261,7 @@ export function initRun(deps: RunDeps): {
             nameEl.textContent = c.name
           }
         }))
-        items.push('sep', { label: 'Edit Configurations…', run: () => void deps.guard('Edit configurations', editConfigs).catch(() => undefined) })
+        items.push('sep', { label: 'Edit Configurations…', run: () => void deps.guard('Edit configurations', editConfigsDialog).catch(() => undefined) })
         showMenu(rect.left, rect.bottom + 4, items)
       })
       .catch(() => undefined) // reported by guard
@@ -236,7 +275,9 @@ export function initRun(deps: RunDeps): {
     run,
     stop,
     updateButtons,
-    editConfigs: () => deps.guard('Edit configurations', editConfigs),
+    editConfigsJson: () => deps.guard('Edit configurations', editConfigs),
+    editConfigs: () => deps.guard('Edit configurations', editConfigsDialog),
+    runCommandLine,
     setBusy: (b) => {
       busy = b
       updateButtons()

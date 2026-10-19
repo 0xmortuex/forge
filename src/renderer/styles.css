@@ -732,3 +732,35 @@ body.no-breadcrumbs #breadcrumbs { display: none; }
 .watch .vval { overflow: hidden; text-overflow: ellipsis; flex: 1; }
 .watch .icon-btn { opacity: 0; } .watch:hover .icon-btn { opacity: 1; }
 #dbg-watch-input { margin: 4px; padding: 4px 9px; background: var(--island); border-radius: 7px; font: 12px "Cascadia Mono", Consolas, monospace; }
+
+/* ---- HTTP client ---- */
+.http-run-glyph { width: 0 !important; height: 0 !important; margin: 5px 0 0 6px; border-style: solid; border-width: 5px 0 5px 9px; border-color: transparent transparent transparent var(--ok); cursor: pointer; background: none; }
+.http-status { font-weight: 700; padding: 1px 10px; border-radius: 10px; background: var(--island-2); color: var(--text-dim); }
+.http-status.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 16%, transparent); }
+.http-status.info { color: var(--info); background: color-mix(in srgb, var(--info) 16%, transparent); }
+.http-status.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 16%, transparent); }
+.http-status.err { color: var(--err); background: color-mix(in srgb, var(--err) 16%, transparent); }
+.http-meta { color: var(--text-dim); font-size: 12px; }
+.http-body { flex: 1; margin: 0; padding: 4px 14px 12px; overflow: auto; font: 12px "JetBrains Mono", Consolas, monospace; white-space: pre-wrap; word-break: break-word; user-select: text; }
+
+/* ---- Test arrows and the Run Configurations dialog ---- */
+.test-run-glyph { width: 0 !important; height: 0 !important; margin: 5px 0 0 6px; border-style: solid; border-width: 5px 0 5px 9px; border-color: transparent transparent transparent var(--ok); cursor: pointer; background: none; }
+#runcfg { z-index: 34; align-items: center; padding: 0; }
+#runcfg-box { width: min(860px, 94vw); height: min(560px, 86vh); display: grid; grid-template-columns: 240px 1fr; }
+#runcfg-side { background: var(--island-2); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+#runcfg-tools { display: flex; gap: 2px; padding: 8px; }
+#runcfg-list { flex: 1; overflow: auto; padding: 0 6px 8px; }
+.rc-item { display: flex; flex-direction: column; padding: 6px 10px; border-radius: 8px; user-select: none; transition: background var(--t-fast); }
+.rc-item:hover { background: var(--hover); }
+.rc-item.sel { background: var(--accent-soft); }
+.rc-name { color: var(--text-hi); font-weight: 600; }
+.rc-kind { color: var(--text-dim); font-size: 11px; }
+#runcfg-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+#runcfg-form { flex: 1; overflow: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+.rc-field { display: flex; flex-direction: column; gap: 4px; }
+.rc-label { color: var(--text-hi); font-weight: 600; }
+.rc-hint { color: var(--text-dim); font-size: 12px; }
+.rc-field .field { padding: 6px 10px; }
+.rc-env { min-height: 80px; resize: vertical; font: 12px "JetBrains Mono", Consolas, monospace; }
+#runcfg-error { color: var(--err); padding: 0 20px; min-height: 18px; }
+#runcfg-foot { display: flex; gap: 8px; align-items: center; padding: 12px 20px; border-top: 1px solid var(--border); }

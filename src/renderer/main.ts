@@ -47,6 +47,9 @@ import { initGutter } from './gutter'
 import { initTodo } from './todo'
 import { initPreview } from './preview'
 import { initBreakpointsWindow } from './breakpoints'
+import { initHttpClient } from './httpclient'
+import { initTestRunner } from './testrunner'
+import { formatForSave, initEditorConfig } from './editorconfig'
 import { initAnnotate } from './annotate'
 import type { ChangeKind, GitChange } from '../main/git'
 
@@ -201,6 +204,7 @@ tw.register({ id: 'find', title: 'Find', icon: icons.search, root: $('view-find'
 tw.register({ id: 'run', title: 'Run', icon: icons.play, root: $('view-run'), dock: 'bottom', shortcut: 'Shift+F10', passive: false })
 tw.register({ id: 'debug', title: 'Debug', icon: icons.bug, root: $('view-debug'), dock: 'bottom', passive: false })
 tw.register({ id: 'breakpoints', title: 'Breakpoints', icon: icons.breakpoint, root: $('view-breakpoints'), dock: 'bottom', shortcut: 'Ctrl+Shift+F8' })
+tw.register({ id: 'http', title: 'Response', icon: icons.http, root: $('view-http'), dock: 'bottom' })
 tw.register({ id: 'todo', title: 'TODO', icon: icons.todo, root: $('view-todo'), dock: 'bottom' })
 tw.register({ id: 'git', title: 'Git', icon: icons.git, root: $('view-git'), dock: 'bottom', shortcut: 'Alt+9' })
 tw.register({ id: 'problems', title: 'Problems', icon: icons.problems, root: $('view-problems'), dock: 'bottom', shortcut: 'Alt+6' })
@@ -209,7 +213,7 @@ tw.register({ id: 'structure', title: 'Structure', icon: icons.structure, root: 
 tw.register({ id: 'preview', title: 'Preview', icon: icons.preview, root: $('view-preview'), dock: 'right' })
 tw.register({ id: 'bookmarks', title: 'Bookmarks', icon: icons.bookmark, root: $('view-bookmarks'), dock: 'right' })
 
-type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints'
+type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http'
 type Side = 'project' | 'commit'
 const showSide = (side: Side): void => tw.show(side)
 const toggleSide = (side: Side): void => tw.toggle(side)
@@ -430,6 +434,12 @@ function closeFile(f: OpenFile): void {
 // Windows paths are case-insensitive, and servers/Monaco may hand back a different drive-letter case.
 const samePath = (a: string, b: string): boolean => norm(a).toLowerCase() === norm(b).toLowerCase()
 
+const editorConfig = initEditorConfig({
+  getRoot: () => rootDir,
+  exists: (p) => window.forge.exists(p),
+  readFile: (p) => window.forge.readFile(p)
+})
+
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|ico|bmp|avif)$/i
 
 async function openFile(path: string, line?: number, column = 1): Promise<void> {
@@ -450,6 +460,18 @@ async function openFile(path: string, line?: number, column = 1): Promise<void> 
       history.record(path, text) // the version as it was when opened
       const model = monaco.editor.createModel(text, undefined, monaco.Uri.file(path))
       const f: OpenFile = { path, model, savedVersion: model.getAlternativeVersionId(), savedText: text }
+      // .editorconfig decides this file's indentation (before anything is typed).
+      void editorConfig
+        .resolve(path)
+        .then((ec) => {
+          if (model.isDisposed()) return
+          model.updateOptions({
+            ...(ec.indentStyle ? { insertSpaces: ec.indentStyle === 'space' } : {}),
+            ...(ec.indentSize ? { tabSize: ec.indentSize, indentSize: ec.indentSize } : {})
+          })
+          updateStatus()
+        })
+        .catch((err: unknown) => report(`.editorconfig: ${err instanceof Error ? err.message : String(err)}`, true))
       model.onDidChangeContent(() => renderTabs())
       openFiles.set(path, f)
       bookmarks.onModelOpened(model, path)
@@ -477,11 +499,21 @@ async function saveActive(opts: { format?: boolean } = {}): Promise<void> {
         await editor.getAction('editor.action.formatDocument')?.run()
       })
     }
+    // .editorconfig: line endings, trailing whitespace and the final newline are fixed as the file is saved.
+    const ec = await editorConfig.resolve(f.path)
+    if (ec.endOfLine) f.model.setEOL(ec.endOfLine === 'crlf' ? monaco.editor.EndOfLineSequence.CRLF : monaco.editor.EndOfLineSequence.LF)
+    const tidy = formatForSave(f.model.getValue(), { ...ec, endOfLine: undefined })
+    if (tidy !== f.model.getValue()) {
+      f.model.pushStackElement()
+      f.model.pushEditOperations([], [{ range: f.model.getFullModelRange(), text: tidy }], () => null)
+      f.model.pushStackElement()
+    }
     const value = f.model.getValue()
     const version = f.model.getAlternativeVersionId() // what was written; anything typed during the write is still unsaved
     await window.forge.writeFile(f.path, value)
     f.savedText = value
     history.record(f.path, value)
+    if (basename(f.path) === '.editorconfig') editorConfig.clear()
     if (samePath(f.path, userData.customCssPath)) setCustomCss(value) // saving custom.css restyles live
     f.savedVersion = version
     renderTabs()
@@ -630,7 +662,10 @@ async function applyExternalChanges(paths: Set<string>, gitChanged: boolean, all
   try {
     // 1. the tree: re-read each folder that gained, lost or renamed something (and is shown)
     const folders = new Set<string>()
-    for (const p of paths) folders.add(parentOf(p))
+    for (const p of paths) {
+      folders.add(parentOf(p))
+      if (basename(p) === '.editorconfig') editorConfig.clear()
+    }
     if (all) {
       // Events were lost: check every folder that is shown and every open file.
       for (const [key, d] of dirs) if (d.depth < 0 || (d.kids.childElementCount > 0 && !d.kids.hidden)) folders.add(key)
@@ -1255,6 +1290,22 @@ tw.setOnShow('preview', () => void preview.refresh().catch((e: unknown) => repor
   editor.onDidChangeModelContent(later)
   editor.onDidChangeModel(later)
 }
+const httpClient = initHttpClient({
+  editor,
+  root: $('view-http'),
+  isHttpFile: () => !!active && !active.diff && !active.image && /\.(http|rest)$/i.test(active.path),
+  reveal: () => showView('http'),
+  report
+})
+const testRunner = initTestRunner({
+  editor,
+  currentPath: () => (active && !active.diff && !active.image ? active.path : null),
+  getRoot: () => rootDir,
+  relPath,
+  readFile: (p) => window.forge.readFile(p),
+  runCommand: (label, cwd, cmd) => runUi.runCommandLine(label, cwd, cmd),
+  report
+})
 const todo = initTodo({
   root: $('view-todo'),
   getRoot: () => rootDir,
@@ -1594,6 +1645,8 @@ registerBuiltinCommands({
     else report('Open a file to see its git history', true)
   },
   gitBranches: () => showBranches(),
+  runTests: () => void testRunner.runFile().catch((err: unknown) => report(`Run tests: ${String(err)}`, true)),
+  runHttp: () => void httpClient.runAtCursor().catch((err: unknown) => report(`HTTP: ${String(err)}`, true)),
   findReplace: () => {
     showView('find')
     $('find-replace').focus()

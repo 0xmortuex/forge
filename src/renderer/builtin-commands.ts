@@ -13,7 +13,9 @@ export interface BuiltinDeps {
   openSearchScope: (scope: 'all' | 'files' | 'symbols' | 'actions', classesOnly?: boolean) => void
   showFind: () => void
   toggleSide: (side: 'project' | 'commit') => void
-  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints') => void
+  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http') => void
+  runHttp: () => void
+  runTests: () => void
   findReplace: () => void
   newTerminal: () => void
   toggleZen: () => void
@@ -234,6 +236,9 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'view.notifications', category: 'View', title: 'Show Notifications', run: d.showNotifications })
   register({ id: 'view.preview', category: 'View', title: 'Toggle Markdown Preview', run: () => d.toggleView('preview') })
   register({ id: 'view.breakpoints', category: 'View', title: 'Toggle Breakpoints Window', keys: 'Ctrl+Shift+F8', run: () => d.toggleView('breakpoints') })
+  register({ id: 'view.http', category: 'View', title: 'Toggle HTTP Response', run: () => d.toggleView('http') })
+  register({ id: 'http.run', category: 'Code', title: 'Run HTTP Request', keys: 'Ctrl+Enter', run: d.runHttp })
+  register({ id: 'run.tests', category: 'Run', title: 'Run Tests in This File', run: d.runTests })
   register({ id: 'view.todo', category: 'View', title: 'Toggle TODO Window', run: () => d.toggleView('todo') })
   register({ id: 'nav.replaceInFiles', category: 'Navigate', title: 'Replace in Files', keys: 'Ctrl+Shift+R', run: d.findReplace })
   register({ id: 'view.git', category: 'View', title: 'Toggle Git Window', keys: 'Alt+9', run: () => d.toggleView('git') })
