@@ -13,7 +13,8 @@ export interface BuiltinDeps {
   openSearchScope: (scope: 'all' | 'files' | 'symbols' | 'actions', classesOnly?: boolean) => void
   showFind: () => void
   toggleSide: (side: 'project' | 'commit') => void
-  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git') => void
+  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo') => void
+  findReplace: () => void
   newTerminal: () => void
   toggleZen: () => void
   toggleFullscreen: () => Promise<void>
@@ -230,6 +231,8 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'code.compareFile', category: 'Code', title: 'Compare with File…', run: d.compareWithFile })
   register({ id: 'code.compareClipboard', category: 'Code', title: 'Compare with Clipboard', run: d.compareWithClipboard })
   register({ id: 'view.notifications', category: 'View', title: 'Show Notifications', run: d.showNotifications })
+  register({ id: 'view.todo', category: 'View', title: 'Toggle TODO Window', run: () => d.toggleView('todo') })
+  register({ id: 'nav.replaceInFiles', category: 'Navigate', title: 'Replace in Files', keys: 'Ctrl+Shift+R', run: d.findReplace })
   register({ id: 'view.git', category: 'View', title: 'Toggle Git Window', keys: 'Alt+9', run: () => d.toggleView('git') })
   register({ id: 'git.fileHistory', category: 'Git', title: 'Show Git History for File', run: d.gitFileHistory })
   register({ id: 'git.branches', category: 'Git', title: 'Branches…', run: d.gitBranches })
@@ -261,7 +264,7 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'code.unfoldAll', category: 'Code', title: 'Expand All', run: () => d.editorAction('editor.unfoldAll') })
   register({ id: 'code.foldRegion', category: 'Code', title: 'Collapse Region', keys: 'Ctrl+Shift+[', run: () => d.editorAction('editor.fold') })
   register({ id: 'code.unfoldRegion', category: 'Code', title: 'Expand Region', keys: 'Ctrl+Shift+]', run: () => d.editorAction('editor.unfold') })
-  register({ id: 'code.refactor', category: 'Code', title: 'Refactor This…', keys: 'Ctrl+Shift+R', run: () => d.editorAction('editor.action.refactor') })
+  register({ id: 'code.refactor', category: 'Code', title: 'Refactor This…', keys: 'Ctrl+Alt+Shift+T', run: () => d.editorAction('editor.action.refactor') })
 
   // ---- Run / debug ----
   register({ id: 'run.run', category: 'Run', title: 'Run', keys: 'Shift+F10', run: d.run })

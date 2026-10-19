@@ -44,6 +44,7 @@ import { initHistory } from './history'
 import { initGitLog } from './gitlog'
 import { initConflicts } from './conflicts'
 import { initGutter } from './gutter'
+import { initTodo } from './todo'
 import { initAnnotate } from './annotate'
 import type { ChangeKind, GitChange } from '../main/git'
 
@@ -195,13 +196,14 @@ tw.register({ id: 'terminal', title: 'Terminal', icon: icons.terminal, root: $('
 tw.register({ id: 'find', title: 'Find', icon: icons.search, root: $('view-find'), dock: 'bottom', shortcut: 'Ctrl+Shift+F' })
 tw.register({ id: 'run', title: 'Run', icon: icons.play, root: $('view-run'), dock: 'bottom', shortcut: 'Shift+F10', passive: false })
 tw.register({ id: 'debug', title: 'Debug', icon: icons.bug, root: $('view-debug'), dock: 'bottom', passive: false })
+tw.register({ id: 'todo', title: 'TODO', icon: icons.todo, root: $('view-todo'), dock: 'bottom' })
 tw.register({ id: 'git', title: 'Git', icon: icons.git, root: $('view-git'), dock: 'bottom', shortcut: 'Alt+9' })
 tw.register({ id: 'problems', title: 'Problems', icon: icons.problems, root: $('view-problems'), dock: 'bottom', shortcut: 'Alt+6' })
 tw.register({ id: 'hierarchy', title: 'Hierarchy', icon: icons.hierarchy, root: $('view-hierarchy'), dock: 'bottom' })
 tw.register({ id: 'structure', title: 'Structure', icon: icons.structure, root: $('view-structure'), dock: 'right', shortcut: 'Alt+7' })
 tw.register({ id: 'bookmarks', title: 'Bookmarks', icon: icons.bookmark, root: $('view-bookmarks'), dock: 'right' })
 
-type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git'
+type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo'
 type Side = 'project' | 'commit'
 const showSide = (side: Side): void => tw.show(side)
 const toggleSide = (side: Side): void => tw.toggle(side)
@@ -1047,12 +1049,41 @@ const finder = initFind({
   input: findInput,
   results: $('find-results'),
   count: $('find-count'),
+  caseBtn: $('find-case'),
+  wordBtn: $('find-word'),
+  regexBtn: $('find-regex'),
+  mask: $<HTMLInputElement>('find-mask'),
+  replaceInput: $<HTMLInputElement>('find-replace'),
+  replaceBtn: $('find-replace-all'),
   getRoot: () => rootDir,
   relPath,
   openAt: openFile,
-  guard: guarded
+  guard: guarded,
+  openText: (path) => [...openFiles.values()].find((f) => !f.diff && samePath(f.path, path))?.model.getValue(),
+  setOpenText: (path, text) => {
+    const m = [...openFiles.values()].find((f) => !f.diff && samePath(f.path, path))?.model
+    if (!m) return
+    m.pushStackElement()
+    m.pushEditOperations([], [{ range: m.getFullModelRange(), text }], () => null)
+    m.pushStackElement()
+  },
+  report
 })
 tw.setOnShow('find', () => findInput.focus())
+// Ctrl+Shift+R is Replace in Files (Monaco would use it for Refactor, which has Ctrl+Alt+Shift+T here).
+editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyR, () => {
+  showView('find')
+  $('find-replace').focus()
+})
+const todo = initTodo({
+  root: $('view-todo'),
+  getRoot: () => rootDir,
+  relPath,
+  openAt: openFile,
+  report,
+  onCount: (n) => tw.setBadge('todo', n ? String(n) : '', 'info')
+})
+tw.setOnShow('todo', () => void todo.refresh().catch((e: unknown) => report(`TODO scan: ${String(e)}`, true)))
 
 // ---- Git ----
 const gitKinds = new Map<string, ChangeKind>() // normalized path -> change kind
@@ -1375,6 +1406,10 @@ registerBuiltinCommands({
     else report('Open a file to see its git history', true)
   },
   gitBranches: () => showBranches(),
+  findReplace: () => {
+    showView('find')
+    $('find-replace').focus()
+  },
   gitNextChange: () => gutter.next(),
   gitForcePush: () => gitUi.push(true),
   gitAnnotate: toggleAnnotate,

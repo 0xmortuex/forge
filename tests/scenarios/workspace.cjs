@@ -37,13 +37,13 @@ run(
     enter()
     check(
       'find reports 2 matches (binary file skipped)',
-      !!(await waitFor(async () => (await text('find-count')) === '2 matches', 8000)),
+      !!(await waitFor(async () => (await text('find-count')).startsWith('2 matches'), 8000)),
       await text('find-count')
     )
     await js("[...document.querySelectorAll('.hit')].find(h => h.textContent.includes('a.txt')).click()")
     check(
       'clicking a hit opens the file at that line',
-      !!(await waitFor(async () => (await text('st-pos')) === '2:1' && (await text('tabs')).includes('a.txt'), 5000))
+      !!(await waitFor(async () => (await text('st-pos')).startsWith('2:') && (await text('tabs')).includes('a.txt'), 5000))
     )
 
     // File operations

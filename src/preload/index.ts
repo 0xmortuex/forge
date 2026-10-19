@@ -4,7 +4,7 @@ import type { ExtensionInfo } from '../main/extensions'
 import type { LoadedUserData } from '../main/settings'
 import type { DebugEvent, DebugEval, DebugKind, DebugScope, DebugVar } from '../main/debug'
 import type { BlameLine, BranchInfo, ChangeKind, CommitDetails, CommitFile, CommitInfo, GitStatus, LogQuery, OpResult, StashEntry } from '../main/git'
-import type { SearchResult } from '../main/search'
+import type { SearchOptions, SearchResult } from '../main/search'
 import type { Snapshot } from '../main/history'
 import type { FsChange } from '../main/watch'
 import type { PtySpec } from '../main/terminal'
@@ -16,8 +16,10 @@ const api = {
   readFile: (path: string): Promise<string> => ipcRenderer.invoke('fs:readFile', path),
   writeFile: (path: string, content: string): Promise<void> =>
     ipcRenderer.invoke('fs:writeFile', path, content),
-  search: (root: string, query: string): Promise<SearchResult> =>
-    ipcRenderer.invoke('fs:search', root, query),
+  search: (root: string, query: string, options: SearchOptions = {}): Promise<SearchResult> =>
+    ipcRenderer.invoke('fs:search', root, query, options),
+  replaceInFiles: (query: string, options: SearchOptions, replacement: string, paths: string[]): Promise<number> =>
+    ipcRenderer.invoke('fs:replace', query, options, replacement, paths),
   /** Shows the file in Explorer / Finder. */
   reveal: (path: string): Promise<void> => ipcRenderer.invoke('shell:reveal', path),
   copyText: (text: string): Promise<void> => ipcRenderer.invoke('clipboard:write', text),

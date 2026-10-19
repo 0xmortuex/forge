@@ -115,6 +115,7 @@
           <div id="view-git" class="view" hidden></div>
           <div id="view-problems" class="view" hidden></div>
           <div id="view-hierarchy" class="view" hidden></div>
+          <div id="view-todo" class="view" hidden></div>
           <div id="view-terminal" class="view" hidden>
             <div id="term-tabs"></div>
             <div id="term"></div>
@@ -141,7 +142,15 @@
           <div id="view-find" class="view" hidden>
             <div id="find-bar">
               <input id="find-input" placeholder="Find in project (Enter)" spellcheck="false" autocomplete="off" />
+              <button class="chip" id="find-case" title="Match case">Aa</button>
+              <button class="chip" id="find-word" title="Whole words only">W</button>
+              <button class="chip" id="find-regex" title="Regular expression">.*</button>
+              <input id="find-mask" class="field" placeholder="File mask: *.ts, src/**" spellcheck="false" autocomplete="off" />
               <span id="find-count"></span>
+            </div>
+            <div id="replace-bar">
+              <input id="find-replace" class="field" placeholder="Replace with" spellcheck="false" autocomplete="off" />
+              <button class="btn" id="find-replace-all">Replace All</button>
             </div>
             <div id="find-results"></div>
           </div>

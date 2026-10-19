@@ -6,7 +6,7 @@ import { registerDebug } from './debug'
 import { registerExtensions, registerExtensionScheme } from './extensions'
 import { registerGit } from './git'
 import { registerSettings } from './settings'
-import { searchProject } from './search'
+import { replaceInFiles, searchProject, type SearchOptions } from './search'
 import { killAllLsp, registerLsp } from './lsp'
 import { registerHistory } from './history'
 import { registerWatch, stopWatching } from './watch'
@@ -85,7 +85,10 @@ ipcMain.handle('fs:listFiles', async (_e, root: string): Promise<string[]> => {
   return files
 })
 
-ipcMain.handle('fs:search', (_e, root: string, query: string) => searchProject(root, query))
+ipcMain.handle('fs:search', (_e, root: string, query: string, options: SearchOptions = {}) => searchProject(root, query, options))
+ipcMain.handle('fs:replace', (_e, query: string, options: SearchOptions, replacement: string, paths: string[]) =>
+  replaceInFiles(query, options, replacement, paths)
+)
 
 const assertMissing = async (path: string): Promise<void> => {
   const exists = await access(path).then(() => true, () => false)
