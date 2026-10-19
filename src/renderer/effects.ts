@@ -42,6 +42,39 @@ export function toast(message: string, kind: ToastKind = 'info', ms = kind === '
 /** Whether a message should pop up as a toast, per the Notifications setting. */
 const IMPORTANT = /^(Saved|Committed|Pushed|Pulled|Renamed|Created|Moved|Reverted|Unstaged|Stashed|Applied|Dropped|Switched|Process finished|Debugging|Running)/
 
+// ---- Notification history: what the bell in the status bar lists (errors and the important events) ----
+export interface Notice {
+  time: number
+  message: string
+  kind: ToastKind
+}
+const MAX_NOTICES = 100
+const notices: Notice[] = []
+let unread = 0
+const listeners: (() => void)[] = []
+
+export const notifications = {
+  /** Newest first. */
+  list: (): Notice[] => [...notices].reverse(),
+  unread: (): number => unread,
+  markRead(): void {
+    unread = 0
+    listeners.forEach((fn) => fn())
+  },
+  onChange(fn: () => void): void {
+    listeners.push(fn)
+  },
+  /** Records a message if it is an error or an important event. */
+  add(message: string, isError: boolean): void {
+    const kind: ToastKind | null = isError ? 'err' : IMPORTANT.test(message) ? 'ok' : null
+    if (!kind) return
+    notices.push({ time: Date.now(), message, kind })
+    if (notices.length > MAX_NOTICES) notices.shift()
+    unread++
+    listeners.forEach((fn) => fn())
+  }
+}
+
 export function shouldToast(message: string, isError: boolean): ToastKind | null {
   const mode = settings.get<string>('notifications')
   if (mode === 'off') return null

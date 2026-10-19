@@ -5,6 +5,7 @@ import type { LoadedUserData } from '../main/settings'
 import type { DebugEvent, DebugEval, DebugKind, DebugScope, DebugVar } from '../main/debug'
 import type { BlameLine, ChangeKind, GitStatus, StashEntry } from '../main/git'
 import type { SearchResult } from '../main/search'
+import type { Snapshot } from '../main/history'
 import type { PtySpec } from '../main/terminal'
 
 const api = {
@@ -23,6 +24,12 @@ const api = {
   createFile: (path: string): Promise<void> => ipcRenderer.invoke('fs:createFile', path),
   createDir: (path: string): Promise<void> => ipcRenderer.invoke('fs:createDir', path),
   rename: (from: string, to: string): Promise<void> => ipcRenderer.invoke('fs:rename', from, to),
+  scratchCreate: (ext: string): Promise<string> => ipcRenderer.invoke('scratch:create', ext),
+  scratchList: (): Promise<string[]> => ipcRenderer.invoke('scratch:list'),
+  readClipboard: (): Promise<string> => ipcRenderer.invoke('clipboard:read'),
+  historyAdd: (path: string, text: string): Promise<boolean> => ipcRenderer.invoke('history:add', path, text),
+  historyList: (path: string): Promise<Snapshot[]> => ipcRenderer.invoke('history:list', path),
+  historyRead: (path: string, id: string): Promise<string> => ipcRenderer.invoke('history:read', path, id),
   lspWorkspace: (root: string, method: string, params: unknown): Promise<{ server: string; result?: unknown; error?: string }[]> =>
     ipcRenderer.invoke('lsp:workspace', root, method, params),
   realpath: (path: string): Promise<string> => ipcRenderer.invoke('fs:realpath', path),
@@ -89,6 +96,7 @@ const api = {
   stateSave: (text: string): Promise<void> => ipcRenderer.invoke('state:save', text),
   ensureCustomCss: (): Promise<string> => ipcRenderer.invoke('settings:ensureCss'),
   openThemesDir: (): Promise<string> => ipcRenderer.invoke('themes:openDir'),
+  openSnippetsDir: (): Promise<string> => ipcRenderer.invoke('snippets:openDir'),
   toggleFullscreen: (): Promise<boolean> => ipcRenderer.invoke('win:toggleFullscreen'),
   extensionsList: (): Promise<ExtensionInfo[]> => ipcRenderer.invoke('extensions:list'),
   openExtensionsDir: (): Promise<string> => ipcRenderer.invoke('extensions:openDir'),

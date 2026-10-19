@@ -20,6 +20,16 @@ export interface BuiltinDeps {
   openSettings: (category?: string) => void
   openSettingsFile: () => Promise<void>
   openThemesDir: () => Promise<void>
+  openSnippetsDir: () => Promise<void>
+  surround: () => void
+  newScratch: () => void
+  showScratches: () => void
+  compareWithFile: () => void
+  compareWithClipboard: () => void
+  showNotifications: () => void
+  showHistory: () => void
+  restoreHistory: () => void
+  insertTemplate: () => void
   openCustomCss: () => Promise<void>
   run: () => Promise<void>
   debug: () => Promise<void>
@@ -208,6 +218,23 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'code.comment', category: 'Code', title: 'Comment with Line Comment', keys: 'Ctrl+/', run: () => d.editorAction('editor.action.commentLine') })
   register({ id: 'code.duplicateLine', category: 'Code', title: 'Duplicate Line', keys: 'Shift+Alt+Down', run: () => d.editorAction('editor.action.copyLinesDownAction') })
   register({ id: 'code.deleteLine', category: 'Code', title: 'Delete Line', keys: 'Ctrl+Shift+K', run: () => d.editorAction('editor.action.deleteLines') })
+  register({ id: 'file.newScratch', category: 'File', title: 'New Scratch File…', keys: 'Ctrl+Alt+Shift+Insert', run: d.newScratch })
+  register({ id: 'file.scratches', category: 'File', title: 'Show Scratch Files', run: d.showScratches })
+  register({ id: 'code.compareFile', category: 'Code', title: 'Compare with File…', run: d.compareWithFile })
+  register({ id: 'code.compareClipboard', category: 'Code', title: 'Compare with Clipboard', run: d.compareWithClipboard })
+  register({ id: 'view.notifications', category: 'View', title: 'Show Notifications', run: d.showNotifications })
+  register({ id: 'history.show', category: 'Code', title: 'Show Local History', run: d.showHistory })
+  register({ id: 'history.restore', category: 'Code', title: 'Restore from Local History', run: d.restoreHistory })
+  register({ id: 'code.surround', category: 'Code', title: 'Surround With…', keys: 'Ctrl+Alt+T', run: d.surround })
+  register({ id: 'code.liveTemplate', category: 'Code', title: 'Insert Live Template…', keys: 'Ctrl+J', run: d.insertTemplate })
+  register({ id: 'code.snippetsFolder', category: 'Code', title: 'Open Snippets Folder', run: d.openSnippetsDir })
+  register({ id: 'code.selectNext', category: 'Code', title: 'Add Selection for Next Occurrence', keys: 'Ctrl+D', run: () => d.editorAction('editor.action.addSelectionToNextFindMatch') })
+  register({ id: 'code.unselectNext', category: 'Code', title: 'Unselect Last Occurrence', run: () => d.editorAction('cursorUndo') })
+  register({ id: 'code.selectAllOccurrences', category: 'Code', title: 'Select All Occurrences', keys: 'Ctrl+Shift+L', run: () => d.editorAction('editor.action.selectHighlights') })
+  register({ id: 'code.replace', category: 'Code', title: 'Replace in File', keys: 'Ctrl+H', run: () => d.editorAction('editor.action.startFindReplace') })
+  register({ id: 'code.commentBlock', category: 'Code', title: 'Comment with Block Comment', keys: 'Shift+Alt+A', run: () => d.editorAction('editor.action.blockComment') })
+  register({ id: 'code.highlightUsages', category: 'Code', title: 'Highlight Usages in File', run: () => d.editorAction('editor.action.wordHighlight.trigger') })
+  register({ id: 'code.intentions', category: 'Code', title: 'Show Intention Actions', keys: 'Alt+Enter', run: () => d.editorAction('editor.action.quickFix') })
   register({ id: 'code.moveLineUp', category: 'Code', title: 'Move Line Up', keys: 'Alt+Up', run: () => d.editorAction('editor.action.moveLinesUpAction') })
   register({ id: 'code.moveLineDown', category: 'Code', title: 'Move Line Down', keys: 'Alt+Down', run: () => d.editorAction('editor.action.moveLinesDownAction') })
   register({ id: 'code.joinLines', category: 'Code', title: 'Join Lines', run: () => d.editorAction('editor.action.joinLines') })

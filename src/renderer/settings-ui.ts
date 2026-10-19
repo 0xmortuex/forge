@@ -1,6 +1,6 @@
 import { commands, customKeys, effectiveKeys } from './commands'
 import { extensions } from './extensions'
-import { keymap } from './keymap'
+import { keymap, KEYMAP_PRESETS } from './keymap'
 import { icons } from './icons'
 import { CATEGORIES, DEFS, ensureSettingsFile, settings, userData, type SettingDef, type Value } from './settings'
 import { allThemes, BUILTIN_THEMES, type Palette } from './themes'
@@ -304,7 +304,26 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
   /** Every command, with its shortcut. "Set" records a new one; a custom shortcut is added to the default. */
   function keymapPage(): void {
     const g = el('div', 'sgroup')
-    g.append(el('h3', '', 'Keyboard shortcuts'))
+    g.append(el('h3', '', 'Keymap'))
+    const presetRow = el('div', 'srow')
+    const info = el('div', 'info')
+    info.append(el('div', 'label', 'Keymap preset'), el('div', 'desc', 'IntelliJ IDEA: Ctrl+D duplicates a line, Ctrl+Y deletes it, Ctrl+W extends the selection (Ctrl+F4 closes a tab) and more.'))
+    const picker = el('select', 'field sel-input') as HTMLSelectElement
+    picker.id = 'keymap-preset'
+    for (const [id, label] of KEYMAP_PRESETS) {
+      const o = el('option', '', label) as HTMLOptionElement
+      o.value = id
+      picker.append(o)
+    }
+    picker.value = settings.get<string>('keymapPreset')
+    picker.onchange = () => {
+      keymap.setPreset(picker.value)
+      render()
+    }
+    const ctl = el('div', 'ctl')
+    ctl.append(picker)
+    presetRow.append(info, ctl)
+    g.append(presetRow, el('h3', '', 'Keyboard shortcuts'))
     const q = search.value.trim().toLowerCase()
     const table = el('table', 'keytable')
     for (const c of commands().filter((x) => !q || `${x.category} ${x.title}`.toLowerCase().includes(q))) {
@@ -336,11 +355,11 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
           .finally(() => {
             set.textContent = 'Set'
             paint()
-            clear.hidden = !customKeys.has(c.id)
+            clear.hidden = !keymap.isUser(c.id)
           })
       }
       const clear = el('button', 'btn', 'Remove')
-      clear.hidden = !customKeys.has(c.id)
+      clear.hidden = !keymap.isUser(c.id)
       clear.onclick = () => {
         keymap.set(c.id, null)
         paint()

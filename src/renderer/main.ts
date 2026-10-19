@@ -11,7 +11,7 @@ import HtmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { initAppearance, bindEditors, editorOptions, setCustomCss } from './appearance'
 import { ensureSettingsFile, flushSettings, settings, userData } from './settings'
-import { initRipples, shouldToast, toast } from './effects'
+import { initRipples, notifications, shouldToast, toast } from './effects'
 import { initPalette } from './commands'
 import { initSettingsUi } from './settings-ui'
 import { session } from './session'
@@ -34,11 +34,13 @@ import { initStructure } from './structure'
 import { initProblems } from './problems'
 import { initBreadcrumbs } from './breadcrumbs'
 import { initTooltips } from './tooltips'
-import { initQuick } from './quick'
+import { initQuick, quickPick } from './quick'
 import { initNavigation } from './navigation'
 import { initBookmarks } from './bookmarks'
 import { initSearchEverywhere, type SearchScope } from './searchall'
 import { initHierarchy } from './hierarchy'
+import { initTemplates, templateProblems } from './templates'
+import { initHistory } from './history'
 import type { ChangeKind, GitChange } from '../main/git'
 
 self.MonacoEnvironment = {
@@ -150,6 +152,7 @@ function report(msg: string, isError = false): void {
   if (!isError) statusMsg.classList.add('flash')
   const kind = shouldToast(msg, isError)
   if (kind) toast(msg, kind)
+  notifications.add(msg, isError)
   statusEl.classList.toggle('error', isError)
   if (isError) console.error(msg)
   const line = document.createElement('div')
@@ -398,6 +401,7 @@ async function openFile(path: string, line?: number, column = 1): Promise<void> 
   else {
     await guarded(`Open ${basename(path)}`, async () => {
       const text = await window.forge.readFile(path)
+      history.record(path, text) // the version as it was when opened
       const model = monaco.editor.createModel(text, undefined, monaco.Uri.file(path))
       const f: OpenFile = { path, model, savedVersion: model.getAlternativeVersionId() }
       model.onDidChangeContent(() => renderTabs())
@@ -428,6 +432,7 @@ async function saveActive(opts: { format?: boolean } = {}): Promise<void> {
       })
     }
     await window.forge.writeFile(f.path, f.model.getValue())
+    history.record(f.path, f.model.getValue())
     if (samePath(f.path, userData.customCssPath)) setCustomCss(f.model.getValue()) // saving custom.css restyles live
     f.savedVersion = f.model.getAlternativeVersionId()
     renderTabs()
@@ -757,6 +762,11 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyN' && e.altKey && e.shiftKey) { e.preventDefault(); void openSearch('symbols'); return }
   if (e.code === 'KeyN' && !e.altKey) { e.preventDefault(); void openSearch(e.shiftKey ? 'files' : 'symbols', e.shiftKey ? undefined : { classesOnly: true }); return }
   if (e.code === 'KeyA' && e.shiftKey && !e.altKey) { e.preventDefault(); void openSearch('actions'); return }
+  // Templates act on the editor, so only while it has focus (Ctrl+J is a newline in a terminal).
+  if (!e.shiftKey && (e.target as Element | null)?.closest?.('.monaco-editor')) {
+    if (e.altKey && e.code === 'KeyT') { e.preventDefault(); templates.surround(); return }
+    if (!e.altKey && e.code === 'KeyJ') { e.preventDefault(); templates.pickTemplate(); return }
+  }
   if (e.code === 'KeyE' && !e.altKey) { e.preventDefault(); if (e.shiftKey) nav.recentLocations(); else nav.recentFiles(); return }
   if (e.altKey && e.code === 'KeyS') { e.preventDefault(); settingsUi.open(); return }
   if (e.altKey && e.code === 'KeyZ') { e.preventDefault(); toggleZen(); return }
@@ -796,6 +806,94 @@ const structure = initStructure({
   isVisible: () => tw.isOpen('structure')
 })
 tw.setOnShow('structure', () => void structure.refresh())
+const history = initHistory({
+  editor,
+  currentPath: () => (active && !active.diff ? active.path : null),
+  showDiff: (path, original) => guarded(`Diff ${basename(path)}`, () => showDiffTab(path, original)),
+  report
+})
+editor.addAction({
+  id: 'forge.localHistory',
+  label: 'Show Local History',
+  contextMenuGroupId: 'navigation',
+  contextMenuOrder: 2.5,
+  run: () => void history.show().catch((err: unknown) => report(`Local history: ${err instanceof Error ? err.message : String(err)}`, true))
+})
+// ---- Scratch files, Compare with…, notifications ----
+const SCRATCH_TYPES: [ext: string, label: string][] = [
+  ['ts', 'TypeScript'], ['js', 'JavaScript'], ['py', 'Python'], ['json', 'JSON'], ['md', 'Markdown'], ['txt', 'Plain text'],
+  ['html', 'HTML'], ['css', 'CSS'], ['c', 'C'], ['cpp', 'C++'], ['mx', 'Mort'], ['sh', 'Shell script']
+]
+function newScratch(): void {
+  quickPick({
+    title: 'New Scratch File',
+    placeholder: 'Choose a language',
+    items: SCRATCH_TYPES.map(([ext, label]) => ({ label, detail: `.${ext}`, icon: fileIcon(`x.${ext}`), data: ext })),
+    onChoose: (ext) => {
+      void guarded('New scratch file', async () => openFile(await window.forge.scratchCreate(ext))).catch(() => undefined)
+    }
+  })
+}
+async function showScratches(): Promise<void> {
+  const list = await window.forge.scratchList()
+  quickPick({
+    title: 'Scratch Files',
+    placeholder: 'Type to filter',
+    items: list.map((p) => ({ label: basename(p), detail: 'newest first', icon: fileIcon(basename(p)), data: p })),
+    emptyText: 'No scratch files yet — create one with Ctrl+Alt+Shift+Insert',
+    onChoose: (p) => void openFile(p).catch(() => undefined) // reported by the opener
+  })
+}
+async function compareWithFile(): Promise<void> {
+  const cur = active && !active.diff ? active : null
+  const root = rootDir
+  if (!cur || !root) return report('Open a file in a project to compare it', true)
+  const files = (await window.forge.listFiles(root)).filter((p) => !samePath(p, cur.path))
+  quickPick({
+    title: `Compare ${basename(cur.path)} with…`,
+    placeholder: 'Type a file name',
+    items: files.map((p) => ({ label: basename(p), detail: relPath(p), icon: fileIcon(basename(p)), data: p })),
+    onChoose: (other) => {
+      void guarded(`Compare with ${basename(other)}`, async () => showDiffTab(cur.path, await window.forge.readFile(other))).catch(() => undefined)
+    }
+  })
+}
+async function compareWithClipboard(): Promise<void> {
+  const cur = active && !active.diff ? active : null
+  if (!cur) return report('Open a file to compare it with the clipboard', true)
+  const text = await window.forge.readClipboard()
+  if (!text) return report('The clipboard has no text', true)
+  await guarded('Compare with clipboard', () => showDiffTab(cur.path, text))
+}
+const bell = $('st-bell')
+const drawBell = (): void => {
+  const n = notifications.unread()
+  bell.innerHTML = icons.bell + (n ? `<span class="bell-count">${n > 99 ? '99+' : n}</span>` : '')
+  bell.classList.toggle('has-unread', n > 0)
+}
+notifications.onChange(drawBell)
+drawBell()
+function showNotifications(): void {
+  const list = notifications.list()
+  notifications.markRead()
+  quickPick({
+    title: 'Notifications',
+    placeholder: 'Type to filter',
+    items: list.map((n) => ({
+      label: n.message,
+      detail: new Date(n.time).toLocaleTimeString(),
+      icon: `<span class="note-ico ${n.kind}">${n.kind === 'err' ? '!' : '✓'}</span>`,
+      data: n.message
+    })),
+    emptyText: 'No notifications yet',
+    onChoose: (msg) => void window.forge.copyText(msg) // choosing one copies its text
+  })
+}
+bell.onclick = showNotifications
+
+const templates = initTemplates(editor)
+templates.init()
+for (const problem of templateProblems) report(problem, true) // a broken snippets file is never silent
 initQuick({ restoreFocus: () => (active ? editor.focus() : undefined) })
 const nav = initNavigation({
   editor,
@@ -885,30 +983,35 @@ async function openDiff(path: string, kind: ChangeKind): Promise<void> {
     // Renamed files: the old path isn't tracked here, so the whole file shows as added.
     const isNew = kind === 'added' || kind === 'untracked' || kind === 'renamed'
     const original = isNew ? '' : await window.forge.gitShow(root, path)
-    const existing = openFiles.get(`diff:${path}`)
-    if (existing?.diff) {
-      existing.diff.original.setValue(original)
-      activate(existing)
-      return
-    }
-    // The diff edits the real file, so the file has to be open; a deleted file has nothing to open.
-    let shared: OpenFile | undefined
-    if (kind !== 'deleted') {
-      await openFile(path)
-      shared = [...openFiles.values()].find((f) => !f.diff && samePath(f.path, path))
-      if (!shared) throw new Error(`Could not open ${basename(path)} to show its diff`)
-    }
-    const uriPath = '/' + norm(path)
-    const f: OpenFile = {
-      path,
-      savedVersion: 0,
-      model: shared ? shared.model : monaco.editor.createModel('', undefined, monaco.Uri.from({ scheme: 'forge-diff', path: uriPath })),
-      diff: { original: monaco.editor.createModel(original, undefined, monaco.Uri.from({ scheme: 'forge-head', path: uriPath })), shared }
-    }
-    f.savedVersion = f.model.getAlternativeVersionId()
-    openFiles.set(tabKey(f), f)
-    activate(f)
+    await showDiffTab(path, original, kind === 'deleted')
   })
+}
+
+/** Opens (or refreshes) a diff tab: `original` on the left, the real file (editable) on the right. */
+async function showDiffTab(path: string, original: string, deleted = false): Promise<void> {
+  const existing = openFiles.get(`diff:${path}`)
+  if (existing?.diff) {
+    existing.diff.original.setValue(original)
+    activate(existing)
+    return
+  }
+  // The diff edits the real file, so the file has to be open; a deleted file has nothing to open.
+  let shared: OpenFile | undefined
+  if (!deleted) {
+    await openFile(path)
+    shared = [...openFiles.values()].find((f) => !f.diff && samePath(f.path, path))
+    if (!shared) throw new Error(`Could not open ${basename(path)} to show its diff`)
+  }
+  const uriPath = '/' + norm(path)
+  const f: OpenFile = {
+    path,
+    savedVersion: 0,
+    model: shared ? shared.model : monaco.editor.createModel('', undefined, monaco.Uri.from({ scheme: 'forge-diff', path: uriPath })),
+    diff: { original: monaco.editor.createModel(original, undefined, monaco.Uri.from({ scheme: 'forge-head', path: uriPath })), shared }
+  }
+  f.savedVersion = f.model.getAlternativeVersionId()
+  openFiles.set(tabKey(f), f)
+  activate(f)
 }
 
 /** After a commit or branch switch: diffs are stale snapshots, and files on disk may have changed. */
@@ -958,6 +1061,7 @@ async function saveAllDirty(): Promise<void> {
   for (const f of openFiles.values()) {
     if (f.diff || !isDirty(f)) continue // a diff tab shares its file's model, which is saved via the file tab
     await window.forge.writeFile(f.path, f.model.getValue())
+    history.record(f.path, f.model.getValue())
     f.savedVersion = f.model.getAlternativeVersionId()
   }
   renderTabs()
@@ -1078,6 +1182,16 @@ registerBuiltinCommands({
     await openFile(userData.settingsPath)
   },
   openThemesDir: async () => void (await window.forge.openThemesDir()),
+  openSnippetsDir: async () => void (await window.forge.openSnippetsDir()),
+  surround: () => templates.surround(),
+  newScratch,
+  showScratches: () => void showScratches().catch((err: unknown) => report(`Scratch files: ${String(err)}`, true)),
+  compareWithFile: () => void compareWithFile().catch((err: unknown) => report(`Compare: ${String(err)}`, true)),
+  compareWithClipboard: () => void compareWithClipboard().catch((err: unknown) => report(`Compare: ${String(err)}`, true)),
+  showNotifications,
+  showHistory: () => void history.show().catch((err: unknown) => report(`Local history: ${err instanceof Error ? err.message : String(err)}`, true)),
+  restoreHistory: () => void history.restore().catch((err: unknown) => report(`Local history: ${err instanceof Error ? err.message : String(err)}`, true)),
+  insertTemplate: () => templates.pickTemplate(),
   openCustomCss,
   run: () => runUi.run(),
   debug: () => dbg.start(),

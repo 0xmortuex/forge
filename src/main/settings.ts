@@ -8,6 +8,7 @@ import { join } from 'node:path'
 const SETTINGS = 'settings.json'
 const STATE = 'state.json'
 const THEMES = 'themes'
+const SNIPPETS = 'snippets'
 const CUSTOM_CSS = 'custom.css'
 
 const userPath = (...parts: string[]): string => join(app.getPath('userData'), ...parts)
@@ -45,6 +46,8 @@ export interface LoadedUserData {
   settings: Record<string, unknown>
   state: Record<string, unknown>
   themes: { name: string; text: string }[]
+  /** snippets/*.json: the user's live templates. */
+  snippets: { name: string; text: string }[]
   /** A problem reading settings/state, to be shown to the user. Defaults are used meanwhile. */
   errors: string[]
   dir: string
@@ -88,11 +91,20 @@ export function registerSettings(): void {
     }
     const themes = await Promise.all(themeNames.map(async (name) => ({ name, text: (await readFile(userPath(THEMES, name), 'utf8')) })))
 
+    let snippetNames: string[] = []
+    try {
+      snippetNames = (await readdir(userPath(SNIPPETS))).filter((n) => n.toLowerCase().endsWith('.json')).sort()
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err // no snippets folder yet is normal
+    }
+    const snippets = await Promise.all(snippetNames.map(async (name) => ({ name, text: await readFile(userPath(SNIPPETS, name), 'utf8') })))
+
     const customCss = (await readText(userPath(CUSTOM_CSS))) ?? ''
     return {
       settings,
       state,
       themes,
+      snippets,
       errors,
       dir: app.getPath('userData'),
       settingsPath: userPath(SETTINGS),
@@ -142,6 +154,13 @@ export function registerSettings(): void {
     const problem = await shell.openPath(userPath(THEMES))
     if (problem) throw new Error(`Could not open the themes folder: ${problem}`)
     return userPath(THEMES)
+  })
+
+  ipcMain.handle('snippets:openDir', async () => {
+    await mkdir(userPath(SNIPPETS), { recursive: true })
+    const problem = await shell.openPath(userPath(SNIPPETS))
+    if (problem) throw new Error(`Could not open the snippets folder: ${problem}`)
+    return userPath(SNIPPETS)
   })
 
   ipcMain.handle('win:toggleFullscreen', (e) => {

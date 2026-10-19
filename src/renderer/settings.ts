@@ -79,6 +79,8 @@ export const DEFS: SettingDef[] = [
   { key: 'uiFontSize', category: 'Appearance', group: 'Layout', label: 'Interface font size', default: 13, control: { type: 'number', min: 10, max: 18, step: 1, unit: 'px' } },
   { key: 'zoom', category: 'Appearance', group: 'Layout', label: 'Interface zoom', default: 100, control: { type: 'number', min: 60, max: 220, step: 10, unit: '%' } },
   { key: 'showStatusBar', category: 'Appearance', group: 'Layout', label: 'Show status bar', default: true, control: onOff },
+  { key: 'keymapPreset', category: 'Keymap', group: 'Preset', label: 'Keymap preset', default: 'forge',
+    control: { type: 'select', options: opts(['forge', 'Forge (default)'], ['intellij', 'IntelliJ IDEA']) } },
   { key: 'showStripe', category: 'Appearance', group: 'Layout', label: 'Show tool window buttons', default: true, control: onOff },
   { key: 'treeFollow', category: 'Appearance', group: 'Layout', label: 'Select the open file in the Project tree', default: false, control: onOff, description: 'Switching tabs expands the tree to that file.' },
 
@@ -177,6 +179,7 @@ const data: Awaited<ReturnType<typeof window.forge.settingsLoad>> = await window
   settings: {},
   state: {},
   themes: [],
+  snippets: [],
   errors: [`Could not read your settings: ${err instanceof Error ? err.message : String(err)} — using defaults`],
   dir: '',
   settingsPath: '',

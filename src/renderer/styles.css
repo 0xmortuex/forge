@@ -603,3 +603,10 @@ body.no-breadcrumbs #breadcrumbs { display: none; }
 .hloading, .hnone { padding-left: 40px; font-size: 12px; }
 .herr { color: var(--err); }
 .hier-flip { padding: 2px 10px; font-size: 12px; }
+
+/* ---- Notifications bell ---- */
+#st-bell { display: inline-flex; align-items: center; gap: 4px; }
+.bell-count { min-width: 16px; padding: 0 5px; border-radius: 8px; font: 700 10px/16px var(--ui); text-align: center; color: var(--accent-ink); background: var(--accent); }
+#st-bell.has-unread { color: var(--text-hi); }
+.note-ico { flex: none; width: 16px; height: 16px; border-radius: 50%; display: inline-grid; place-items: center; font: 800 10px var(--ui); color: var(--accent-ink); background: var(--ok); }
+.note-ico.err { background: var(--err); }

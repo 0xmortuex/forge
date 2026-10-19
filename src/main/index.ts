@@ -8,6 +8,8 @@ import { registerGit } from './git'
 import { registerSettings } from './settings'
 import { searchProject } from './search'
 import { killAllLsp, registerLsp } from './lsp'
+import { registerHistory } from './history'
+import { registerScratch } from './scratch'
 import { killAllTerminals, registerTerminal } from './terminal'
 import { walkFiles } from './walk'
 
@@ -128,6 +130,8 @@ registerTerminal()
 registerLsp()
 registerGit()
 registerDebug()
+registerHistory()
+registerScratch()
 let terminalsEnded = false
 app.on('before-quit', (e) => {
   killAllLsp()

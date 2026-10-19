@@ -736,6 +736,7 @@ export function initLsp(deps: LspDeps): {
   deps.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyI, act('editor.action.peekDefinition')) // Quick Definition
   deps.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyQ, act('editor.action.showHover')) // Quick Documentation
   deps.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyP, act('editor.action.triggerParameterHints')) // Parameter Info
+  deps.editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.Enter, act('editor.action.quickFix')) // Show Intention Actions
 
   deps.editor.addAction({
     id: 'forge.rename',
