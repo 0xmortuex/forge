@@ -4,12 +4,15 @@ A JetBrains-style IDE built with Electron, TypeScript and Monaco. It is a learni
 fast, good-looking editor with real language intelligence, git, a terminal and a debugger, built in verified steps
 with an end-to-end test suite that drives the real UI.
 
-![Debugging a Node program in Forge](docs/debugger.png)
+![Forge: project tree, editor with breadcrumbs, Structure and Problems windows](docs/overview.png)
 
 ## Highlights
 
 - **Colorful, animated, and yours to change** — 17 themes (dark, light and neon), a rainbow accent, glass panels, an
   animated aurora background, and about 50 settings that apply live. See [Make it yours](#make-it-yours).
+- **A real IDE layout** — tool windows dock left, right or bottom and can be moved by menu or drag; Structure and
+  Problems windows, breadcrumbs, a Project tree with locate/collapse, draggable tabs, styled tooltips and clickable
+  status-bar widgets (go to line, line endings, indentation, language).
 - **Real language intelligence** — completion, hover, go-to-definition, diagnostics, rename, find usages, formatting
   and quick fixes for TypeScript/JavaScript, Python, C/C++ and [Mort](https://github.com/0xmortuex/Mort), through
   language servers.
@@ -23,7 +26,8 @@ with an end-to-end test suite that drives the real UI.
 
 | | |
 | --- | --- |
-| **Editor** | Monaco, tabs, project tree (create / rename / delete to the Recycle Bin), Search Everywhere (double-<kbd>Shift</kbd>), project-wide search, Zen mode, full screen, session restore with recent projects. |
+| **Layout** | Left, right and bottom docks with a stripe on each edge; move any tool window between them (right-click its button, or drag it to another edge). Sizes and placement are remembered. |
+| **Editor** | Monaco, tabs (reorder by dragging, middle-click to close), breadcrumbs, Structure window, Problems window, project tree (create / rename / delete to the Recycle Bin), Search Everywhere (double-<kbd>Shift</kbd>), project-wide search, Zen mode, full screen, session restore with recent projects. |
 | **Languages** | TypeScript/JavaScript (`typescript-language-server`) and Python (`pyright`) are bundled. C/C++ uses `clangd` if it is on your `PATH`. Mort uses its own `mortc lsp`. Find usages, rename, reformat, quick fixes, format on save. |
 | **Terminal** | Real shells (node-pty + xterm.js), as many as you like, in tabs. |
 | **Git** | Branch widget with ahead/behind, Commit window, editable diffs, blame in the status bar, colored tree, push (publishes new branches), fast-forward pull, stash (with untracked files), revert. Uses the `git` CLI. |
@@ -79,6 +83,8 @@ instead of overwriting it.
 | Open folder / Save / Close tab | <kbd>Ctrl</kbd>+<kbd>O</kbd> / <kbd>Ctrl</kbd>+<kbd>S</kbd> / <kbd>Ctrl</kbd>+<kbd>W</kbd> |
 | Search Everywhere / Find in project | <kbd>Shift</kbd> <kbd>Shift</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> |
 | Project / Commit / Output / Terminal | <kbd>Alt</kbd>+<kbd>1</kbd> / <kbd>0</kbd> / <kbd>2</kbd> / <kbd>3</kbd> |
+| Problems / Structure | <kbd>Alt</kbd>+<kbd>6</kbd> / <kbd>7</kbd> |
+| Go to symbol in file / Go to line | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> / <kbd>Ctrl</kbd>+<kbd>G</kbd> |
 | New terminal | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>`</kbd> |
 | Zen mode / Full screen | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Z</kbd> / <kbd>F11</kbd> |
 | Rename / Find usages / Reformat / Quick fix | <kbd>F2</kbd> / <kbd>Alt</kbd>+<kbd>F7</kbd> / <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd> / <kbd>Ctrl</kbd>+<kbd>.</kbd> |
@@ -131,7 +137,9 @@ Python debugging needs `debugpy` (`uv pip install debugpy`). Mort support needs 
 - There is no packaged installer yet; run it from source.
 - Debugging covers Node and Python only (no conditional breakpoints or logpoints yet).
 - Git has no history viewer, merge-conflict UI or branch deletion; pull is fast-forward only.
-- One editor group (no split editors). The extension API is deliberately small (version 1).
+- One editor group (no split editors); Problems lists the open files only, not the whole project.
+- The built-in IDE shortcuts (Alt+digit, F-keys, Ctrl+Shift+P …) work inside the terminal; your own custom shortcuts do not.
+- The extension API is deliberately small (version 1).
 
 ## License
 
