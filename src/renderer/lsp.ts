@@ -1,5 +1,6 @@
 import * as monaco from 'monaco-editor'
 import { askText } from './menu'
+import { settings } from './settings'
 import { applyWorkspaceEdit } from './lsp-edits'
 import type { HierarchyNode, HierarchyRoot } from './hierarchy'
 import type {
@@ -7,6 +8,7 @@ import type {
   CallHierarchyItem,
   CallHierarchyOutgoingCall,
   CodeAction,
+  CodeLens as LspCodeLens,
   Command,
   CompletionItem,
   CompletionList,
@@ -431,6 +433,43 @@ export function initLsp(deps: LspDeps): {
       )
       return { hints, dispose: () => undefined }
     }
+  })
+
+  // "N usages" above declarations (IntelliJ's Code Vision), from the server's code lenses.
+  const lensSource = new WeakMap<monaco.languages.CodeLens, LspCodeLens>()
+  const lensChanged = new monaco.Emitter<monaco.languages.CodeLensProvider>()
+  settings.onChange((key) => {
+    if (key === 'codeVision') lensChanged.fire(lensProvider)
+  })
+  const lensProvider: monaco.languages.CodeLensProvider = {
+    onDidChange: lensChanged.event,
+    async provideCodeLenses(model) {
+      const none = { lenses: [], dispose: () => undefined }
+      if (!settings.get<boolean>('codeVision') || !(await capabilities(model))?.codeLensProvider) return none
+      const res = await request<LspCodeLens[]>(model, 'textDocument/codeLens', {})
+      const lenses = (res ?? []).map((l): monaco.languages.CodeLens => {
+        const lens: monaco.languages.CodeLens = { range: toRange(l.range) }
+        lensSource.set(lens, l)
+        return lens
+      })
+      return { lenses, dispose: () => undefined }
+    },
+    async resolveCodeLens(model, lens) {
+      const source = lensSource.get(lens)
+      if (!source) return lens
+      const resolved = await request<LspCodeLens>(model, 'codeLens/resolve', source)
+      if (resolved?.command) {
+        // The server's command (editor.action.showReferences) is a VS Code one; ours opens Forge's own usages list.
+        lens.command = { id: 'forge.showUsages', title: resolved.command.title, arguments: [model.uri.toString(), lens.range.startLineNumber, lens.range.startColumn] }
+      }
+      return lens
+    }
+  }
+  monaco.languages.registerCodeLensProvider(LANGUAGES, lensProvider)
+  monaco.editor.registerCommand('forge.showUsages', (_accessor, uri: string, line: number, column: number) => {
+    if (deps.editor.getModel()?.uri.toString() !== uri) return deps.report('Usages can be listed from the main editor only', true)
+    deps.editor.setPosition({ lineNumber: line, column })
+    safe('Find Usages', findUsages)()
   })
 
   monaco.languages.registerDocumentSymbolProvider(LANGUAGES, {

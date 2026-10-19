@@ -24,6 +24,8 @@ interface ServerSpec {
   launch: () => Launch
   /** Sent as initializationOptions (server-specific settings). */
   initOptions?: unknown
+  /** Sent as workspace/didChangeConfiguration once the server is initialized (settings it reads from the client). */
+  settings?: unknown
 }
 
 const nodeRequire = createRequire(__filename)
@@ -67,6 +69,11 @@ const SERVERS: Record<string, ServerSpec> = {
   typescript: {
     id: 'typescript',
     launch: () => npmBin('typescript-language-server', 'typescript-language-server'),
+    // Code lenses ("N references") are computed by the server only when switched on here; the editor's Code Vision setting decides whether they show.
+    settings: {
+      typescript: { referencesCodeLens: { enabled: true, showOnAllFunctions: true }, implementationsCodeLens: { enabled: true } },
+      javascript: { referencesCodeLens: { enabled: true, showOnAllFunctions: true }, implementationsCodeLens: { enabled: true } }
+    },
     // The server computes inlay hints from these; whether they are shown is the editor's setting.
     initOptions: {
       preferences: {
@@ -239,6 +246,7 @@ class Client {
           foldingRange: { lineFoldingOnly: true, rangeLimit: 5000 },
           selectionRange: {},
           inlayHint: {},
+          codeLens: {},
           callHierarchy: {},
           typeHierarchy: {},
           references: {},
@@ -265,6 +273,7 @@ class Client {
     })) as { capabilities: Record<string, unknown> }
     this.capabilities = init.capabilities
     await this.conn.sendNotification('initialized', {})
+    if (this.spec.settings) await this.conn.sendNotification('workspace/didChangeConfiguration', { settings: this.spec.settings })
   }
 
   notify(method: string, params: unknown): Promise<void> {

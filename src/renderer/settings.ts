@@ -112,6 +112,8 @@ export const DEFS: SettingDef[] = [
   { key: 'inlayHints', category: 'Editor', group: 'Display', label: 'Inline hints', default: 'onUnlessPressed',
     description: 'Parameter names and inferred types shown inside the code, from the language server.',
     control: { type: 'select', options: opts(['on', 'Always'], ['onUnlessPressed', 'Always (hold Ctrl+Alt to hide)'], ['offUnlessPressed', 'Never (hold Ctrl+Alt to show)'], ['off', 'Never']) } },
+  { key: 'codeVision', category: 'Editor', group: 'Display', label: 'Show usages above declarations', default: true, control: onOff,
+    description: 'A "3 references" label above functions, classes and methods (TypeScript/JavaScript); click it to list them.' },
   { key: 'folding', category: 'Editor', group: 'Display', label: 'Code folding', default: true, control: onOff },
   { key: 'scrollBeyondLastLine', category: 'Editor', group: 'Display', label: 'Scroll past the last line', default: false, control: onOff },
 
