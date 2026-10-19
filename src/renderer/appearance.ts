@@ -34,6 +34,7 @@ export function editorOptions(): monaco.editor.IStandaloneEditorConstructionOpti
     guides: { indentation: bool('indentGuides'), bracketPairs: bracketColors },
     bracketPairColorization: { enabled: bracketColors },
     stickyScroll: { enabled: bool('stickyScroll') },
+    inlayHints: { enabled: str('inlayHints') as 'on' | 'off' | 'onUnlessPressed' | 'offUnlessPressed' },
     folding: bool('folding'),
     scrollBeyondLastLine: bool('scrollBeyondLastLine'),
     cursorStyle: (str('cursorStyle') as 'line' | 'block' | 'underline' | 'line-thin' | 'block-outline' | 'underline-thin'),
@@ -48,7 +49,7 @@ export function editorOptions(): monaco.editor.IStandaloneEditorConstructionOpti
 
 const EDITOR_KEYS = new Set([
   'fontFamily', 'fontSize', 'lineHeight', 'fontLigatures', 'minimap', 'lineNumbers', 'renderWhitespace', 'rulers', 'wordWrap',
-  'indentGuides', 'bracketColors', 'stickyScroll', 'folding', 'scrollBeyondLastLine', 'cursorStyle', 'cursorBlinking',
+  'indentGuides', 'bracketColors', 'stickyScroll', 'inlayHints', 'folding', 'scrollBeyondLastLine', 'cursorStyle', 'cursorBlinking',
   'smoothCaret', 'smoothScrolling', 'tabSize', 'insertSpaces', 'mouseWheelZoom'
 ])
 const TERMINAL_KEYS = new Set(['terminalFontFamily', 'terminalFontSize', 'terminalLineHeight', 'terminalCursor', 'terminalBlink', 'terminalScrollback'])

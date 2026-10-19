@@ -77,11 +77,14 @@ run(
     await js("document.querySelector('#view-structure .icon-btn[title=\"Expand all\"]').click()")
     check('expand all shows them again', (await symNames()).includes('describe'))
 
-    // the editor's own Go to Symbol (Ctrl+Shift+O) is fed by the same server
-    key('O', ['control', 'shift'])
-    const outline = () => js("document.querySelector('.quick-input-widget:not([style*=\"display: none\"])')?.textContent ?? ''")
-    check('Ctrl+Shift+O lists the symbols too', !!(await waitFor(async () => (await outline()).includes('makeCircle'), 20000)), await outline())
-    key('Escape')
+    // the editor's own Go to Symbol (Ctrl+Shift+O) is fed by the same server. Monaco's popup closes itself when the
+    // window loses focus, and a hosted CI runner's window has no real OS focus, so this is only checked when it has.
+    if (await js('document.hasFocus()')) {
+      key('O', ['control', 'shift'])
+      const outline = () => js("document.querySelector('.quick-input-widget:not([style*=\"display: none\"])')?.textContent ?? ''")
+      check('Ctrl+Shift+O lists the symbols too', !!(await waitFor(async () => (await outline()).includes('makeCircle'), 20000)), await outline())
+      key('Escape')
+    } else console.log('SKIP structure-problems: Ctrl+Shift+O (the window has no OS focus)')
 
     // ---- Problems ----
     await openNode('bad.py')

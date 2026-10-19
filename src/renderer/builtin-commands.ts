@@ -10,9 +10,10 @@ export interface BuiltinDeps {
   saveActive: () => Promise<void>
   closeActiveTab: () => void
   openSearch: () => void
+  openSearchScope: (scope: 'all' | 'files' | 'symbols' | 'actions', classesOnly?: boolean) => void
   showFind: () => void
   toggleSide: (side: 'project' | 'commit') => void
-  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks') => void
+  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy') => void
   newTerminal: () => void
   toggleZen: () => void
   toggleFullscreen: () => Promise<void>
@@ -60,6 +61,10 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'file.save', category: 'File', title: 'Save', keys: 'Ctrl+S', run: d.saveActive })
   register({ id: 'file.close', category: 'File', title: 'Close Tab', keys: 'Ctrl+W', run: d.closeActiveTab })
   register({ id: 'nav.search', category: 'Navigate', title: 'Search Everywhere', keys: 'Shift+Shift', run: d.openSearch })
+  register({ id: 'nav.class', category: 'Navigate', title: 'Go to Class', keys: 'Ctrl+N', run: () => d.openSearchScope('symbols', true) })
+  register({ id: 'nav.file', category: 'Navigate', title: 'Go to File', keys: 'Ctrl+Shift+N', run: () => d.openSearchScope('files') })
+  register({ id: 'nav.symbol', category: 'Navigate', title: 'Go to Symbol', keys: 'Ctrl+Alt+Shift+N', run: () => d.openSearchScope('symbols') })
+  register({ id: 'nav.action', category: 'Navigate', title: 'Find Action', keys: 'Ctrl+Shift+A', run: () => d.openSearchScope('actions') })
   register({ id: 'nav.back', category: 'Navigate', title: 'Back', keys: 'Ctrl+Alt+Left', run: d.navBack })
   register({ id: 'nav.forward', category: 'Navigate', title: 'Forward', keys: 'Ctrl+Alt+Right', run: d.navForward })
   register({ id: 'nav.recentFiles', category: 'Navigate', title: 'Recent Files', keys: 'Ctrl+E', run: d.recentFiles })
@@ -76,6 +81,7 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'view.problems', category: 'View', title: 'Toggle Problems', keys: 'Alt+6', run: () => d.toggleView('problems') })
   register({ id: 'view.structure', category: 'View', title: 'Toggle Structure', keys: 'Alt+7', run: () => d.toggleView('structure') })
   register({ id: 'view.bookmarks', category: 'View', title: 'Toggle Bookmarks', run: () => d.toggleView('bookmarks') })
+  register({ id: 'view.hierarchy', category: 'View', title: 'Toggle Hierarchy', run: () => d.toggleView('hierarchy') })
   register({ id: 'view.run', category: 'View', title: 'Toggle Run Window', run: () => d.toggleView('run') })
   register({ id: 'view.debug', category: 'View', title: 'Toggle Debug Window', run: () => d.toggleView('debug') })
   register({ id: 'view.newTerminal', category: 'View', title: 'New Terminal', keys: 'Ctrl+Shift+`', run: d.newTerminal })
@@ -186,6 +192,33 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'editor.usages', category: 'Code', title: 'Find Usages', keys: 'Alt+F7', run: () => d.editorAction('forge.findUsages') })
   register({ id: 'editor.quickfix', category: 'Code', title: 'Show Quick Fixes', keys: 'Ctrl+.', run: () => d.editorAction('editor.action.quickFix') })
   register({ id: 'editor.definition', category: 'Code', title: 'Go to Definition', keys: 'F12', run: () => d.editorAction('editor.action.revealDefinition') })
+  register({ id: 'code.declaration', category: 'Code', title: 'Go to Declaration', keys: 'Ctrl+B', run: () => d.editorAction('editor.action.revealDefinition') })
+  register({ id: 'code.implementation', category: 'Code', title: 'Go to Implementation', keys: 'Ctrl+Alt+B', run: () => d.editorAction('forge.goImplementation') })
+  register({ id: 'code.typeDefinition', category: 'Code', title: 'Go to Type Definition', keys: 'Ctrl+Shift+B', run: () => d.editorAction('forge.goTypeDefinition') })
+  register({ id: 'code.symbolInFile', category: 'Code', title: 'Go to Symbol in File', keys: 'Ctrl+Shift+O', run: () => d.editorAction('editor.action.quickOutline') })
+  register({ id: 'code.gotoLine', category: 'Code', title: 'Go to Line', keys: 'Ctrl+G', run: () => d.editorAction('editor.action.gotoLine') })
+  register({ id: 'code.organizeImports', category: 'Code', title: 'Optimize Imports', keys: 'Ctrl+Alt+O', run: () => d.editorAction('forge.organizeImports') })
+  register({ id: 'code.callHierarchy', category: 'Code', title: 'Call Hierarchy', keys: 'Ctrl+Alt+H', run: () => d.editorAction('forge.callHierarchy') })
+  register({ id: 'code.typeHierarchy', category: 'Code', title: 'Type Hierarchy', run: () => d.editorAction('forge.typeHierarchy') })
+  register({ id: 'code.quickDoc', category: 'Code', title: 'Quick Documentation', keys: 'Ctrl+Q', run: () => d.editorAction('editor.action.showHover') })
+  register({ id: 'code.quickDefinition', category: 'Code', title: 'Quick Definition', keys: 'Ctrl+Shift+I', run: () => d.editorAction('editor.action.peekDefinition') })
+  register({ id: 'code.paramInfo', category: 'Code', title: 'Parameter Info', keys: 'Ctrl+P', run: () => d.editorAction('editor.action.triggerParameterHints') })
+  register({ id: 'code.extendSelection', category: 'Code', title: 'Extend Selection', keys: 'Shift+Alt+Right', run: () => d.editorAction('editor.action.smartSelect.expand') })
+  register({ id: 'code.shrinkSelection', category: 'Code', title: 'Shrink Selection', keys: 'Shift+Alt+Left', run: () => d.editorAction('editor.action.smartSelect.shrink') })
+  register({ id: 'code.comment', category: 'Code', title: 'Comment with Line Comment', keys: 'Ctrl+/', run: () => d.editorAction('editor.action.commentLine') })
+  register({ id: 'code.duplicateLine', category: 'Code', title: 'Duplicate Line', keys: 'Shift+Alt+Down', run: () => d.editorAction('editor.action.copyLinesDownAction') })
+  register({ id: 'code.deleteLine', category: 'Code', title: 'Delete Line', keys: 'Ctrl+Shift+K', run: () => d.editorAction('editor.action.deleteLines') })
+  register({ id: 'code.moveLineUp', category: 'Code', title: 'Move Line Up', keys: 'Alt+Up', run: () => d.editorAction('editor.action.moveLinesUpAction') })
+  register({ id: 'code.moveLineDown', category: 'Code', title: 'Move Line Down', keys: 'Alt+Down', run: () => d.editorAction('editor.action.moveLinesDownAction') })
+  register({ id: 'code.joinLines', category: 'Code', title: 'Join Lines', run: () => d.editorAction('editor.action.joinLines') })
+  register({ id: 'code.upper', category: 'Code', title: 'To UPPER CASE', run: () => d.editorAction('editor.action.transformToUppercase') })
+  register({ id: 'code.lower', category: 'Code', title: 'To lower case', run: () => d.editorAction('editor.action.transformToLowercase') })
+  register({ id: 'code.sortLines', category: 'Code', title: 'Sort Lines Ascending', run: () => d.editorAction('editor.action.sortLinesAscending') })
+  register({ id: 'code.foldAll', category: 'Code', title: 'Collapse All', run: () => d.editorAction('editor.foldAll') })
+  register({ id: 'code.unfoldAll', category: 'Code', title: 'Expand All', run: () => d.editorAction('editor.unfoldAll') })
+  register({ id: 'code.foldRegion', category: 'Code', title: 'Collapse Region', keys: 'Ctrl+Shift+[', run: () => d.editorAction('editor.fold') })
+  register({ id: 'code.unfoldRegion', category: 'Code', title: 'Expand Region', keys: 'Ctrl+Shift+]', run: () => d.editorAction('editor.unfold') })
+  register({ id: 'code.refactor', category: 'Code', title: 'Refactor This…', keys: 'Ctrl+Shift+R', run: () => d.editorAction('editor.action.refactor') })
 
   // ---- Run / debug ----
   register({ id: 'run.run', category: 'Run', title: 'Run', keys: 'Shift+F10', run: d.run })

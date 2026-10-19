@@ -102,6 +102,9 @@ export const DEFS: SettingDef[] = [
   { key: 'bracketColors', category: 'Editor', group: 'Display', label: 'Rainbow brackets', default: true, control: onOff, description: 'Colors matching bracket pairs by nesting depth.' },
   { key: 'stickyScroll', category: 'Editor', group: 'Display', label: 'Sticky scroll', default: true, control: onOff, description: 'Keeps the enclosing function or class pinned at the top.' },
   { key: 'breadcrumbs', category: 'Editor', group: 'Display', label: 'Breadcrumbs', default: true, control: onOff, description: 'The file path and the class or function around the cursor, above the editor.' },
+  { key: 'inlayHints', category: 'Editor', group: 'Display', label: 'Inline hints', default: 'onUnlessPressed',
+    description: 'Parameter names and inferred types shown inside the code, from the language server.',
+    control: { type: 'select', options: opts(['on', 'Always'], ['onUnlessPressed', 'Always (hold Ctrl+Alt to hide)'], ['offUnlessPressed', 'Never (hold Ctrl+Alt to show)'], ['off', 'Never']) } },
   { key: 'folding', category: 'Editor', group: 'Display', label: 'Code folding', default: true, control: onOff },
   { key: 'scrollBeyondLastLine', category: 'Editor', group: 'Display', label: 'Scroll past the last line', default: false, control: onOff },
 

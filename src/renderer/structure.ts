@@ -37,6 +37,11 @@ const KIND: Partial<Record<monaco.languages.SymbolKind, { letter: string; color:
   [SK.TypeParameter]: { letter: 'T', color: 'var(--syn-type)' }
 }
 
+/** How a kind of symbol is drawn (a letter on a tinted square). `kind` is Monaco's SymbolKind (LSP's minus one). */
+export function symbolBadge(kind: number): { letter: string; color: string } {
+  return KIND[kind as monaco.languages.SymbolKind] ?? { letter: '·', color: 'var(--text-dim)' }
+}
+
 const contains = (r: monaco.IRange, p: monaco.IPosition): boolean =>
   monaco.Range.containsPosition(r, p)
 

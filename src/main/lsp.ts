@@ -22,6 +22,8 @@ interface Launch {
 interface ServerSpec {
   id: string
   launch: () => Launch
+  /** Sent as initializationOptions (server-specific settings). */
+  initOptions?: unknown
 }
 
 const nodeRequire = createRequire(__filename)
@@ -62,7 +64,22 @@ function npmBin(pkg: string, binName: string): Launch {
 }
 
 const SERVERS: Record<string, ServerSpec> = {
-  typescript: { id: 'typescript', launch: () => npmBin('typescript-language-server', 'typescript-language-server') },
+  typescript: {
+    id: 'typescript',
+    launch: () => npmBin('typescript-language-server', 'typescript-language-server'),
+    // The server computes inlay hints from these; whether they are shown is the editor's setting.
+    initOptions: {
+      preferences: {
+        includeInlayParameterNameHints: 'literals',
+        includeInlayFunctionParameterTypeHints: true,
+        includeInlayVariableTypeHints: true,
+        includeInlayVariableTypeHintsWhenTypeMatchesName: false,
+        includeInlayPropertyDeclarationTypeHints: true,
+        includeInlayFunctionLikeReturnTypeHints: true,
+        includeInlayEnumMemberValueHints: true
+      }
+    }
+  },
   python: { id: 'python', launch: () => npmBin('pyright', 'pyright-langserver') },
   // Mort's own language server (`mortc lsp`). Set MORTC to a mortc.py path to run it from a checkout.
   mort: {
@@ -189,8 +206,15 @@ class Client {
       rootUri: this.folder().uri,
       workspaceFolders: [this.folder()],
       clientInfo: { name: 'Forge' },
+      initializationOptions: this.spec.initOptions,
       capabilities: {
-        workspace: { configuration: true, workspaceFolders: true, applyEdit: true, workspaceEdit: { documentChanges: true } },
+        workspace: {
+          configuration: true,
+          workspaceFolders: true,
+          applyEdit: true,
+          workspaceEdit: { documentChanges: true },
+          symbol: { symbolKind: { valueSet: Array.from({ length: 26 }, (_, i) => i + 1) } }
+        },
         textDocument: {
           synchronization: { dynamicRegistration: false, didSave: false },
           completion: {
@@ -208,6 +232,15 @@ class Client {
             }
           },
           definition: { linkSupport: true },
+          implementation: { linkSupport: true },
+          typeDefinition: { linkSupport: true },
+          declaration: { linkSupport: true },
+          documentHighlight: {},
+          foldingRange: { lineFoldingOnly: true, rangeLimit: 5000 },
+          selectionRange: {},
+          inlayHint: {},
+          callHierarchy: {},
+          typeHierarchy: {},
           references: {},
           documentSymbol: {
             hierarchicalDocumentSymbolSupport: true,
@@ -226,7 +259,7 @@ class Client {
               }
             }
           },
-          publishDiagnostics: {}
+          publishDiagnostics: { tagSupport: { valueSet: [1, 2] }, relatedInformation: true }
         }
       }
     })) as { capabilities: Record<string, unknown> }
@@ -336,6 +369,21 @@ export function registerLsp(): void {
   ipcMain.handle('lsp:applyEditResult', (_e, id: number, applied: boolean, failureReason?: string) => {
     pendingEdits.get(id)?.({ applied, failureReason })
     pendingEdits.delete(id)
+  })
+
+  /** Asks every server running for this project (for requests that belong to no single document, like workspace/symbol). */
+  ipcMain.handle('lsp:workspace', async (_e, root: string, method: string, params: unknown) => {
+    const out: { server: string; result?: unknown; error?: string }[] = []
+    for (const [key, c] of clients) {
+      if (!key.endsWith(`\0${root}`)) continue
+      try {
+        await c.ready
+        out.push({ server: c.spec.id, result: await c.request(method, params) })
+      } catch (err) {
+        out.push({ server: c.spec.id, error: err instanceof Error ? err.message : String(err) })
+      }
+    }
+    return out
   })
 
   ipcMain.handle('lsp:request', async (_e, uri: string, method: string, params: unknown) => {

@@ -1,14 +1,21 @@
 import * as monaco from 'monaco-editor'
 import { askText } from './menu'
 import { applyWorkspaceEdit } from './lsp-edits'
+import type { HierarchyNode, HierarchyRoot } from './hierarchy'
 import type {
+  CallHierarchyIncomingCall,
+  CallHierarchyItem,
+  CallHierarchyOutgoingCall,
   CodeAction,
   Command,
   CompletionItem,
   CompletionList,
   Diagnostic,
+  DocumentHighlight,
   DocumentSymbol,
+  FoldingRange,
   Hover,
+  InlayHint,
   InsertReplaceEdit,
   Location,
   LocationLink,
@@ -16,15 +23,29 @@ import type {
   MarkupContent,
   Position as LspPosition,
   Range as LspRange,
+  SelectionRange,
   ServerCapabilities,
   SignatureHelp,
   SymbolInformation,
   TextEdit,
-  WorkspaceEdit
+  TypeHierarchyItem,
+  WorkspaceEdit,
+  WorkspaceSymbol
 } from 'vscode-languageserver-protocol'
 
 /** Monaco language ids that Forge can talk to a language server for (see BY_EXT in main/lsp.ts). */
 const LANGUAGES = ['typescript', 'javascript', 'python', 'c', 'cpp', 'mort']
+
+/** One match of a project-wide symbol search. */
+export interface SymbolHit {
+  name: string
+  /** LSP SymbolKind (1-based). */
+  kind: number
+  container?: string
+  path: string
+  line: number
+  column: number
+}
 
 /** An error that has already been shown to the user, so callers must not report it again. */
 class Reported extends Error {}
@@ -33,8 +54,10 @@ export interface LspDeps {
   editor: monaco.editor.IStandaloneCodeEditor
   /** The open model for a path, if the file is open in a tab. */
   getModel: (path: string) => monaco.editor.ITextModel | undefined
-  /** Shows Find Usages results (in the Find panel). */
-  showUsages: (symbol: string, hits: { path: string; line: number; text: string }[]) => void
+  /** Shows Find Usages results (in the Find panel). `what` names them: "usage" (default), "implementation" ... */
+  showUsages: (symbol: string, hits: { path: string; line: number; text: string }[], what?: string) => void
+  /** Shows a call or type hierarchy in its window. */
+  showHierarchy: (root: HierarchyRoot) => void
   getRoot: () => string | null
   openFile: (path: string, line?: number, column?: number) => Promise<void>
   report: (msg: string, isError?: boolean) => void
@@ -97,6 +120,8 @@ export function initLsp(deps: LspDeps): {
   quietFormat: <T>(fn: () => Promise<T>) => Promise<T>
   /** The file's symbols as a tree; null when no language server handles it. */
   documentSymbols: (model: monaco.editor.ITextModel) => Promise<monaco.languages.DocumentSymbol[] | null>
+  /** Symbols matching `query` anywhere in the project (from every running language server). */
+  workspaceSymbols: (query: string) => Promise<SymbolHit[]>
 } {
   const docs = new Map<string, Doc>()
   // Completion items keep their raw LSP form so they can be resolved lazily.
@@ -191,7 +216,8 @@ export function initLsp(deps: LspDeps): {
         severity: SEVERITY[d.severity ?? 1] ?? monaco.MarkerSeverity.Error,
         message: typeof d.message === 'string' ? d.message : d.message.value,
         source: d.source,
-        code: d.code === undefined ? undefined : String(d.code)
+        code: d.code === undefined ? undefined : String(d.code),
+        tags: d.tags?.map((t) => (t === 1 ? monaco.MarkerTag.Unnecessary : monaco.MarkerTag.Deprecated))
       }))
     )
     doc.errors = diags.filter((d) => (d.severity ?? 1) === 1).length
@@ -346,6 +372,65 @@ export function initLsp(deps: LspDeps): {
     return (res ?? []).map(toSymbol)
   }
 
+  monaco.languages.registerDocumentHighlightProvider(LANGUAGES, {
+    async provideDocumentHighlights(model, position) {
+      if (!(await capabilities(model))?.documentHighlightProvider) return null
+      const res = await request<DocumentHighlight[]>(model, 'textDocument/documentHighlight', { position: toLsp(position) })
+      // LSP DocumentHighlightKind (Text 1, Read 2, Write 3) is Monaco's plus one.
+      return res?.map((h) => ({ range: toRange(h.range), kind: ((h.kind ?? 1) - 1) as monaco.languages.DocumentHighlightKind })) ?? null
+    }
+  })
+
+  const FRK = monaco.languages.FoldingRangeKind
+  monaco.languages.registerFoldingRangeProvider(LANGUAGES, {
+    async provideFoldingRanges(model) {
+      if (!(await capabilities(model))?.foldingRangeProvider) return null
+      const res = await request<FoldingRange[]>(model, 'textDocument/foldingRange', {})
+      return (
+        res?.map((r) => ({
+          start: r.startLine + 1,
+          end: r.endLine + 1,
+          kind: r.kind === 'comment' ? FRK.Comment : r.kind === 'imports' ? FRK.Imports : r.kind === 'region' ? FRK.Region : undefined
+        })) ?? null
+      )
+    }
+  })
+
+  monaco.languages.registerSelectionRangeProvider(LANGUAGES, {
+    async provideSelectionRanges(model, positions) {
+      if (!(await capabilities(model))?.selectionRangeProvider) return null
+      const res = await request<SelectionRange[]>(model, 'textDocument/selectionRange', { positions: positions.map(toLsp) })
+      // Monaco wants each position's chain from the innermost range outwards.
+      return (
+        res?.map((sr) => {
+          const chain: monaco.languages.SelectionRange[] = []
+          for (let r: SelectionRange | undefined = sr; r; r = r.parent) chain.push({ range: toRange(r.range) })
+          return chain
+        }) ?? null
+      )
+    }
+  })
+
+  monaco.languages.registerInlayHintsProvider(LANGUAGES, {
+    async provideInlayHints(model, range) {
+      const none = { hints: [], dispose: () => undefined }
+      if (!(await capabilities(model))?.inlayHintProvider) return none
+      const res = await request<InlayHint[]>(model, 'textDocument/inlayHint', {
+        range: { start: { line: range.startLineNumber - 1, character: range.startColumn - 1 }, end: { line: range.endLineNumber - 1, character: range.endColumn - 1 } }
+      })
+      const hints = (res ?? []).map(
+        (h): monaco.languages.InlayHint => ({
+          label: typeof h.label === 'string' ? h.label : h.label.map((p) => p.value).join(''),
+          position: { lineNumber: h.position.line + 1, column: h.position.character + 1 },
+          kind: h.kind as monaco.languages.InlayHintKind | undefined, // LSP Type 1 / Parameter 2 are Monaco's too
+          paddingLeft: h.paddingLeft,
+          paddingRight: h.paddingRight
+        })
+      )
+      return { hints, dispose: () => undefined }
+    }
+  })
+
   monaco.languages.registerDocumentSymbolProvider(LANGUAGES, {
     displayName: 'Language server',
     async provideDocumentSymbols(model) {
@@ -462,6 +547,196 @@ export function initLsp(deps: LspDeps): {
     contextMenuOrder: 1.6,
     run: safe('Find Usages', findUsages)
   })
+  // Go to Implementation / Type Definition. One answer jumps there; several are listed in the Find window (Monaco's
+  // own peek can only show files that are already open).
+  async function gotoKind(method: string, cap: 'implementationProvider' | 'typeDefinitionProvider', what: string): Promise<void> {
+    const model = deps.editor.getModel()
+    const pos = deps.editor.getPosition()
+    if (!model || !pos) return
+    if (!(await capabilities(model))?.[cap]) return unsupported(model, `Go to ${what}`)
+    const res = await request<Location | Location[] | LocationLink[]>(model, method, { position: toLsp(pos) })
+    const list = res ? (Array.isArray(res) ? res : [res]) : []
+    const word = model.getWordAtPosition(pos)?.word ?? ''
+    if (!list.length) return deps.report(`No ${what} found for ${word || 'the symbol'}`)
+    const cache = new Map<string, string[]>()
+    const hits: { path: string; line: number; column: number; text: string }[] = []
+    for (const l of list) {
+      const at = 'targetUri' in l ? { uri: l.targetUri, range: l.targetSelectionRange } : { uri: l.uri, range: l.range }
+      const path = monaco.Uri.parse(at.uri).fsPath
+      let lines = cache.get(path)
+      if (!lines) {
+        lines = await lineTexts(path)
+        cache.set(path, lines)
+      }
+      hits.push({ path, line: at.range.start.line + 1, column: at.range.start.character + 1, text: (lines[at.range.start.line] ?? '').trim() })
+    }
+    const first = hits[0]
+    if (hits.length === 1 && first) return void deps.openFile(first.path, first.line, first.column)
+    hits.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line)
+    deps.showUsages(word, hits, what)
+  }
+
+  // Applies a code action the server offered: its edit, then its command (resolving the edit first if needed).
+  async function applyCodeAction(uri: string, action: CodeAction): Promise<void> {
+    let a = action
+    if (!a.edit && !a.command) {
+      // Many servers send fixes without their edit and fill it in on demand.
+      const caps = await window.forge.lspCapabilities(uri)
+      const provider = (caps as ServerCapabilities).codeActionProvider
+      if (typeof provider === 'object' && provider.resolveProvider) {
+        a = (await window.forge.lspRequest(uri, 'codeAction/resolve', a)) as CodeAction
+      }
+    }
+    if (a.edit) {
+      const res = await applyWorkspaceEdit(a.edit, { getModel: deps.getModel })
+      deps.report(`${a.title}: ${res.edits} edit${res.edits === 1 ? '' : 's'}`)
+    }
+    if (a.command) {
+      await window.forge.lspRequest(uri, 'workspace/executeCommand', { command: a.command.command, arguments: a.command.arguments })
+    }
+    if (!a.edit && !a.command) throw new Error('The language server offered no edit or command for this fix')
+  }
+
+  async function organizeImports(): Promise<void> {
+    const model = deps.editor.getModel()
+    if (!model) return
+    if (!(await capabilities(model))?.codeActionProvider) return unsupported(model, 'Optimize Imports')
+    const doc = docs.get(keyOf(model.uri))
+    if (!doc) return
+    const res = await request<(CodeAction | Command)[]>(model, 'textDocument/codeAction', {
+      range: toMonacoRange(model.getFullModelRange()),
+      context: { diagnostics: [], only: ['source.organizeImports'] }
+    })
+    const action = res?.find((a): a is CodeAction => 'kind' in a && typeof a.kind === 'string' && a.kind.startsWith('source.organizeImports'))
+    if (!action) return deps.report('The imports are already organized')
+    await applyCodeAction(doc.uri, action)
+  }
+
+  // ---- Hierarchies ----
+  const posOf = (it: { selectionRange: LspRange }): { line: number; column: number } => ({
+    line: it.selectionRange.start.line + 1,
+    column: it.selectionRange.start.character + 1
+  })
+  const nodeOf = (origin: string, it: CallHierarchyItem | TypeHierarchyItem, children: () => Promise<(CallHierarchyItem | TypeHierarchyItem)[]>): HierarchyNode => ({
+    name: it.name,
+    detail: it.detail,
+    kind: it.kind,
+    path: monaco.Uri.parse(it.uri).fsPath,
+    ...posOf(it),
+    children: async () => (await children()).map((c) => nodeOf(origin, c, () => childrenOf(origin, c)))
+  })
+  // Which request lists a node's children depends on which hierarchy it belongs to; `mode` is remembered per tree.
+  let mode: 'incoming' | 'outgoing' | 'supertypes' | 'subtypes' = 'incoming'
+  async function childrenOf(origin: string, it: CallHierarchyItem | TypeHierarchyItem): Promise<(CallHierarchyItem | TypeHierarchyItem)[]> {
+    const ask = <T,>(method: string): Promise<T | null> => window.forge.lspRequest(origin, method, { item: it }) as Promise<T | null>
+    if (mode === 'incoming') return ((await ask<CallHierarchyIncomingCall[]>('callHierarchy/incomingCalls')) ?? []).map((c) => c.from)
+    if (mode === 'outgoing') return ((await ask<CallHierarchyOutgoingCall[]>('callHierarchy/outgoingCalls')) ?? []).map((c) => c.to)
+    return (await ask<TypeHierarchyItem[]>(mode === 'supertypes' ? 'typeHierarchy/supertypes' : 'typeHierarchy/subtypes')) ?? []
+  }
+
+  async function hierarchy(kind: 'call' | 'type', direction: 'incoming' | 'outgoing' | 'supertypes' | 'subtypes'): Promise<void> {
+    const model = deps.editor.getModel()
+    const pos = deps.editor.getPosition()
+    if (!model || !pos) return
+    const cap = kind === 'call' ? 'callHierarchyProvider' : 'typeHierarchyProvider'
+    if (!(await capabilities(model))?.[cap]) return unsupported(model, kind === 'call' ? 'Call Hierarchy' : 'Type Hierarchy')
+    const doc = docs.get(keyOf(model.uri))
+    if (!doc) return
+    const items = await request<(CallHierarchyItem | TypeHierarchyItem)[]>(
+      model,
+      kind === 'call' ? 'textDocument/prepareCallHierarchy' : 'textDocument/prepareTypeHierarchy',
+      { position: toLsp(pos) }
+    )
+    if (!items?.length) return deps.report(`There is no ${kind} hierarchy at the cursor`)
+    const build = (dir: typeof direction): HierarchyRoot => {
+      mode = dir
+      const labels: Record<typeof direction, [string, typeof direction, string]> = {
+        incoming: ['Callers of', 'outgoing', 'Show callees'],
+        outgoing: ['Callees of', 'incoming', 'Show callers'],
+        supertypes: ['Supertypes of', 'subtypes', 'Show subtypes'],
+        subtypes: ['Subtypes of', 'supertypes', 'Show supertypes']
+      }
+      const [title, other, label] = labels[dir]
+      return {
+        title: `${title} ${items[0]?.name ?? ''}`,
+        nodes: items.map((i) => nodeOf(doc.uri, i, () => childrenOf(doc.uri, i))),
+        toggle: { label, load: async () => build(other) }
+      }
+    }
+    deps.showHierarchy(build(direction))
+  }
+
+  async function workspaceSymbols(query: string): Promise<SymbolHit[]> {
+    const root = deps.getRoot()
+    if (!root || !query.trim()) return []
+    const answers = await window.forge.lspWorkspace(root, 'workspace/symbol', { query })
+    const out: SymbolHit[] = []
+    for (const a of answers) {
+      if (a.error) {
+        deps.report(`Symbol search (${a.server}): ${a.error}`, true)
+        continue
+      }
+      for (const s of (a.result as (SymbolInformation | WorkspaceSymbol)[] | null) ?? []) {
+        const loc = s.location as { uri: string; range?: LspRange }
+        out.push({
+          name: s.name,
+          kind: s.kind,
+          container: s.containerName,
+          path: monaco.Uri.parse(loc.uri).fsPath,
+          line: (loc.range?.start.line ?? 0) + 1,
+          column: (loc.range?.start.character ?? 0) + 1
+        })
+      }
+    }
+    return out
+  }
+
+  deps.editor.addAction({
+    id: 'forge.goImplementation',
+    label: 'Go to Implementation',
+    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.KeyB],
+    contextMenuGroupId: 'navigation',
+    contextMenuOrder: 1.3,
+    run: safe('Go to Implementation', () => gotoKind('textDocument/implementation', 'implementationProvider', 'implementation'))
+  })
+  deps.editor.addAction({
+    id: 'forge.goTypeDefinition',
+    label: 'Go to Type Definition',
+    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyB],
+    contextMenuGroupId: 'navigation',
+    contextMenuOrder: 1.4,
+    run: safe('Go to Type Definition', () => gotoKind('textDocument/typeDefinition', 'typeDefinitionProvider', 'type definition'))
+  })
+  deps.editor.addAction({
+    id: 'forge.organizeImports',
+    label: 'Optimize Imports',
+    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.KeyO],
+    contextMenuGroupId: '1_modification',
+    contextMenuOrder: 1.3,
+    run: safe('Optimize Imports', organizeImports)
+  })
+  deps.editor.addAction({
+    id: 'forge.callHierarchy',
+    label: 'Call Hierarchy',
+    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.KeyH],
+    contextMenuGroupId: 'navigation',
+    contextMenuOrder: 1.7,
+    run: safe('Call Hierarchy', () => hierarchy('call', 'incoming'))
+  })
+  deps.editor.addAction({
+    id: 'forge.typeHierarchy',
+    label: 'Type Hierarchy',
+    contextMenuGroupId: 'navigation',
+    contextMenuOrder: 1.8,
+    run: safe('Type Hierarchy', () => hierarchy('type', 'supertypes'))
+  })
+  // JetBrains-style keys for things Monaco already does.
+  const act = (id: string): (() => void) => () => void deps.editor.getAction(id)?.run()
+  deps.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyB, act('editor.action.revealDefinition')) // Go to Declaration
+  deps.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyI, act('editor.action.peekDefinition')) // Quick Definition
+  deps.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyQ, act('editor.action.showHover')) // Quick Documentation
+  deps.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyP, act('editor.action.triggerParameterHints')) // Parameter Info
+
   deps.editor.addAction({
     id: 'forge.rename',
     label: 'Rename Symbol…',
@@ -518,25 +793,7 @@ export function initLsp(deps: LspDeps): {
   })
 
   monaco.editor.registerCommand('forge.applyCodeAction', (_accessor, uri: string, action: CodeAction) =>
-    safe(`Quick fix "${action.title}"`, async () => {
-      let a = action
-      if (!a.edit && !a.command) {
-        // Many servers send fixes without their edit and fill it in on demand.
-        const caps = await window.forge.lspCapabilities(uri)
-        const provider = (caps as ServerCapabilities).codeActionProvider
-        if (typeof provider === 'object' && provider.resolveProvider) {
-          a = (await window.forge.lspRequest(uri, 'codeAction/resolve', a)) as CodeAction
-        }
-      }
-      if (a.edit) {
-        const res = await applyWorkspaceEdit(a.edit, { getModel: deps.getModel })
-        deps.report(`${a.title}: ${res.edits} edit${res.edits === 1 ? '' : 's'}`)
-      }
-      if (a.command) {
-        await window.forge.lspRequest(uri, 'workspace/executeCommand', { command: a.command.command, arguments: a.command.arguments })
-      }
-      if (!a.edit && !a.command) throw new Error('The language server offered no edit or command for this fix')
-    })()
+    safe(`Quick fix "${action.title}"`, () => applyCodeAction(uri, action))()
   )
 
   // A server can also push edits itself (workspace/applyEdit), e.g. after running a command.
@@ -566,6 +823,7 @@ export function initLsp(deps: LspDeps): {
     openDoc,
     closeDoc,
     documentSymbols,
+    workspaceSymbols,
     async quietFormat(fn) {
       quietFormat = true
       try {
