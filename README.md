@@ -1,4 +1,6 @@
-# Forge
+<p align="center"><img src="build/icon.png" alt="Forge logo" width="120"></p>
+
+<h1 align="center">Forge</h1>
 
 A JetBrains-style IDE built with Electron, TypeScript and Monaco. It is a learning/portfolio project: the goal is a
 fast, good-looking editor with real language intelligence, git, a terminal and a debugger, built in verified steps

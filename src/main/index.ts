@@ -30,6 +30,8 @@ function createWindow(): void {
     height: 900,
     backgroundColor: '#101d22',
     title: 'Forge',
+    // The window and taskbar icon (out/main/index.js -> ../../build/icon.png).
+    icon: join(__dirname, '../../build/icon.png'),
     minWidth: 900,
     minHeight: 560,
     titleBarStyle: 'hidden',
