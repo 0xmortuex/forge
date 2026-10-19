@@ -45,6 +45,7 @@ import { initGitLog } from './gitlog'
 import { initConflicts } from './conflicts'
 import { initGutter } from './gutter'
 import { initTodo } from './todo'
+import { naming, relatedFiles } from './related'
 import { initPreview } from './preview'
 import { initBreakpointsWindow } from './breakpoints'
 import { initHttpClient } from './httpclient'
@@ -403,6 +404,22 @@ function showImage(f: OpenFile | null): void {
   img.onload = () => (info.textContent = `${basename(f.path)} · ${img.naturalWidth} × ${img.naturalHeight} · ${kb < 1024 ? `${kb.toFixed(1)} KB` : `${(kb / 1024).toFixed(1)} MB`}`)
   img.onclick = () => view.classList.toggle('actual')
   view.replaceChildren(img, info)
+}
+
+/** Ctrl+Shift+T: from a file to its test (or back), by naming convention. */
+function goToTest(): void {
+  if (!rootDir || !active || active.diff) return report('Open a file in a project first', true)
+  const from = active.path
+  window.forge.listFiles(rootDir).then(
+    (files) => {
+      const found = relatedFiles(from, files)
+      if (!found.length) return report(`No ${naming(from.split(/[\\/]/).pop() ?? '').isTest ? 'source' : 'test'} file found for ${relPath(from)}`, true)
+      const go = (p: string): void => void openFile(p).catch((err: unknown) => report(`Go to Test: ${err instanceof Error ? err.message : String(err)}`, true))
+      if (found.length === 1) return go(found[0] as string)
+      showMenu(window.innerWidth / 2 - 100, window.innerHeight / 3, found.map((p) => ({ label: relPath(p), run: () => go(p) })))
+    },
+    (err: unknown) => report(`Go to Test: ${err instanceof Error ? err.message : String(err)}`, true)
+  )
 }
 
 /** Ctrl+Tab and friends: the next (or previous) tab, wrapping around. */
@@ -1117,6 +1134,7 @@ window.addEventListener('keydown', (e) => {
     if (e.altKey && e.code === 'KeyT') { e.preventDefault(); templates.surround(); return }
     if (!e.altKey && e.code === 'KeyJ') { e.preventDefault(); templates.pickTemplate(); return }
   }
+  if (e.shiftKey && e.code === 'KeyT' && !e.altKey) { e.preventDefault(); goToTest(); return }
   if (e.code === 'KeyE' && !e.altKey) { e.preventDefault(); if (e.shiftKey) nav.recentLocations(); else nav.recentFiles(); return }
   if (e.altKey && e.code === 'KeyS') { e.preventDefault(); settingsUi.open(); return }
   if (e.altKey && e.code === 'KeyZ') { e.preventDefault(); toggleZen(); return }
@@ -1706,6 +1724,7 @@ registerBuiltinCommands({
   },
   gitBranches: () => showBranches(),
   nextTab: (delta) => cycleTab(delta),
+  goToTest: () => goToTest(),
   resetLayout: () => {
     // Tool windows go back to their original docks and sizes (the CSS defaults); the open files are left alone.
     for (const id of ['project', 'bottom', 'right']) {
