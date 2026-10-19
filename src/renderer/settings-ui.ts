@@ -7,6 +7,7 @@ import { allThemes, BUILTIN_THEMES, type Palette } from './themes'
 
 export interface SettingsUiDeps {
   openFile: (path: string) => Promise<void>
+  openCustomCss: () => Promise<void>
   report: (msg: string, isError?: boolean) => void
 }
 
@@ -133,6 +134,25 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
         sync()
       })
       wrap.append(input)
+    } else if (c.type === 'theme-select') {
+      const sel = el('select', 'field sel-input')
+      for (const kind of ['dark', 'light'] as const) {
+        const group = el('optgroup')
+        group.label = kind === 'dark' ? 'Dark themes' : 'Light themes'
+        for (const p of allThemes().filter((x) => x.kind === kind)) {
+          const opt = el('option', '', p.name)
+          opt.value = p.id
+          group.append(opt)
+        }
+        sel.append(group)
+      }
+      sel.onchange = () => set(sel.value)
+      syncs.set(def.key, () => {
+        sel.value = settings.get<string>(def.key)
+        sync()
+      })
+      sel.value = settings.get<string>(def.key)
+      wrap.append(sel)
     } else if (c.type === 'color') {
       const swatches = el('div', 'swatches')
       const picker = el('input')
@@ -221,9 +241,11 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
       mock.append(side, code)
       card.append(mock, el('div', 'nm', p.name), el('div', 'kd', `${p.kind === 'light' ? 'Light' : 'Dark'}${BUILTIN(p) ? '' : ' · custom'}`))
       card.onclick = () => {
+        settings.set('autoTheme', false) // choosing a theme yourself means you want that one
         settings.set(def.key, p.id)
         paint()
         syncs.get(def.key)?.()
+        syncs.get('autoTheme')?.()
       }
       cards.set(p.id, card)
       grid.append(card)
@@ -252,6 +274,15 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
         }
         tools.append(info, open)
         g.append(tools)
+        const css = el('div', 'srow')
+        const cssInfo = el('div', 'info')
+        cssInfo.append(el('div', 'label', 'Custom CSS'), el('div', 'desc', 'Restyle anything with your own custom.css. It applies when you save it in Forge.'))
+        const openCss = el('button', 'btn', 'Open custom.css')
+        openCss.onclick = () => {
+          deps.openCustomCss().then(() => close()).catch((err: unknown) => deps.report(err instanceof Error ? err.message : String(err), true))
+        }
+        css.append(cssInfo, openCss)
+        g.append(css)
       } else g.append(row(d, start + i))
     })
     return g

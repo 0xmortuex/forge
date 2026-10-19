@@ -8,6 +8,7 @@ import { join } from 'node:path'
 const SETTINGS = 'settings.json'
 const STATE = 'state.json'
 const THEMES = 'themes'
+const CUSTOM_CSS = 'custom.css'
 
 const userPath = (...parts: string[]): string => join(app.getPath('userData'), ...parts)
 
@@ -48,6 +49,9 @@ export interface LoadedUserData {
   errors: string[]
   dir: string
   settingsPath: string
+  /** Contents of custom.css (empty if there is none) and where it lives. */
+  customCss: string
+  customCssPath: string
 }
 
 let settingsBroken = false
@@ -84,7 +88,17 @@ export function registerSettings(): void {
     }
     const themes = await Promise.all(themeNames.map(async (name) => ({ name, text: (await readFile(userPath(THEMES, name), 'utf8')) })))
 
-    return { settings, state, themes, errors, dir: app.getPath('userData'), settingsPath: userPath(SETTINGS) }
+    const customCss = (await readText(userPath(CUSTOM_CSS))) ?? ''
+    return {
+      settings,
+      state,
+      themes,
+      errors,
+      dir: app.getPath('userData'),
+      settingsPath: userPath(SETTINGS),
+      customCss,
+      customCssPath: userPath(CUSTOM_CSS)
+    }
   })
 
   ipcMain.handle('settings:save', async (_e, text: string) => {
@@ -99,6 +113,28 @@ export function registerSettings(): void {
   ipcMain.handle('state:save', async (_e, text: string) => {
     parseObject(text, 'State to save')
     await writeAtomic(userPath(STATE), text)
+  })
+
+  /** Creates custom.css with a short guide if it doesn't exist yet, and returns its path. */
+  ipcMain.handle('settings:ensureCss', async () => {
+    if ((await readText(userPath(CUSTOM_CSS))) === null) {
+      await writeAtomic(
+        userPath(CUSTOM_CSS),
+        `/* Forge custom CSS: restyle anything. It applies when you save this file in Forge.
+   If something breaks, turn it off in Settings (Appearance > Apply custom.css) or delete this file.
+
+   Colors come from variables, for example:  --accent  --island  --text  --err  --ok
+   (Settings can override some of them, so prefer targeting elements by id or class.)
+
+   Examples:
+     #toolbar { height: 52px; }
+     .tab.active { font-weight: 700; }
+     .island { box-shadow: 0 0 24px var(--accent-soft); }
+*/
+`
+      )
+    }
+    return userPath(CUSTOM_CSS)
   })
 
   ipcMain.handle('themes:openDir', async () => {

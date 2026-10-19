@@ -1,10 +1,15 @@
+import '@fontsource/jetbrains-mono/400.css'
+import '@fontsource/jetbrains-mono/700.css'
+import '@fontsource/fira-code/400.css'
+import '@fontsource/fira-code/700.css'
+import '@fontsource-variable/inter/index.css'
 import * as monaco from 'monaco-editor'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import JsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import CssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import HtmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
-import { initAppearance, bindEditors, editorOptions } from './appearance'
+import { initAppearance, bindEditors, editorOptions, setCustomCss } from './appearance'
 import { ensureSettingsFile, flushSettings, settings, userData } from './settings'
 import { initRipples, shouldToast, toast } from './effects'
 import { initPalette } from './commands'
@@ -95,6 +100,10 @@ const diffEditor = monaco.editor.createDiffEditor($('diff'), {
   renderSideBySide: true
 })
 bindEditors(editor, diffEditor) // from here on, editor settings apply live to both
+// The bundled coding fonts load asynchronously; once they have, tell Monaco to re-measure its characters.
+void Promise.all([document.fonts.load('13px "JetBrains Mono"'), document.fonts.load('13px "Fira Code"')])
+  .then(() => monaco.editor.remeasureFonts())
+  .catch((err: unknown) => console.error('Loading the bundled fonts failed', err))
 
 // Static icons for buttons declared in index.html.
 const setIcon = (sel: string, html: string): void => {
@@ -535,6 +544,7 @@ async function saveActive(opts: { format?: boolean } = {}): Promise<void> {
       })
     }
     await window.forge.writeFile(f.path, f.model.getValue())
+    if (samePath(f.path, userData.customCssPath)) setCustomCss(f.model.getValue()) // saving custom.css restyles live
     f.savedVersion = f.model.getAlternativeVersionId()
     renderTabs()
     report(`Saved ${basename(f.path)}`)
@@ -980,7 +990,11 @@ function toggleZen(): void {
   document.body.classList.toggle('zen') // hides everything but the editor; the layout adapts by itself
 }
 
-const settingsUi = initSettingsUi({ openFile, report })
+async function openCustomCss(): Promise<void> {
+  await openFile(await window.forge.ensureCustomCss())
+}
+
+const settingsUi = initSettingsUi({ openFile, report, openCustomCss })
 const palette = initPalette({ report })
 registerBuiltinCommands({
   openFolder,
@@ -1004,6 +1018,7 @@ registerBuiltinCommands({
     await openFile(userData.settingsPath)
   },
   openThemesDir: async () => void (await window.forge.openThemesDir()),
+  openCustomCss,
   run: () => runUi.run(),
   debug: () => dbg.start(),
   stop: () => runUi.stop(),

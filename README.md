@@ -42,7 +42,11 @@ Open **Settings** with <kbd>Ctrl</kbd>+<kbd>,</kbd>, or press <kbd>Ctrl</kbd>+<k
 - **Themes** — Material Oceanic, Darcula, Dracula, Nord, Tokyo Night, Monokai Pro, Solarized (dark and light),
   Gruvbox, Catppuccin, Rosé Pine, One Dark, GitHub (dark and light), Synthwave '84, Forge Light, High Contrast. One
   small palette drives the interface, the editor's syntax colors and the terminal. Add your own as a JSON file.
+  They can follow your system's light/dark setting (pick one theme for each).
 - **Accent** — twelve swatches, any custom color, or a slowly cycling rainbow.
+- **Fonts** — JetBrains Mono, Fira Code (with ligatures) and Inter are bundled, so it looks the same on any machine.
+- **Custom CSS** — restyle anything with your own `custom.css`; it applies live when you save it, and there is an off
+  switch in case a style breaks the layout.
 - **Motion** — panels slide, tabs pop in, folders fade open, notifications slide in, buttons ripple; choose *Full*,
   *Reduced* or *Off*, and a speed.
 - **Layout** — corner radius, panel spacing, density, interface font and size, zoom, status bar and tool-window

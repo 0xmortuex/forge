@@ -1,6 +1,7 @@
 import { register } from './commands'
 import { session } from './session'
 import { flushSettings, settings } from './settings'
+import { currentThemeId } from './appearance'
 import { activeTheme, allThemes, applyTheme, findTheme } from './themes'
 
 /** What the commands need from the rest of the app. main.ts supplies these. */
@@ -18,6 +19,7 @@ export interface BuiltinDeps {
   openSettings: (category?: string) => void
   openSettingsFile: () => Promise<void>
   openThemesDir: () => Promise<void>
+  openCustomCss: () => Promise<void>
   run: () => Promise<void>
   debug: () => Promise<void>
   stop: () => Promise<void>
@@ -71,6 +73,7 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   // ---- Settings ----
   register({ id: 'settings.open', category: 'Settings', title: 'Open Settings', keys: 'Ctrl+,', run: () => d.openSettings() })
   register({ id: 'settings.file', category: 'Settings', title: 'Open settings.json', run: d.openSettingsFile })
+  register({ id: 'settings.css', category: 'Settings', title: 'Open custom.css', run: d.openCustomCss })
   register({ id: 'settings.themes', category: 'Settings', title: 'Open Themes Folder', run: d.openThemesDir })
   register({ id: 'settings.extensions', category: 'Settings', title: 'Manage Extensions', run: () => d.openSettings('Extensions') })
   register({ id: 'window.reload', category: 'Settings', title: 'Reload Window', run: async () => {
@@ -87,9 +90,12 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
       id: `theme.${p.id}`,
       category: 'Theme',
       title: p.name,
-      run: () => settings.set('theme', p.id),
+      run: () => {
+        settings.set('autoTheme', false)
+        settings.set('theme', p.id)
+      },
       preview: () => void applyTheme(p, activeTheme().options, true),
-      revert: () => void applyTheme(findTheme(settings.get<string>('theme')), currentOptions(), true)
+      revert: () => void applyTheme(findTheme(currentThemeId()), currentOptions(), true)
     })
   }
   for (const [name, hex] of ACCENTS) {

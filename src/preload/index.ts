@@ -84,6 +84,7 @@ const api = {
   settingsLoad: (): Promise<LoadedUserData> => ipcRenderer.invoke('settings:load'),
   settingsSave: (text: string): Promise<void> => ipcRenderer.invoke('settings:save', text),
   stateSave: (text: string): Promise<void> => ipcRenderer.invoke('state:save', text),
+  ensureCustomCss: (): Promise<string> => ipcRenderer.invoke('settings:ensureCss'),
   openThemesDir: (): Promise<string> => ipcRenderer.invoke('themes:openDir'),
   toggleFullscreen: (): Promise<boolean> => ipcRenderer.invoke('win:toggleFullscreen'),
   extensionsList: (): Promise<ExtensionInfo[]> => ipcRenderer.invoke('extensions:list'),

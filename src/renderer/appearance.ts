@@ -66,8 +66,31 @@ function themeOptions(): { accent?: string; glass: boolean } {
   return { accent: str('accent') || undefined, glass: bool('glass') }
 }
 
+const systemDark = window.matchMedia('(prefers-color-scheme: dark)')
+
+/** The theme that should be showing right now: the chosen one, or the light/dark pair following the system. */
+export function currentThemeId(): string {
+  return bool('autoTheme') ? str(systemDark.matches ? 'themeDark' : 'themeLight') : str('theme')
+}
+
 function applyCurrentTheme(animate: boolean): string {
-  return applyTheme(findTheme(str('theme')), themeOptions(), animate)
+  return applyTheme(findTheme(currentThemeId()), themeOptions(), animate)
+}
+
+/** Your custom.css, as a <style> element that goes last so it can override anything. */
+export function applyCustomCss(text: string): void {
+  let style = document.getElementById('user-css') as HTMLStyleElement | null
+  if (!style) {
+    style = document.createElement('style')
+    style.id = 'user-css'
+    document.head.append(style)
+  }
+  style.textContent = bool('customCss') ? text : ''
+}
+let customCssText = userData.customCss
+export function setCustomCss(text: string): void {
+  customCssText = text
+  applyCustomCss(text)
 }
 
 function applyBodyClasses(): void {
@@ -166,10 +189,16 @@ export function initAppearance(): string {
   applyZoom()
   applyMotion()
   const themeName = applyCurrentTheme(false)
+  applyCustomCss(customCssText)
+  // Following the system: re-theme when the operating system switches between light and dark.
+  systemDark.addEventListener('change', () => {
+    if (bool('autoTheme')) applyCurrentTheme(true)
+  })
   applyTerminal()
 
   settings.onChange((key) => {
-    if (key === 'theme' || key === 'accent' || key === 'glass') {
+    if (key === 'customCss') applyCustomCss(customCssText)
+    else if (['theme', 'accent', 'glass', 'autoTheme', 'themeLight', 'themeDark'].includes(key)) {
       stopAccentCycle() // the new theme sets the real accent; the cycle restarts below if still wanted
       applyCurrentTheme(true)
       applyBodyClasses()

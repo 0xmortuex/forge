@@ -10,6 +10,7 @@ export type Control =
   | { type: 'text'; placeholder?: string; list?: string[] }
   | { type: 'color' }
   | { type: 'theme' } // the theme gallery
+  | { type: 'theme-select' } // a dropdown of every theme
 
 export interface SettingDef {
   key: string
@@ -34,7 +35,7 @@ export const CATEGORIES = [
 const opts = (...pairs: [string, string][]): { value: string; label: string }[] => pairs.map(([value, label]) => ({ value, label }))
 const onOff = { type: 'bool' } as const
 const FONTS = [
-  'Segoe UI Variable', 'Segoe UI', 'Calibri', 'Arial', 'Verdana', 'Tahoma', 'Trebuchet MS', 'Georgia',
+  'Segoe UI Variable', 'Inter Variable', 'Segoe UI', 'Calibri', 'Arial', 'Verdana', 'Tahoma', 'Trebuchet MS', 'Georgia',
   'Cascadia Code', 'Cascadia Mono', 'Consolas', 'JetBrains Mono', 'Fira Code', 'Courier New'
 ]
 
@@ -45,6 +46,10 @@ export const DEFS: SettingDef[] = [
   // ---- Appearance ----
   { key: 'theme', category: 'Appearance', group: 'Theme', label: 'Color theme', default: 'oceanic', control: { type: 'theme' },
     description: 'Drop your own theme files into the themes folder to add more.' },
+  { key: 'autoTheme', category: 'Appearance', group: 'Theme', label: 'Follow the system light/dark setting', default: false, control: onOff,
+    description: 'Switches between the two themes below when your operating system changes. Picking a theme yourself turns this off.' },
+  { key: 'themeLight', category: 'Appearance', group: 'Theme', label: 'Theme for light mode', default: 'forge-light', control: { type: 'theme-select' } },
+  { key: 'themeDark', category: 'Appearance', group: 'Theme', label: 'Theme for dark mode', default: 'oceanic', control: { type: 'theme-select' } },
   { key: 'accent', category: 'Appearance', group: 'Theme', label: 'Accent color', default: '', control: { type: 'color' },
     description: 'Overrides the theme’s accent. Clear it to use the theme’s own.' },
   { key: 'accentCycle', category: 'Appearance', group: 'Theme', label: 'Rainbow accent', default: false, control: onOff,
@@ -53,6 +58,8 @@ export const DEFS: SettingDef[] = [
     description: 'Gives each tool window its own color and tints tabs by file type.' },
   { key: 'glass', category: 'Appearance', group: 'Theme', label: 'Glass panels', default: false, control: onOff,
     description: 'Translucent panels and editor, so the animated background shows through.' },
+  { key: 'customCss', category: 'Appearance', group: 'Theme', label: 'Apply custom.css', default: true, control: onOff,
+    description: 'Your own styles from custom.css in the user-data folder. Turn off if a style breaks the layout.' },
 
   { key: 'background', category: 'Appearance', group: 'Background & motion', label: 'Window background', default: 'aurora',
     control: { type: 'select', options: opts(['aurora', 'Animated aurora'], ['gradient', 'Soft gradient'], ['solid', 'Solid color']) } },
@@ -139,7 +146,7 @@ function validate(def: SettingDef, v: unknown): Value | undefined {
   if (c.type === 'number') return typeof v === 'number' && Number.isFinite(v) ? Math.min(c.max, Math.max(c.min, v)) : undefined
   if (c.type === 'select') return typeof v === 'string' && c.options.some((o) => o.value === v) ? v : undefined
   if (c.type === 'color') return typeof v === 'string' && (v === '' || /^#[0-9a-f]{6}$/i.test(v)) ? v : undefined
-  return typeof v === 'string' ? v : undefined // text, theme
+  return typeof v === 'string' ? v : undefined // text, theme, theme-select
 }
 
 type Listener = (key: string, value: Value) => void
@@ -167,7 +174,9 @@ const data: Awaited<ReturnType<typeof window.forge.settingsLoad>> = await window
   themes: [],
   errors: [`Could not read your settings: ${err instanceof Error ? err.message : String(err)} — using defaults`],
   dir: '',
-  settingsPath: ''
+  settingsPath: '',
+  customCss: '',
+  customCssPath: ''
 }))
 export const userData = data
 
