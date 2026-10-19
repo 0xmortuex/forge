@@ -110,6 +110,7 @@ run(
     enter()
     check('inserting a line above moves the bookmark down with its text', !!(await waitFor(() => js("[...document.querySelectorAll('#view-bookmarks .bm')].some(r => r.dataset.line === '6' && r.textContent.includes('b line 5'))"), 3000)), await text('view-bookmarks'))
     key('Z', ['control']) // undo the insertion
+    await waitFor(() => js("[...document.querySelectorAll('#view-bookmarks .bm')].some(r => r.dataset.line === '5' && r.textContent.includes('b line 5'))"), 4000) // the bookmark follows it back up
 
     // Toggling on the bookmarked line removes it.
     await js("[...document.querySelectorAll('#view-bookmarks .bm')].find(r => r.textContent.includes('b.txt')).click()")

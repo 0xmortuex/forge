@@ -75,7 +75,9 @@ run(
       'the logpoint printed at every iteration without pausing',
       !!(await waitFor(async () => {
         const o = await runText()
-        return o.includes('val 0') && o.includes('val 4') && o.includes('done total=10')
+        // The terminal pane only shows its last rows, so the first iterations may have scrolled out of view: the later
+        // ones and the program's own final line prove the logpoint printed repeatedly and the run was not paused.
+        return (o.match(/val \d/g) ?? []).length >= 2 && o.includes('val 4') && o.includes('done total=10')
       }, 6000)),
       await runText()
     )
