@@ -838,3 +838,29 @@ body.no-breadcrumbs #breadcrumbs { display: none; }
 .db-null { color: var(--text-dim); font-style: italic; font-size: 11px; }
 .db-blob { color: var(--warn); font-size: 11px; }
 .db-trunc { padding: 8px 12px; color: var(--warn); font-size: 12px; }
+
+/* ---- Choose changes to commit (partial commits) ---- */
+.partial-pick { margin-left: auto; opacity: 0; width: 20px; height: 20px; }
+.change:hover .partial-pick, .partial-pick:focus-visible { opacity: 1; }
+.partial-badge { margin-left: auto; font-size: 10px; font-weight: 700; padding: 0 6px; border-radius: 8px; background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+.partial-badge + .partial-pick { margin-left: 4px; }
+#partial { align-items: center; z-index: 60; }
+.partial-box { width: min(980px, 92vw); height: min(78vh, 760px); display: flex; flex-direction: column; }
+.partial-head { flex: none; display: flex; align-items: baseline; gap: 16px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.partial-title { flex: 1; font-weight: 700; color: var(--text-hi); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.partial-count { color: var(--text-dim); font-size: 12px; }
+.partial-body { flex: 1; min-height: 0; overflow: auto; padding: 6px 0 10px; font: 12.5px/1.5 "JetBrains Mono", Consolas, monospace; user-select: text; }
+.partial-foot { flex: none; display: flex; gap: 8px; align-items: center; padding: 10px 16px; border-top: 1px solid var(--border); }
+.partial-hunk { margin: 8px 0 14px; }
+.partial-hunk-head { display: flex; align-items: center; gap: 8px; padding: 3px 14px; background: var(--island-2); color: var(--info); cursor: pointer; position: sticky; top: 0; z-index: 1; }
+.partial-note { color: var(--warn); font: 11px var(--ui); }
+.partial-line { display: flex; align-items: center; gap: 6px; padding: 0 14px; white-space: pre; }
+.partial-line.add { background: color-mix(in srgb, var(--ok) 14%, transparent); }
+.partial-line.del { background: color-mix(in srgb, var(--err) 14%, transparent); }
+.partial-line.ctx { color: var(--text-dim); }
+.partial-line input, .partial-hunk-head input { accent-color: var(--accent); margin: 0; flex: none; }
+.partial-pad { display: inline-block; width: 13px; flex: none; }
+.partial-sign { width: 10px; flex: none; font-weight: 700; }
+.partial-line.add .partial-sign { color: var(--ok); }
+.partial-line.del .partial-sign { color: var(--err); }
+.partial-text { flex: 1; }

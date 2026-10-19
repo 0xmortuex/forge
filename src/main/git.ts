@@ -1,8 +1,9 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { readFile, writeFile } from 'node:fs/promises'
-import { join, relative, resolve } from 'node:path'
+import { readFile, rm, writeFile } from 'node:fs/promises'
+import { basename, join, relative, resolve } from 'node:path'
 import { ipcMain } from 'electron'
+import { buildPatch, parseDiff, type FileDiff } from './gitpatch'
 
 export type ChangeKind = 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | 'conflict'
 
@@ -115,6 +116,23 @@ function gitOnce(cwd: string, args: string[], network: boolean): Promise<string>
         reject(new Error(`git ${args[0]}: ${stderr.trim() || err.message}`))
       }
     )
+  })
+}
+
+/** Runs git with extra environment variables and/or text on stdin (used for the temporary index of a partial commit). */
+function gitIn(cwd: string, args: string[], env: NodeJS.ProcessEnv, input?: string): Promise<string> {
+  return new Promise((resolvePromise, reject) => {
+    const child = execFile(
+      'git',
+      ['--no-optional-locks', '-c', 'core.quotepath=off', ...args],
+      { cwd, maxBuffer: MAX_BUFFER, encoding: 'utf8', windowsHide: true, env: { ...process.env, ...env } },
+      (err, stdout, stderr) => {
+        if (!err) return resolvePromise(stdout)
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return reject(new Error('git not found on PATH'))
+        reject(new Error(`git ${args[0]}: ${stderr.trim() || err.message}`))
+      }
+    )
+    if (input !== undefined) child.stdin?.end(input)
   })
 }
 
@@ -291,6 +309,19 @@ function parseNameStatus(repo: Repo, out: string): CommitFile[] {
     }
   }
   return files
+}
+
+async function requireHead(root: string): Promise<void> {
+  const ok = await git(root, ['rev-parse', '--verify', '--quiet', 'HEAD']).then(
+    () => true,
+    () => false
+  )
+  if (!ok) throw new Error('Choosing changes needs a first commit to compare with; commit the whole files this time')
+}
+
+async function fileDiff(root: string, repo: Repo, abs: string): Promise<FileDiff | null> {
+  await requireHead(root)
+  return parseDiff(await git(root, ['diff', 'HEAD', '--no-color', '--no-ext-diff', '--no-renames', '-U3', '--', toGitPath(repo, abs)]))
 }
 
 export function registerGit(): void {
@@ -634,6 +665,48 @@ export function registerGit(): void {
     }
     return parts.join('\n')
   })
+
+  /** A modified file's changes against HEAD, as hunks and lines, for choosing which of them to commit. */
+  ipcMain.handle('git:file-hunks', async (_e, root: string, abs: string): Promise<FileDiff | null> => {
+    const repo = await needRepo(root)
+    return fileDiff(root, repo, abs)
+  })
+
+  /**
+   * Commits only the chosen parts of some files, plus whole other files. The commit is made through a temporary index, so the
+   * real index, the working files and anything the user staged by hand are left as they were (apart from the committed paths).
+   */
+  ipcMain.handle(
+    'git:commit-partial',
+    async (_e, root: string, message: string, whole: string[], partial: { path: string; fingerprint: string; selected: number[][] }[]) => {
+      const repo = await needRepo(root)
+      if (!message.trim()) throw new Error('Commit message is empty')
+      if (!whole.length && !partial.length) throw new Error('No files selected to commit')
+      await requireHead(root)
+      const gitDir = (await git(root, ['rev-parse', '--absolute-git-dir'])).trim()
+      const tempIndex = join(gitDir, `forge-index-${process.pid}-${Date.now()}`)
+      const env = { GIT_INDEX_FILE: tempIndex }
+      const wholeRels = whole.map((p) => toGitPath(repo, p))
+      try {
+        await gitIn(root, ['read-tree', 'HEAD'], env)
+        if (wholeRels.length) await gitIn(root, ['add', '-A', '--', ...wholeRels], env)
+        for (const p of partial) {
+          const diff = await fileDiff(root, repo, p.path)
+          if (!diff || diff.fingerprint !== p.fingerprint) {
+            throw new Error(`${basename(p.path)} changed since you chose its changes. Choose them again.`)
+          }
+          const patch = buildPatch(diff, p.selected)
+          if (!patch) throw new Error(`No changes are chosen in ${basename(p.path)}`)
+          await gitIn(root, ['apply', '--cached', '--recount', '-'], env, patch)
+        }
+        await gitIn(root, ['commit', '-m', message], env)
+      } finally {
+        await rm(tempIndex, { force: true })
+      }
+      // The real index still holds the old versions of what was committed: bring those paths up to date (nothing else changes).
+      await git(root, ['reset', '-q', '--', ...wholeRels, ...partial.map((p) => toGitPath(repo, p.path))])
+    }
+  )
 
   /** Adds a path to the repository's .gitignore (created if needed). */
   ipcMain.handle('git:ignore', async (_e, root: string, abs: string) => {

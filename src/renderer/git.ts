@@ -1,6 +1,7 @@
 import type { BlameLine, ChangeKind, GitChange, GitStatus } from '../main/git'
 import { ask, cleanCommitMessage, commitPrompt } from './ai'
 import { icons } from './icons'
+import { chooseChanges, type PartialChoice } from './partial'
 import { askText, showMenu, type MenuItem } from './menu'
 
 export interface GitDeps {
@@ -61,6 +62,8 @@ export function initGit(deps: GitDeps): {
   let status: GitStatus | null = null
   let operation: string | null = null // a merge / rebase / cherry-pick / revert that is stopped half way
   const checked = new Map<string, boolean>() // path -> included in next commit (default true)
+  /** Files of which only some changes go into the next commit (chosen in "Choose Changes…"). */
+  const partial = new Map<string, PartialChoice>()
   const norm = (p: string): string => p.replace(/\\/g, '/').toLowerCase()
 
   // ---- Status ----
@@ -76,6 +79,7 @@ export function initGit(deps: GitDeps): {
       deps.report(`Git status: ${err instanceof Error ? err.message : String(err)}`, true)
       throw err
     }
+    for (const p of [...partial.keys()]) if (!status?.changes.some((c) => c.path === p && c.kind === 'modified')) partial.delete(p)
     render()
     deps.onStatus(status?.changes ?? [])
     deps.onIgnored(status?.ignored ?? [])
@@ -124,6 +128,25 @@ export function initGit(deps: GitDeps): {
       dir.className = 'dir'
       dir.textContent = dirname(c.path).slice(root.length).replace(/^[\\/]/, '')
       row.append(box, badge, name, dir)
+      const choice = partial.get(c.path)
+      if (c.kind === 'modified') {
+        if (choice) {
+          const part = document.createElement('span')
+          part.className = 'partial-badge'
+          part.textContent = `${choice.picked}/${choice.total}`
+          part.title = `Only ${choice.picked} of ${choice.total} changed lines will be committed`
+          row.append(part)
+        }
+        const pick = document.createElement('button')
+        pick.className = 'icon-btn small partial-pick'
+        pick.innerHTML = icons.commit
+        pick.title = 'Choose which changes of this file to commit…'
+        pick.onclick = (e) => {
+          e.stopPropagation()
+          void pickChanges(c)
+        }
+        row.append(pick)
+      }
       // A conflicted file has no meaningful diff: it is resolved in the editor, where its conflict blocks are marked.
       row.onclick = () => void (c.kind === 'conflict' ? deps.openFile(c.path) : deps.openDiff(c.path, c.kind)).catch(() => undefined) // reported by the opener
       row.oncontextmenu = (ev) => {
@@ -132,6 +155,30 @@ export function initGit(deps: GitDeps): {
       }
       list.append(row)
     }
+  }
+
+  /** Opens the dialog for a modified file and remembers what was chosen (everything chosen = the whole file). */
+  async function pickChanges(c: GitChange): Promise<void> {
+    const root = deps.getRoot()
+    if (!root) return
+    await deps
+      .guard('Choose changes', async () => {
+        await deps.saveAll() // the diff must be of what is on disk
+        const diff = await window.forge.gitFileHunks(root, c.path)
+        if (!diff) throw new Error(`${basename(c.path)} has no text changes to choose from`)
+        const result = await chooseChanges(basename(c.path), diff, partial.get(c.path))
+        if (!result) return
+        if (result.picked === result.total) partial.delete(c.path) // all of it: just the whole file
+        else if (result.picked === 0) {
+          partial.delete(c.path)
+          checked.set(c.path, false) // none of it: the file is left out
+        } else {
+          partial.set(c.path, result)
+          checked.set(c.path, true)
+        }
+        render()
+      })
+      .catch(() => undefined) // already reported by guard
   }
 
   // ---- Commit ----
@@ -186,16 +233,34 @@ export function initGit(deps: GitDeps): {
   async function commit(root: string, thenPush: boolean): Promise<void> {
     if (!status || operation) return
     const amend = amendBox.checked
-    const paths = status.changes.filter((c) => c.kind !== 'conflict' && (checked.get(c.path) ?? true)).map((c) => c.path)
+    const ticked = status.changes.filter((c) => c.kind !== 'conflict' && (checked.get(c.path) ?? true)).map((c) => c.path)
+    const chosen = ticked.filter((p) => partial.has(p)) // only some of their changes
+    const paths = ticked
+    if (chosen.length && amend) {
+      deps.report('Amend cannot commit only some changes of a file: untick Amend, or include those files whole (Choose Changes → Select All)', true)
+      return
+    }
     commitBtn.disabled = true
     pushCommitBtn.disabled = true
     await deps
       .guard(thenPush ? 'Commit and push' : 'Commit', async () => {
         await deps.saveAll() // git only commits what is on disk
-        await window.forge.gitCommit(root, message.value, paths, amend)
+        if (chosen.length) {
+          await window.forge.gitCommitPartial(
+            root,
+            message.value,
+            paths.filter((p) => !partial.has(p)),
+            chosen.map((p) => ({ path: p, fingerprint: partial.get(p)!.fingerprint, selected: partial.get(p)!.selected }))
+          )
+        } else {
+          await window.forge.gitCommit(root, message.value, paths, amend)
+        }
         message.value = ''
         amendBox.checked = false
-        for (const p of paths) checked.delete(p)
+        for (const p of paths) {
+          checked.delete(p)
+          partial.delete(p)
+        }
         deps.report(amend ? 'Amended the last commit' : `Committed ${paths.length} file${paths.length === 1 ? '' : 's'}`)
         await deps.onWorktreeChanged()
         if (thenPush) {
@@ -245,6 +310,7 @@ export function initGit(deps: GitDeps): {
       ]
     }
     const items: (MenuItem | 'sep')[] = [{ label: 'Show Diff', run: () => void deps.openDiff(c.path, c.kind).catch(() => undefined) }]
+    if (c.kind === 'modified') items.push({ label: 'Choose Changes to Commit…', run: () => void pickChanges(c) })
     if (!root) return items
     items.push('sep')
     const name = basename(c.path)

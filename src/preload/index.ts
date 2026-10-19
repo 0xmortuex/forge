@@ -11,6 +11,7 @@ import type { FsChange } from '../main/watch'
 import type { HttpRequestSpec, HttpResponse } from '../main/http'
 import type { InspectResult } from '../main/inspect'
 import type { DbQueryResult, DbSchema } from '../main/database'
+import type { FileDiff } from '../main/gitpatch'
 import type { AiEvent, AiRequest } from '../main/ai'
 import type { PtySpec } from '../main/terminal'
 
@@ -131,6 +132,9 @@ const api = {
   gitRevert: (root: string, path: string, kind: ChangeKind): Promise<void> =>
     ipcRenderer.invoke('git:revert', root, path, kind),
   gitDiffForCommit: (root: string, changes: { path: string; kind: ChangeKind }[]): Promise<string> => ipcRenderer.invoke('git:diff-for-commit', root, changes),
+  gitFileHunks: (root: string, abs: string): Promise<FileDiff | null> => ipcRenderer.invoke('git:file-hunks', root, abs),
+  gitCommitPartial: (root: string, message: string, whole: string[], partial: { path: string; fingerprint: string; selected: number[][] }[]): Promise<void> =>
+    ipcRenderer.invoke('git:commit-partial', root, message, whole, partial),
   gitCommit: (root: string, message: string, paths: string[], amend = false): Promise<void> => ipcRenderer.invoke('git:commit', root, message, paths, amend),
   debugLaunch: (cwd: string, cols: number, rows: number, spec: PtySpec, kind: DebugKind): Promise<number> =>
     ipcRenderer.invoke('debug:launch', cwd, cols, rows, spec, kind),
