@@ -88,16 +88,15 @@ async function run(name, files, scenario, options = {}) {
     if (win.isDestroyed()) return
     if (win.isMinimized()) win.restore()
     if (!win.isVisible()) win.show()
-    if (!win.isFocused()) {
-      win.focus()
-      wc.focus()
-    }
+    // Only the window is refocused here. Focusing the page again while keys are being typed can swallow one of them.
+    if (!win.isFocused()) win.focus()
   }
   win.setAlwaysOnTop(true, 'screen-saver')
   // FORGE_TEST_SIZE=1024x600 reproduces a small CI display locally.
   const size = /^(\d+)x(\d+)$/.exec(process.env['FORGE_TEST_SIZE'] ?? '')
   if (size) win.setSize(Number(size[1]), Number(size[2]))
   front()
+  wc.focus() // once, so the page has keyboard focus from the start
   // Layout-dependent checks (how many editor lines or gutter marks are rendered) must not depend on the display:
   // a small screen clamps the window, so emulate the app's default 1400x900 viewport whenever the real one is smaller.
   const [cw = 0, ch = 0] = win.getContentSize()

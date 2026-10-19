@@ -38,6 +38,8 @@ run(
     await js("document.querySelector('#editor .monaco-editor textarea').focus(); undefined")
     key('End', ['control'])
     await type('edited')
+    // Typing reaches the editor asynchronously: save only once all of it is there, or the snapshot could miss its end.
+    await waitFor(() => js("[...document.querySelectorAll('#editor .view-line')].some(l => l.textContent.includes('edited'))"), 4000)
     key('S', ['control'])
     check('saving stores another', !!(await waitFor(() => snapshots().length === 2, 4000)), String(snapshots().length))
     check('...holding the saved text', snapshots().some((s) => s.includes('edited')))
