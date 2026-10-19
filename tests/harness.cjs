@@ -94,7 +94,23 @@ async function run(name, files, scenario, options = {}) {
     }
   }
   win.setAlwaysOnTop(true, 'screen-saver')
+  // FORGE_TEST_SIZE=1024x600 reproduces a small CI display locally.
+  const size = /^(\d+)x(\d+)$/.exec(process.env['FORGE_TEST_SIZE'] ?? '')
+  if (size) win.setSize(Number(size[1]), Number(size[2]))
   front()
+  // Layout-dependent checks (how many editor lines or gutter marks are rendered) must not depend on the display:
+  // a small screen clamps the window, so emulate the app's default 1400x900 viewport whenever the real one is smaller.
+  const [cw, ch] = win.getContentSize()
+  if (cw < 1400 || ch < 860) {
+    wc.enableDeviceEmulation({
+      screenPosition: 'desktop',
+      screenSize: { width: 1400, height: 900 },
+      viewPosition: { x: 0, y: 0 },
+      viewSize: { width: 1400, height: 900 },
+      deviceScaleFactor: 0,
+      scale: 1
+    })
+  }
   setInterval(front, 200).unref() // something else on the desktop may minimize or defocus it mid-run
   await sleep(1500) // let the renderer finish initializing
 
