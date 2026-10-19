@@ -1,3 +1,5 @@
+import { KEYMAP_PRESETS } from './keymap-presets'
+
 // Every user-changeable option is declared once here. The Settings window is generated from this list,
 // settings.json stores only what differs from the defaults, and appearance.ts applies each value live.
 
@@ -81,7 +83,7 @@ export const DEFS: SettingDef[] = [
   { key: 'zoom', category: 'Appearance', group: 'Layout', label: 'Interface zoom', default: 100, control: { type: 'number', min: 60, max: 220, step: 10, unit: '%' } },
   { key: 'showStatusBar', category: 'Appearance', group: 'Layout', label: 'Show status bar', default: true, control: onOff },
   { key: 'keymapPreset', category: 'Keymap', group: 'Preset', label: 'Keymap preset', default: 'forge',
-    control: { type: 'select', options: opts(['forge', 'Forge (default)'], ['intellij', 'IntelliJ IDEA']) } },
+    control: { type: 'select', options: opts(...KEYMAP_PRESETS) } },
   { key: 'showStripe', category: 'Appearance', group: 'Layout', label: 'Show tool window buttons', default: true, control: onOff },
   { key: 'treeShowHidden', category: 'Appearance', group: 'Layout', label: 'Show hidden files in the Project tree', default: true, control: onOff, description: 'Files and folders whose names start with a dot (.git, .env ...).' },
   { key: 'treeFollow', category: 'Appearance', group: 'Layout', label: 'Select the open file in the Project tree', default: false, control: onOff, description: 'Switching tabs expands the tree to that file.' },
@@ -113,6 +115,8 @@ export const DEFS: SettingDef[] = [
   { key: 'inlayHints', category: 'Editor', group: 'Display', label: 'Inline hints', default: 'onUnlessPressed',
     description: 'Parameter names and inferred types shown inside the code, from the language server.',
     control: { type: 'select', options: opts(['on', 'Always'], ['onUnlessPressed', 'Always (hold Ctrl+Alt to hide)'], ['offUnlessPressed', 'Never (hold Ctrl+Alt to show)'], ['off', 'Never']) } },
+  { key: 'postfix', category: 'Editor', group: 'Display', label: 'Postfix templates', default: true, control: onOff,
+    description: 'Type value.log, items.for, user.if and similar, then accept the suggestion to rewrite the expression (JavaScript, TypeScript, Python, Java, Kotlin, C#, Go, Rust).' },
   { key: 'spellcheck', category: 'Editor', group: 'Display', label: 'Check spelling', default: true, control: onOff,
     description: 'Underlines misspelled words in comments, strings, Markdown and text files (English). Ctrl+. offers corrections.' },
   { key: 'emmet', category: 'Editor', group: 'Display', label: 'Emmet abbreviations', default: true, control: onOff,

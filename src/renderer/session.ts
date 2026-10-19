@@ -21,6 +21,8 @@ export interface SessionState {
   lastFolder?: string
   recents: string[]
   openFiles: string[]
+  /** The open files that are pinned. */
+  pinned?: string[]
   activeFile?: string
   /** Most recently opened files first (Recent Files). */
   recentFiles?: string[]
@@ -78,6 +80,7 @@ function load(raw: Record<string, unknown>): SessionState {
     lastFolder: typeof raw['lastFolder'] === 'string' ? raw['lastFolder'] : undefined,
     recents: strings(raw['recents']).slice(0, MAX_RECENTS),
     openFiles: strings(raw['openFiles']),
+    pinned: strings(raw['pinned']),
     activeFile: typeof raw['activeFile'] === 'string' ? raw['activeFile'] : undefined,
     recentFiles: strings(raw['recentFiles']),
     bookmarks: bookmarkList(raw['bookmarks']),

@@ -1,4 +1,5 @@
 import { commandById, commands, customKeys, effectiveKeys } from './commands'
+import { GLOBAL_PRESET_COMMANDS, KEYMAP_PRESETS, PRESETS } from './keymap-presets'
 import { settings } from './settings'
 
 // Custom shortcuts. A command's default shortcut keeps working; a custom one is an extra way to run it.
@@ -8,34 +9,7 @@ import { settings } from './settings'
 // duplicate a line, Ctrl+Y delete one, Ctrl+W extend the selection and so on. The user's shortcuts win over the preset's,
 // and only the user's are ever written to settings.json.
 
-export const KEYMAP_PRESETS: [id: string, label: string][] = [
-  ['forge', 'Forge (default)'],
-  ['intellij', 'IntelliJ IDEA']
-]
-
-// Preset commands that work anywhere in the window. Every other preset shortcut works only while the editor has focus,
-// so Ctrl+D is not stolen from a terminal (end of input) or Ctrl+Y from a text box (redo).
-const GLOBAL_PRESET_COMMANDS = new Set(['file.close'])
-
-// command id -> shortcut. These take over keys the editor or Forge would otherwise use (Ctrl+W closes a tab by default).
-const PRESETS: Record<string, Record<string, string>> = {
-  forge: {},
-  intellij: {
-    'code.duplicateLine': 'Ctrl+D',
-    'code.deleteLine': 'Ctrl+Y',
-    'code.extendSelection': 'Ctrl+W',
-    'code.shrinkSelection': 'Ctrl+Shift+W',
-    'file.close': 'Ctrl+F4',
-    'code.selectNext': 'Alt+J',
-    'code.unselectNext': 'Alt+Shift+J',
-    'code.selectAllOccurrences': 'Ctrl+Alt+Shift+J',
-    'code.moveLineUp': 'Alt+Shift+Up',
-    'code.moveLineDown': 'Alt+Shift+Down',
-    'code.replace': 'Ctrl+R',
-    'code.commentBlock': 'Ctrl+Shift+/',
-    'code.highlightUsages': 'Ctrl+Shift+F7'
-  }
-}
+export { KEYMAP_PRESETS }
 
 const KEY_NAMES: Record<string, string> = {
   Comma: ',', Period: '.', Slash: '/', Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']',

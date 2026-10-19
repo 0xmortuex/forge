@@ -52,6 +52,7 @@ import { initDuplicates } from './duplicates'
 import { initNpm } from './npm'
 import { initTestExplorer } from './testexplorer'
 import { initEmmet } from './emmet'
+import { initPostfix } from './postfix'
 import { registerExtraLanguages } from './languages'
 import { addToDictionary, initSpell, wordAtCursor } from './spell'
 import { initAiInline } from './aiinline'
@@ -82,6 +83,8 @@ interface OpenFile {
   savedVersion: number
   /** The text last known to be on disk (read or written by Forge); a file tab only. Tells our own writes from outside changes. */
   savedText?: string
+  /** Pinned tabs stay at the left, have no close button, and are skipped by Close All / Close Others. */
+  pinned?: boolean
   /** An image file: shown in the image viewer instead of the text editor. */
   image?: { url: string; bytes: number }
   // Present on diff tabs: the HEAD side, and the file tab whose model the right side edits (none for deleted files).
@@ -286,6 +289,7 @@ const isDirty = (f: OpenFile): boolean =>
 function tabMenu(f: OpenFile): (MenuItem | 'sep')[] {
   return [
     { label: 'Close', run: () => void requestClose(f) },
+    ...(f.diff ? [] : [{ label: f.pinned ? 'Unpin Tab' : 'Pin Tab', run: () => setPinned(f, !f.pinned) }]),
     { label: 'Close Others', run: () => closeTabs(f) },
     ...(f.diff || f.image ? [] : [{ label: 'Split Right', run: () => split.open(f.path, 'right') }, { label: 'Split Down', run: () => split.open(f.path, 'down') }]),
     { label: 'Close All', run: () => closeTabs() },
@@ -307,6 +311,7 @@ function moveTab(fromKey: string, toKey: string): void {
   entries.splice(to, 0, moved!)
   openFiles.clear()
   for (const [k, v] of entries) openFiles.set(k, v)
+  normalizePins() // a tab cannot be dragged in front of a pinned one, nor a pinned one behind the rest
   renderTabs()
 }
 // The mouse wheel scrolls a crowded tab bar sideways.
@@ -338,14 +343,24 @@ function renderTabs(): void {
       dot.textContent = '●'
       tab.append(dot)
     }
-    const close = document.createElement('span')
-    close.className = 'close'
-    close.innerHTML = icons.close
-    close.onclick = (e) => {
-      e.stopPropagation()
-      requestClose(f)
+    if (f.pinned) {
+      // A pinned tab shows a pin where the close button would be: it is not closed by accident.
+      tab.classList.add('pinned')
+      const pin = document.createElement('span')
+      pin.className = 'pin'
+      pin.innerHTML = icons.pin
+      pin.title = 'Pinned: right-click the tab to unpin it'
+      tab.append(pin)
+    } else {
+      const close = document.createElement('span')
+      close.className = 'close'
+      close.innerHTML = icons.close
+      close.onclick = (e) => {
+        e.stopPropagation()
+        requestClose(f)
+      }
+      tab.append(close)
     }
-    tab.append(close)
     tab.onclick = () => activate(f)
     tab.onauxclick = (e) => {
       if (e.button !== 1) return
@@ -444,6 +459,10 @@ function cycleTab(delta: 1 | -1): void {
 
 /** User-initiated close: asks first if that would throw away unsaved edits. */
 function requestClose(f: OpenFile): boolean {
+  if (f.pinned) {
+    report('This tab is pinned: unpin it first (right-click the tab)')
+    return false
+  }
   const unsaved = f.diff ? f.diff.shared : f
   if (unsaved && isDirty(unsaved) && !confirm(`${basename(unsaved.path)} has unsaved changes. Close it and discard them?`)) return false
   if (!f.diff) {
@@ -470,8 +489,24 @@ function reopenClosedTab(): void {
 /** Close All / Close Others: stops at the first file whose unsaved edits the user wants to keep. */
 function closeTabs(keep?: OpenFile): void {
   for (const other of [...openFiles.values()]) {
-    if (other !== keep && !requestClose(other)) return
+    if (other === keep || other.pinned) continue // pinned tabs are left open
+    if (!requestClose(other)) return
   }
+}
+
+/** Pinned tabs first, each group in its own order. */
+function normalizePins(): void {
+  const entries = [...openFiles.entries()]
+  openFiles.clear()
+  for (const [k, v] of entries.filter(([, f]) => f.pinned)) openFiles.set(k, v)
+  for (const [k, v] of entries.filter(([, f]) => !f.pinned)) openFiles.set(k, v)
+}
+
+function setPinned(f: OpenFile, pinned: boolean): void {
+  f.pinned = pinned || undefined
+  normalizePins()
+  renderTabs()
+  saveSession()
 }
 
 /** Throws away the unsaved edits of the active file and reads it from disk again. */
@@ -1534,6 +1569,7 @@ tw.setOnShow('ai', () => {
 })
 initAiInline({ report })
 initEmmet(editor)
+initPostfix()
 registerExtraLanguages()
 {
   // The user's own language servers (settings.json "languageServers"): sent now and whenever the list changes.
@@ -2074,6 +2110,7 @@ function saveSession(): void {
   const docks = tw.layout()
   session.update({
     openFiles: [...openFiles.values()].filter((f) => !f.diff).map((f) => f.path),
+    pinned: [...openFiles.values()].filter((f) => f.pinned && !f.diff).map((f) => f.path),
     activeFile: (active?.diff ? active.diff.shared : active)?.path,
     layout: {
       projectWidth: width > 0 ? width : layout.projectWidth, // a hidden window measures 0: keep the last real size
@@ -2154,6 +2191,12 @@ async function restoreSession(): Promise<void> {
       }
     }
     if (s.activeFile) await openFile(s.activeFile).catch(() => undefined) // reported by guarded()
+    for (const p of s.pinned ?? []) {
+      const f = [...openFiles.values()].find((x) => !x.diff && samePath(x.path, p))
+      if (f) f.pinned = true
+    }
+    normalizePins()
+    renderTabs()
   } finally {
     restoring = false
     saveSession()

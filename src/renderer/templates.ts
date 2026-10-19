@@ -195,7 +195,8 @@ export function initTemplates(editor: monaco.editor.IStandaloneCodeEditor): Temp
           editor.setSelection(hit.range)
           insertSnippet(editor, hit.template.body)
         },
-        'forgeTemplateAtCursor && editorTextFocus && !editorReadonly'
+        // With a suggestion list open, Tab accepts the highlighted suggestion (which may be this very template, or a postfix one).
+        'forgeTemplateAtCursor && editorTextFocus && !editorReadonly && !suggestWidgetVisible'
       )
 
       monaco.languages.registerCompletionItemProvider('*', {
