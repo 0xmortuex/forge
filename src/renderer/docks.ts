@@ -70,6 +70,8 @@ export interface ToolWindows {
   activeIn: (dock: DockName) => string | undefined
   layout: () => Required<DockLayout>
   restore: (layout: DockLayout) => void
+  /** Puts every window back in the dock it was registered in, and shows every dock again. */
+  reset: () => void
   /** A small count shown on the window's tab and stripe button (empty text removes it). */
   setBadge: (id: string, text: string, tone?: 'err' | 'warn' | 'info') => void
   /** Re-reads visibility into the stripes and tabs (after something else changed a panel). */
@@ -80,6 +82,8 @@ const MIN_SIZE = 120
 
 export function createToolWindows(deps: ToolWindowDeps): ToolWindows {
   const windows = new Map<string, ToolWindowDef & { dock: DockName }>()
+  /** The dock each window was registered in, for reset(). */
+  const homes = new Map<string, DockName>()
   const docks: Record<DockName, Dock> = {
     left: { name: 'left', ...deps.els.left, active: undefined, userHidden: false },
     right: { name: 'right', ...deps.els.right, active: undefined, userHidden: true },
@@ -269,6 +273,7 @@ export function createToolWindows(deps: ToolWindowDeps): ToolWindows {
     register(def) {
       if (windows.has(def.id)) throw new Error(`Tool window registered twice: ${def.id}`)
       windows.set(def.id, { ...def })
+      homes.set(def.id, def.dock)
       render()
     },
     setOnShow(id, fn) {
@@ -303,6 +308,14 @@ export function createToolWindows(deps: ToolWindowDeps): ToolWindows {
         if (w && w.dock === name && w.passive !== false) docks[name].active = w.id
         const hidden = l.hidden?.[name]
         if (typeof hidden === 'boolean') docks[name].userHidden = hidden
+      }
+      render()
+    },
+    reset() {
+      for (const [id, home] of homes) get(id).dock = home
+      for (const name of DOCK_NAMES) {
+        docks[name].active = undefined
+        docks[name].userHidden = false
       }
       render()
     },

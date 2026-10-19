@@ -16,6 +16,7 @@ export interface BuiltinDeps {
   toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http') => void
   runHttp: () => void
   nextTab: (delta: 1 | -1) => void
+  resetLayout: () => void
   inspectCode: () => void
   openInBrowser: () => void
   splitEditor: (how: 'right' | 'down' | 'none') => void
@@ -247,6 +248,7 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'editor.splitDown', category: 'View', title: 'Split Down', run: () => d.splitEditor('down') })
   register({ id: 'editor.unsplit', category: 'View', title: 'Unsplit', run: () => d.splitEditor('none') })
   register({ id: 'code.inspect', category: 'Code', title: 'Inspect Code', run: d.inspectCode })
+  register({ id: 'view.resetLayout', category: 'View', title: 'Reset Layout', run: d.resetLayout })
   register({ id: 'tab.next', category: 'Navigate', title: 'Next Tab', keys: 'Ctrl+Tab', run: () => d.nextTab(1) })
   register({ id: 'tab.prev', category: 'Navigate', title: 'Previous Tab', keys: 'Ctrl+Shift+Tab', run: () => d.nextTab(-1) })
   register({ id: 'file.openInBrowser', category: 'File', title: 'Open in Browser', run: d.openInBrowser })

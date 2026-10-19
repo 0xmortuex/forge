@@ -1706,6 +1706,18 @@ registerBuiltinCommands({
   },
   gitBranches: () => showBranches(),
   nextTab: (delta) => cycleTab(delta),
+  resetLayout: () => {
+    // Tool windows go back to their original docks and sizes (the CSS defaults); the open files are left alone.
+    for (const id of ['project', 'bottom', 'right']) {
+      const el = $(id)
+      el.style.width = ''
+      el.style.height = ''
+    }
+    tw.reset()
+    tw.show('project')
+    tw.show('output')
+    saveSession()
+  },
   inspectCode: () => {
     showView('problems')
     problemsView.inspect().catch((err: unknown) => report(`Inspect Code: ${err instanceof Error ? err.message : String(err)}`, true))
