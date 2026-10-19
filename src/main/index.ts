@@ -96,6 +96,13 @@ ipcMain.handle('fs:rename', async (_e, from: string, to: string) => {
   await rename(from, to)
 })
 // Recycle Bin instead of permanent delete.
+// The minimize/maximize/close buttons are drawn by the OS over our toolbar; keep their colors in step with the theme.
+const COLOR = /^#[0-9a-f]{6}$/i
+ipcMain.handle('win:titleBar', (e, color: string, symbolColor: string) => {
+  if (!COLOR.test(color) || !COLOR.test(symbolColor)) throw new Error('Title bar colors must be #rrggbb')
+  if (process.platform === 'darwin') return // macOS keeps its own traffic lights
+  BrowserWindow.fromWebContents(e.sender)?.setTitleBarOverlay({ color, symbolColor, height: 40 })
+})
 ipcMain.handle('fs:trash', (_e, path: string) => shell.trashItem(path))
 ipcMain.handle('shell:reveal', (_e, path: string) => shell.showItemInFolder(path))
 ipcMain.handle('clipboard:write', (_e, text: string) => clipboard.writeText(text))

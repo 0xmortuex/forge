@@ -70,6 +70,7 @@ const stLang = $('st-lang')
 
 registerMort()
 const themeName = initAppearance() // theme, fonts, layout, motion: everything the user chose
+requestAnimationFrame(() => document.documentElement.classList.add('ready')) // the page fades in, already themed
 // Monaco's in-browser TS worker can't resolve node_modules, so its results are wrong or duplicated.
 // All TS/JS intelligence comes from the language server (see lsp.ts); only highlighting stays built in.
 for (const defaults of [

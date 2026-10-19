@@ -399,5 +399,9 @@ export function applyTheme(p: Palette, o: ThemeOptions = {}, animate = true): st
   monaco.editor.defineTheme(name, monacoTheme(p, o))
   monaco.editor.setTheme(name)
   setTerminalTheme(terminalTheme(p, o))
+  // The OS-drawn window buttons sit over the top of the window, so match what is behind them.
+  window.forge
+    .setTitleBar(mix(p.bg1, p.bg0, 0.3), p.text)
+    .catch((err: unknown) => console.error('Could not color the window buttons', err))
   return name
 }

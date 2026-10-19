@@ -94,6 +94,8 @@ const api = {
     ipcRenderer.on('app:flush', () => cb())
   },
   flushed: (): void => ipcRenderer.send('app:flushed'),
+  /** Colors for the native window buttons (Windows/Linux). */
+  setTitleBar: (color: string, symbolColor: string): Promise<void> => ipcRenderer.invoke('win:titleBar', color, symbolColor),
   /** 1 = 100%. */
   setZoom: (factor: number): void => webFrame.setZoomFactor(factor),
   /** Each subscription returns a function that removes it. */

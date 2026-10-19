@@ -444,3 +444,9 @@ body.reduced #aurora, body.reduced .logo, body.reduced .w-title, body.reduced.bu
 
 .empty-tree { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 36px 16px; color: var(--text-dim); text-align: center; animation: rise var(--t-slow) var(--ease); }
 .empty-tree p { margin: 0; }
+
+/* Fade in at startup, once the saved theme is applied (so there is no flash of the default colors).
+   The animation is a fallback: if the script never marks the page ready, it appears anyway after 2.5s. */
+html:not(.ready) body { opacity: 0; animation: reveal 0.01s 2.5s forwards; }
+html.ready body { transition: opacity 280ms ease-out; }
+@keyframes reveal { to { opacity: 1; } }
