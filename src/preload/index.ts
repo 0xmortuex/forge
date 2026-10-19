@@ -23,6 +23,7 @@ const api = {
   createFile: (path: string): Promise<void> => ipcRenderer.invoke('fs:createFile', path),
   createDir: (path: string): Promise<void> => ipcRenderer.invoke('fs:createDir', path),
   rename: (from: string, to: string): Promise<void> => ipcRenderer.invoke('fs:rename', from, to),
+  realpath: (path: string): Promise<string> => ipcRenderer.invoke('fs:realpath', path),
   trash: (path: string): Promise<void> => ipcRenderer.invoke('fs:trash', path),
 
   termCreate: (cwd: string, cols: number, rows: number, spec?: PtySpec): Promise<number> =>

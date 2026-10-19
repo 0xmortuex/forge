@@ -1,4 +1,5 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
+import { realpathSync } from 'node:fs'
 import { access, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { registerDebug } from './debug'
@@ -103,6 +104,9 @@ ipcMain.handle('win:titleBar', (e, color: string, symbolColor: string) => {
   if (process.platform === 'darwin') return // macOS keeps its own traffic lights
   BrowserWindow.fromWebContents(e.sender)?.setTitleBarOverlay({ color, symbolColor, height: 40 })
 })
+// The real path of a folder: aliases (symlinks, junctions, Windows 8.3 short names like RUNNER~1) resolved. Git,
+// debuggers and language servers all report real paths, so the project has to be addressed by one too.
+ipcMain.handle('fs:realpath', (_e, path: string) => realpathSync.native(path))
 ipcMain.handle('fs:trash', (_e, path: string) => shell.trashItem(path))
 ipcMain.handle('shell:reveal', (_e, path: string) => shell.showItemInFolder(path))
 ipcMain.handle('clipboard:write', (_e, text: string) => clipboard.writeText(text))

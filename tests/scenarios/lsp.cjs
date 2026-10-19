@@ -77,7 +77,11 @@ run(
     await openNode('hello.c')
     if (hasClangd) {
       await t.sleep(8000)
-      check('c: clangd starts without reporting errors', await js("document.querySelectorAll('#log .err').length === 0"))
+      check(
+        'c: clangd starts without reporting errors',
+        await js("document.querySelectorAll('#log .err').length === 0"),
+        await js("[...document.querySelectorAll('#log .err')].map(e => e.textContent).join(' | ')")
+      )
     } else {
       check(
         'c: missing clangd is reported clearly',

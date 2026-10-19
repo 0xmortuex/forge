@@ -702,6 +702,7 @@ async function openFolder(): Promise<void> {
 
 async function openFolderAt(dir: string): Promise<void> {
   await guarded('Open folder', async () => {
+    dir = await window.forge.realpath(dir) // before anything is addressed by this path (see fs:realpath)
     treeEl.replaceChildren()
     dirs.clear()
     dirs.set(norm(dir), { kids: treeEl, depth: -1 })

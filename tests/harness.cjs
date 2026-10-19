@@ -35,7 +35,8 @@ async function run(name, files, scenario, options = {}) {
   }
   process.env['FORGE_USER_DATA'] = userData
   dialog.showOpenDialog = /** @type {any} */ (async () => ({ canceled: false, filePaths: [root] }))
-  require('../out/main/index.js')
+  // Built dynamically so that `tsc` (which checks this file) doesn't need out/ to exist: a fresh clone type-checks before it builds.
+  require(path.join(__dirname, '..', 'out', 'main', 'index.js'))
 
   /** @type {boolean[]} */
   const results = []
