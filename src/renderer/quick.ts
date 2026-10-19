@@ -21,6 +21,8 @@ export interface QuickOptions<T> {
   emptyText?: string
   /** Which row starts selected (default: the first). */
   selected?: number
+  /** Extra actions for a row: right-click, or the right arrow key. `at` is where to show a menu. */
+  onContext?: (data: T, at: { x: number; y: number }) => void
 }
 
 const byId = <E extends HTMLElement>(id: string): E => {
@@ -106,6 +108,13 @@ export function quickPick<T>(opts: QuickOptions<T>): void {
         row.append(d)
       }
       row.onclick = () => choose(i)
+      if (opts.onContext) {
+        row.classList.add('has-ctx')
+        row.oncontextmenu = (ev) => {
+          ev.preventDefault()
+          context(i, ev.clientX, ev.clientY)
+        }
+      }
       row.onmouseenter = () => {
         if (selected !== i) {
           selected = i
@@ -119,6 +128,14 @@ export function quickPick<T>(opts: QuickOptions<T>): void {
   const mark = (): void => {
     results.querySelectorAll('.result').forEach((el, i) => el.classList.toggle('sel', i === selected))
     results.querySelector('.sel')?.scrollIntoView({ block: 'nearest' })
+  }
+
+  /** Runs a row's extra actions; the popup stays open behind the menu until one is picked. */
+  function context(i: number, x: number, y: number): void {
+    const hit = shown[i]
+    if (!hit || !opts.onContext) return
+    close()
+    opts.onContext(hit.item.data, { x, y })
   }
 
   function choose(i: number): void {
@@ -145,6 +162,10 @@ export function quickPick<T>(opts: QuickOptions<T>): void {
       close()
       restoreFocus()
     } else if (e.key === 'Enter') choose(selected)
+    else if (e.key === 'ArrowRight' && opts.onContext && input.selectionStart === input.value.length) {
+      const box = results.querySelector('.sel')?.getBoundingClientRect()
+      if (box) context(selected, box.right - 40, box.top + box.height)
+    }
     else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault()
       if (!shown.length) return

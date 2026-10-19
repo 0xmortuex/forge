@@ -148,10 +148,12 @@ run('git-remote', { 'a.txt': 'one\ntwo\n' }, async (t) => {
     check('the Commit window ends up clean', !!(await waitFor(async () => (await text('commit-summary')) === 'No changes', 5000)))
 
     // A new branch is published with its first push
-    await click('branch-widget')
-    await menuOpen()
-    await menuClick('New Branch')
+    await click('branch-widget') // the Branches popup: its first row is "New Branch…"
+    await waitFor(() => js("!document.getElementById('quick').hidden"), 3000)
+    await t.type('New Branch')
     await sleep(200)
+    key('Enter')
+    await sleep(300)
     await ask('feature')
     await waitFor(async () => (await widget()).startsWith('feature'), 8000)
     await click('commit-push')

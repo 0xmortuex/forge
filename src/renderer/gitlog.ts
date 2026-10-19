@@ -1,6 +1,8 @@
-import type { CommitDetails, CommitFile, CommitInfo, OpResult } from '../main/git'
+import type { BranchInfo, CommitDetails, CommitFile, CommitInfo, OpResult } from '../main/git'
 import { fileIcon } from './icons'
+import { icons } from './icons'
 import { askText, showMenu, type MenuItem } from './menu'
+import { quickPick } from './quick'
 
 // The Git window: the commit history with a graph, filters, and the details and changed files of the selected commit.
 // Operations on a commit (cherry-pick, revert, new branch, reset ...) are in its context menu.
@@ -11,7 +13,9 @@ export interface GitLogDeps {
   getRoot: () => string | null
   report: (msg: string, isError?: boolean) => void
   guard: (label: string, fn: () => Promise<void>) => Promise<void>
-  /** Opens a read-only diff: \`left\` against \`right\` (text), titled after \`path\`. */
+  /** Opens a diff of `original` against the real file (editable on the right). */
+  showDiff: (path: string, original: string, deleted?: boolean) => Promise<void>
+  /** Opens a read-only diff: `left` against `right` (text), titled after `path`. */
   showStaticDiff: (path: string, label: string, left: string, right: string) => Promise<void>
   /** Brings the window on screen. */
   reveal: () => void
@@ -26,6 +30,8 @@ export interface GitLog {
   showFileHistory: (path: string) => Promise<void>
   /** Runs an operation that can stop on conflicts and reports how it went. */
   runOp: (label: string, op: () => Promise<OpResult>) => Promise<void>
+  /** The Branches popup: switch, create, merge, rebase, rename, delete, compare. */
+  showBranches: () => Promise<void>
 }
 
 const PAGE = 200
@@ -211,19 +217,20 @@ export function initGitLog(deps: GitLogDeps): GitLog {
     }
   }
 
+  let reloadAfter = false // a full reload was asked for while one was running
+
   async function load(reset: boolean): Promise<void> {
     const root = deps.getRoot()
-    if (!root || loading) return
+    if (!root) return
+    if (loading) {
+      if (reset) reloadAfter = true // don't lose it: run again as soon as this one is done
+      return
+    }
     const mine = ++seq
     loading = true
     try {
-      if (reset) {
-        commits = []
-        more = true
-        listEl.replaceChildren()
-        await fillBranches()
-      }
-      const skip = commits.length
+      if (reset) await fillBranches()
+      const skip = reset ? 0 : commits.length
       const page = await window.forge.gitLog(root, {
         branch: current(),
         text: msgInput.value.trim() || undefined,
@@ -234,23 +241,25 @@ export function initGitLog(deps: GitLogDeps): GitLog {
       })
       if (mine !== seq) return
       more = page.length === PAGE
-      commits.push(...page)
+      // The list is only replaced once the new commits are here, so it is never seen empty in between.
+      commits = reset ? page : [...commits, ...page]
       graph = layoutGraph(commits)
       graphWidth = Math.max(1, ...graph.map((g) => g.width)) * LANE_W + 6
-      if (reset) listEl.replaceChildren()
-      else if (!filtered()) {
-        // The graph of earlier rows may have gained lanes: simplest to draw it all again.
+      if (reset || !filtered()) {
+        // The graph of earlier rows may have gained lanes when more were loaded: simplest to draw it all again.
         listEl.replaceChildren()
         drawRows(0)
-        return
-      }
-      drawRows(reset ? 0 : skip)
+      } else drawRows(skip)
       if (!commits.length) listEl.append(el('div', 'hint', filtered() ? 'No commits match the filters' : 'No commits yet'))
     } catch (err) {
       deps.report(`Git log: ${err instanceof Error ? err.message : String(err)}`, true)
       throw err
     } finally {
       loading = false
+      if (reloadAfter) {
+        reloadAfter = false
+        void load(true).catch(() => undefined) // reported where it fails
+      }
     }
   }
 
@@ -381,6 +390,125 @@ export function initGitLog(deps: GitLogDeps): GitLog {
     ]
   }
 
+  // ---- Branches ----
+  type BranchPick = { kind: 'new' } | { kind: 'fetch' } | { kind: 'branch'; b: BranchInfo }
+
+  async function compareWith(ref: string): Promise<void> {
+    const root = deps.getRoot()
+    if (!root) return
+    const files = await window.forge.gitDiffFiles(root, ref)
+    quickPick({
+      title: `Compare the working tree with ${ref}`,
+      placeholder: 'Type to filter files',
+      emptyText: `No differences from ${ref}`,
+      items: files.map((f) => ({
+        label: basename(f.path),
+        detail: `${f.status} · ${dirname(f.path).slice(root.length).replace(/^[\\/]/, '')}`,
+        icon: fileIcon(basename(f.path)),
+        data: f
+      })),
+      onChoose: (f) => {
+        void deps
+          .guard(`Compare ${basename(f.path)}`, async () => {
+            const left = f.status === 'A' ? '' : await window.forge.gitFileAt(root, ref, f.oldPath ?? f.path)
+            await deps.showDiff(f.path, left, f.status === 'D')
+          })
+          .catch(() => undefined)
+      }
+    })
+  }
+
+  function branchMenu(b: BranchInfo, cur: BranchInfo | undefined): (MenuItem | 'sep')[] {
+    const root = deps.getRoot()
+    if (!root) return []
+    const items: (MenuItem | 'sep')[] = []
+    const checkout = (): Promise<void> =>
+      plain('Checkout', () => window.forge.gitCheckout(root, b.name, b.remote ? 'remote' : 'local'), `Switched to ${b.name}`)
+    if (!b.current) items.push({ label: 'Checkout', run: () => void checkout() })
+    items.push({
+      label: `New Branch from '${b.name}'…`,
+      run: () =>
+        void (async () => {
+          const name = await askText('New branch name')
+          if (name) await plain('New branch', () => window.forge.gitBranchFrom(root, name, b.name), `Created and switched to ${name}`)
+        })()
+    })
+    items.push({ label: 'Compare with Working Tree…', run: () => void compareWith(b.name).catch((err: unknown) => deps.report(`Compare: ${String(err)}`, true)) })
+    if (cur && !b.current) {
+      items.push('sep')
+      items.push({ label: `Merge '${b.name}' into '${cur.name}'`, run: () => void runOp(`Merge ${b.name}`, () => window.forge.gitMerge(root, b.name)) })
+      if (!cur.remote) items.push({ label: `Rebase '${cur.name}' onto '${b.name}'`, run: () => void runOp(`Rebase onto ${b.name}`, () => window.forge.gitRebase(root, b.name)) })
+    }
+    items.push('sep')
+    if (!b.remote) {
+      items.push({
+        label: 'Rename…',
+        run: () =>
+          void (async () => {
+            const name = await askText('Rename branch', b.name)
+            if (name && name !== b.name) await plain('Rename', () => window.forge.gitRenameBranch(root, b.name, name), `Renamed ${b.name} to ${name}`)
+          })()
+      })
+    }
+    if (!b.current) {
+      items.push({
+        label: b.remote ? 'Delete Remote Branch…' : 'Delete…',
+        danger: true,
+        run: () =>
+          void plain(
+            'Delete branch',
+            async () => {
+              if (b.remote && !confirm(`Delete ${b.name} from the remote? This cannot be undone.`)) throw new Error('Cancelled')
+              try {
+                await window.forge.gitDeleteBranch(root, b.name, false, b.remote)
+              } catch (err) {
+                // git refuses to delete a branch whose commits aren't merged anywhere; that is the user's call.
+                if (!/not fully merged/i.test(String(err))) throw err
+                if (!confirm(`${b.name} has commits that are not merged. Delete it anyway?`)) throw new Error('Cancelled')
+                await window.forge.gitDeleteBranch(root, b.name, true, b.remote)
+              }
+            },
+            `Deleted ${b.name}`
+          )
+      })
+    }
+    return items
+  }
+
+  async function showBranches(): Promise<void> {
+    const root = deps.getRoot()
+    if (!root) return
+    const list = await window.forge.gitBranchesFull(root)
+    const cur = list.find((b) => b.current)
+    const detailOf = (b: BranchInfo): string =>
+      [b.current ? 'current' : b.remote ? 'remote' : 'local', b.upstream ? `tracks ${b.upstream}` : '', b.ahead ? `↑${b.ahead}` : '', b.behind ? `↓${b.behind}` : '']
+        .filter(Boolean)
+        .join(' · ')
+    const sorted = [...list].sort((a, b) => Number(b.current) - Number(a.current) || Number(a.remote) - Number(b.remote) || a.name.localeCompare(b.name))
+    const items: { label: string; detail?: string; icon?: string; data: BranchPick }[] = [
+      { label: 'New Branch…', detail: 'from the current branch', icon: '<span class="qplus">＋</span>', data: { kind: 'new' } },
+      { label: 'Fetch', detail: 'all remotes', icon: icons.refresh, data: { kind: 'fetch' } },
+      ...sorted.map((b) => ({ label: b.name, detail: detailOf(b), icon: `<span class="qbranch${b.remote ? ' remote' : ''}">${icons.branch}</span>`, data: { kind: 'branch', b } as BranchPick }))
+    ]
+    quickPick<BranchPick>({
+      title: 'Branches  (Enter switches · right-click or → for more)',
+      placeholder: 'Type to filter branches',
+      items,
+      onChoose: (pick) => {
+        if (pick.kind === 'new') {
+          void (async () => {
+            const name = await askText('New branch name')
+            if (name) await plain('New branch', () => window.forge.gitCreateBranch(root, name), `Created and switched to ${name}`)
+          })()
+        } else if (pick.kind === 'fetch') void plain('Fetch', () => window.forge.gitFetch(root), 'Fetched')
+        else if (!pick.b.current) void plain('Checkout', () => window.forge.gitCheckout(root, pick.b.name, pick.b.remote ? 'remote' : 'local'), `Switched to ${pick.b.name}`)
+      },
+      onContext: (pick, at) => {
+        if (pick.kind === 'branch') showMenu(at.x, at.y, branchMenu(pick.b, cur))
+      }
+    })
+  }
+
   // ---- Banner for an operation that stopped (merge / rebase / cherry-pick / revert) ----
   async function updateBanner(): Promise<void> {
     const root = deps.getRoot()
@@ -427,6 +555,7 @@ export function initGitLog(deps: GitLogDeps): GitLog {
   return {
     refresh,
     runOp,
+    showBranches,
     async showFileHistory(path) {
       filePath = path
       pathChip.hidden = false

@@ -28,7 +28,12 @@ export interface BuiltinDeps {
   compareWithClipboard: () => void
   showNotifications: () => void
   gitFileHistory: () => void
+  gitBranches: () => void
+  gitNextChange: () => void
+  gitAnnotate: () => void
+  gitPrevChange: () => void
   gitFetch: () => void
+  gitForcePush: () => void
   showHistory: () => void
   restoreHistory: () => void
   insertTemplate: () => void
@@ -227,6 +232,12 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'view.notifications', category: 'View', title: 'Show Notifications', run: d.showNotifications })
   register({ id: 'view.git', category: 'View', title: 'Toggle Git Window', keys: 'Alt+9', run: () => d.toggleView('git') })
   register({ id: 'git.fileHistory', category: 'Git', title: 'Show Git History for File', run: d.gitFileHistory })
+  register({ id: 'git.branches', category: 'Git', title: 'Branches…', run: d.gitBranches })
+  register({ id: 'git.annotate', category: 'Git', title: 'Annotate with Git Blame', run: d.gitAnnotate })
+  register({ id: 'git.nextChange', category: 'Git', title: 'Next Change', keys: 'Ctrl+Alt+Shift+Down', run: d.gitNextChange })
+  register({ id: 'git.prevChange', category: 'Git', title: 'Previous Change', keys: 'Ctrl+Alt+Shift+Up', run: d.gitPrevChange })
+  toggle('Editor', 'Git Changes in the Gutter', 'gitGutter')
+  register({ id: 'git.forcePush', category: 'Git', title: 'Force Push (with lease)', run: d.gitForcePush })
   register({ id: 'git.fetch', category: 'Git', title: 'Fetch', run: d.gitFetch })
   register({ id: 'history.show', category: 'Code', title: 'Show Local History', run: d.showHistory })
   register({ id: 'history.restore', category: 'Code', title: 'Restore from Local History', run: d.restoreHistory })

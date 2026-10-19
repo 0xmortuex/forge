@@ -61,7 +61,11 @@
           <div id="commit-list"></div>
           <div id="commit-foot">
             <textarea id="commit-msg" placeholder="Commit message" spellcheck="false"></textarea>
-            <button id="commit-btn">Commit</button>
+            <label class="amend"><input type="checkbox" id="commit-amend" /> Amend previous commit</label>
+            <div class="commit-actions">
+              <button id="commit-btn">Commit</button>
+              <button class="btn" id="commit-push-btn" title="Commit, then push">Commit &amp; Push</button>
+            </div>
           </div>
         </div>
       </aside>

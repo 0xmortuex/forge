@@ -42,6 +42,9 @@ import { initHierarchy } from './hierarchy'
 import { initTemplates, templateProblems } from './templates'
 import { initHistory } from './history'
 import { initGitLog } from './gitlog'
+import { initConflicts } from './conflicts'
+import { initGutter } from './gutter'
+import { initAnnotate } from './annotate'
 import type { ChangeKind, GitChange } from '../main/git'
 
 self.MonacoEnvironment = {
@@ -58,6 +61,8 @@ interface OpenFile {
   path: string
   model: monaco.editor.ITextModel // for a diff tab: the working-copy side (shared with the file tab when editable)
   savedVersion: number
+  /** The text last known to be on disk (read or written by Forge); a file tab only. Tells our own writes from outside changes. */
+  savedText?: string
   // Present on diff tabs: the HEAD side, and the file tab whose model the right side edits (none for deleted files).
   diff?: { original: monaco.editor.ITextModel; shared?: OpenFile }
 }
@@ -407,7 +412,7 @@ async function openFile(path: string, line?: number, column = 1): Promise<void> 
       const text = await window.forge.readFile(path)
       history.record(path, text) // the version as it was when opened
       const model = monaco.editor.createModel(text, undefined, monaco.Uri.file(path))
-      const f: OpenFile = { path, model, savedVersion: model.getAlternativeVersionId() }
+      const f: OpenFile = { path, model, savedVersion: model.getAlternativeVersionId(), savedText: text }
       model.onDidChangeContent(() => renderTabs())
       openFiles.set(path, f)
       bookmarks.onModelOpened(model, path)
@@ -435,10 +440,13 @@ async function saveActive(opts: { format?: boolean } = {}): Promise<void> {
         await editor.getAction('editor.action.formatDocument')?.run()
       })
     }
-    await window.forge.writeFile(f.path, f.model.getValue())
-    history.record(f.path, f.model.getValue())
-    if (samePath(f.path, userData.customCssPath)) setCustomCss(f.model.getValue()) // saving custom.css restyles live
-    f.savedVersion = f.model.getAlternativeVersionId()
+    const value = f.model.getValue()
+    const version = f.model.getAlternativeVersionId() // what was written; anything typed during the write is still unsaved
+    await window.forge.writeFile(f.path, value)
+    f.savedText = value
+    history.record(f.path, value)
+    if (samePath(f.path, userData.customCssPath)) setCustomCss(value) // saving custom.css restyles live
+    f.savedVersion = version
     renderTabs()
     report(`Saved ${basename(f.path)}`)
     extensions.emit('save', { path: f.path })
@@ -522,18 +530,99 @@ async function collapseTree(): Promise<void> {
   for (const [key, d] of dirs) if (d.setOpen && !d.kids.hidden && key !== norm(rootDir ?? '')) await d.setOpen(false)
 }
 
-/** Re-reads one directory's listing. Expanded subfolders inside it collapse. */
+/** Re-reads one directory's listing. Subfolders that were expanded inside it stay expanded. */
 async function refreshDir(dir: string): Promise<void> {
   const key = norm(dir)
   const d = dirs.get(key)
   if (!d) return
+  // Nothing to do if the folder's listing is what is already shown (watching reports folders that were merely read).
+  if (d.kids.childElementCount > 0) {
+    const shown = new Set([...d.kids.children].filter((c) => c.classList.contains('node')).map((c) => norm((c as HTMLElement).dataset['path'] ?? '')))
+    const entries = await window.forge.readDir(dir)
+    if (entries.length === shown.size && entries.every((e) => shown.has(norm(e.path)))) return
+  }
+  // Shallowest first, so each parent is open again before its children are.
+  const open = [...dirs.entries()].filter(([k, x]) => k.startsWith(key + '/') && x.setOpen && !x.kids.hidden).map(([k]) => k).sort((a, b) => a.length - b.length)
   for (const k of [...dirs.keys()]) if (k.startsWith(key + '/')) dirs.delete(k)
   const wasEmpty = d.kids.childElementCount === 0
-  d.kids.replaceChildren()
   // A folder that was never expanded stays lazy.
   if (wasEmpty && d.kids.hidden) return
-  await renderDir(dir, d.kids, d.depth + 1)
+  // Build the new rows off-screen and swap them in, so the tree is never seen half empty while the listing is read.
+  const fresh = document.createElement('div')
+  await renderDir(dir, fresh, d.depth + 1)
+  d.kids.replaceChildren(...fresh.childNodes)
+  decorateTree()
+  for (const k of open) await dirs.get(k)?.setOpen?.(true)
 }
+
+// ---- Changes made outside Forge ----
+let syncing = false
+let syncAgain: { paths: Set<string>; git: boolean; all: boolean } | null = null
+
+/** Brings the tree, the open files and the git status in line with what changed on disk. */
+async function applyExternalChanges(paths: Set<string>, gitChanged: boolean, all = false): Promise<void> {
+  if (syncing) {
+    // Changes arriving while one round is running are folded into the next round.
+    syncAgain ??= { paths: new Set(), git: false, all: false }
+    for (const p of paths) syncAgain.paths.add(p)
+    syncAgain.git ||= gitChanged
+    syncAgain.all ||= all
+    return
+  }
+  syncing = true
+  try {
+    // 1. the tree: re-read each folder that gained, lost or renamed something (and is shown)
+    const folders = new Set<string>()
+    for (const p of paths) folders.add(parentOf(p))
+    if (all) {
+      // Events were lost: check every folder that is shown and every open file.
+      for (const [key, d] of dirs) if (d.depth < 0 || (d.kids.childElementCount > 0 && !d.kids.hidden)) folders.add(key)
+      for (const f of openFiles.values()) if (!f.diff) paths.add(f.path)
+      gitChanged = true
+    }
+    for (const dir of folders) if (dirs.has(norm(dir))) await refreshDir(dir)
+    // 2. open files: reload the ones that changed on disk, unless they have unsaved edits
+    for (const p of paths) {
+      const f = [...openFiles.values()].find((x) => !x.diff && samePath(x.path, p))
+      if (!f) continue
+      let text: string
+      try {
+        text = await window.forge.readFile(f.path)
+      } catch (err) {
+        if ((err as { code?: string }).code === 'ENOENT' || /ENOENT/.test(String(err))) report(`${basename(f.path)} was deleted outside Forge (it stays open)`, true)
+        else report(`Reload ${basename(f.path)}: ${err instanceof Error ? err.message : String(err)}`, true)
+        continue
+      }
+      if (text === f.savedText) continue // our own write, or nothing new
+      f.savedText = text
+      if (text === f.model.getValue()) {
+        f.savedVersion = f.model.getAlternativeVersionId() // the disk and the editor agree: nothing unsaved
+        continue
+      }
+      if (isDirty(f)) {
+        report(`${basename(f.path)} changed on disk, but you have unsaved edits here. Saving will overwrite it.`, true)
+        continue
+      }
+      f.model.pushStackElement()
+      f.model.pushEditOperations([], [{ range: f.model.getFullModelRange(), text }], () => null)
+      f.model.pushStackElement()
+      f.savedVersion = f.model.getAlternativeVersionId()
+      report(`Reloaded ${basename(f.path)} (changed outside Forge)`)
+    }
+    renderTabs()
+    // 3. git
+    if (gitChanged || paths.size) refreshGit()
+  } finally {
+    syncing = false
+    const next = syncAgain
+    syncAgain = null
+    if (next) void applyExternalChanges(next.paths, next.git, next.all).catch((err: unknown) => report(`Sync: ${String(err)}`, true))
+  }
+}
+window.forge.onFsChanged((c) => {
+  void applyExternalChanges(new Set(c.paths), c.git, c.all).catch((err: unknown) => report(`Sync with disk: ${err instanceof Error ? err.message : String(err)}`, true))
+})
+window.forge.onFsWatchError((m) => report(`Watching the project for changes stopped: ${m}`, true))
 
 const joinPath = (dir: string, name: string): string => `${dir}${dir.includes('\\') ? '\\' : '/'}${name}`
 
@@ -631,6 +720,7 @@ async function openFolderAt(dir: string): Promise<void> {
     dirs.clear()
     dirs.set(norm(dir), { kids: treeEl, depth: -1 })
     rootDir = dir
+    await window.forge.watchRoot(dir)
     bookmarks.refresh()
     await renderDir(dir, treeEl)
     document.title = `${basename(dir)} – Forge`
@@ -810,6 +900,7 @@ const structure = initStructure({
   isVisible: () => tw.isOpen('structure')
 })
 tw.setOnShow('structure', () => void structure.refresh())
+initConflicts(editor)
 const history = initHistory({
   editor,
   currentPath: () => (active && !active.diff ? active.path : null),
@@ -965,11 +1056,14 @@ tw.setOnShow('find', () => findInput.focus())
 
 // ---- Git ----
 const gitKinds = new Map<string, ChangeKind>() // normalized path -> change kind
+let gitIgnored: string[] = [] // normalized paths git ignores (a folder covers everything in it)
 
 function decorateTree(): void {
   treeEl.querySelectorAll<HTMLElement>('.node[data-path]').forEach((n) => {
-    const kind = gitKinds.get(norm(n.dataset['path'] ?? '').toLowerCase())
+    const p = norm(n.dataset['path'] ?? '').toLowerCase()
+    const kind = gitKinds.get(p)
     if (kind) n.dataset['git'] = kind
+    else if (gitIgnored.some((i) => p === i || p.startsWith(i + '/'))) n.dataset['git'] = 'ignored'
     else delete n.dataset['git']
   })
 }
@@ -1045,6 +1139,7 @@ async function onWorktreeChanged(): Promise<void> {
     if (isDirty(f)) continue // never clobber unsaved edits
     try {
       const text = await window.forge.readFile(f.path)
+      f.savedText = text
       if (text !== f.model.getValue()) {
         f.model.setValue(text)
         f.savedVersion = f.model.getAlternativeVersionId()
@@ -1061,11 +1156,19 @@ const gitUi = initGit({
   report,
   guard: guarded,
   openDiff,
+  openFile: (path) => openFile(path),
+  saveAll: saveAllDirty,
+  pullMode: () => settings.get<'ff-only' | 'merge' | 'rebase'>('gitPullMode'),
+  onIgnored: (paths) => {
+    gitIgnored = paths.map((p) => norm(p).toLowerCase())
+    decorateTree()
+  },
   onStatus: (changes: GitChange[]) => {
     gitKinds.clear()
     for (const c of changes) gitKinds.set(norm(c.path).toLowerCase(), c.kind)
     decorateTree()
     refreshBlame()
+    gutter.invalidate() // the committed texts may have changed (commit, checkout, pull)
   },
   onWorktreeChanged
 })
@@ -1079,17 +1182,54 @@ window.addEventListener('focus', () => {
   if (settings.get<boolean>('gitRefreshOnFocus')) refreshGit() // changes made outside Forge
 })
 
+// Git can't show a file that isn't in HEAD (untracked, or the repository has no commits yet): no change marks then.
+const NOT_IN_HEAD = /not inside a git repository|exists on disk, but not in|does not exist in|invalid object name|unknown revision|bad revision/i
+const gutter = initGutter({
+  editor,
+  currentPath: () => (active && !active.diff ? active.path : null),
+  headText: async (path) => {
+    const root = rootDir
+    if (!root) return null
+    try {
+      return await window.forge.gitShow(root, path)
+    } catch (err) {
+      if (NOT_IN_HEAD.test(err instanceof Error ? err.message : String(err))) return null
+      throw err
+    }
+  },
+  openDiff: (path) => void openDiff(path, 'modified').catch(() => undefined), // reported by the opener
+  enabled: () => settings.get<boolean>('gitGutter'),
+  report
+})
+settings.onChange((key) => {
+  if (key === 'gitGutter') gutter.refresh()
+})
+const annotate = initAnnotate({
+  editor,
+  getRoot: () => rootDir,
+  currentPath: () => (active && !active.diff ? active.path : null),
+  isDirty: () => !!active && !active.diff && isDirty(active),
+  plainLineNumbers: () => settings.get<string>('lineNumbers') as monaco.editor.LineNumbersType,
+  report
+})
+const toggleAnnotate = (): void =>
+  void annotate.toggle().catch((err: unknown) => report(`Annotate: ${err instanceof Error ? err.message : String(err)}`, true))
+editor.addAction({ id: 'forge.annotate', label: 'Annotate with Git Blame', contextMenuGroupId: 'navigation', contextMenuOrder: 2.6, run: toggleAnnotate })
 const gitLog = initGitLog({
   root: $('view-git'),
   getRoot: () => rootDir,
   report,
   guard: guarded,
   showStaticDiff,
+  showDiff: (path, original, deleted) => guarded(`Diff ${basename(path)}`, () => showDiffTab(path, original, deleted)),
   reveal: () => showView('git'),
   onWorktreeChanged,
   refreshStatus: () => gitUi.refresh().catch(() => undefined) // gitUi reports its own failures
 })
 tw.setOnShow('git', () => void gitLog.refresh().catch(() => undefined)) // reported where it fails
+const showBranches = (): void =>
+  void gitLog.showBranches().catch((err: unknown) => report(`Git branches: ${err instanceof Error ? err.message : String(err)}`, true))
+$('branch-widget').onclick = showBranches
 const showFileHistory = (path: string): void =>
   void gitLog.showFileHistory(path).catch((err: unknown) => report(`Git history: ${err instanceof Error ? err.message : String(err)}`, true))
 
@@ -1098,9 +1238,12 @@ const showFileHistory = (path: string): void =>
 async function saveAllDirty(): Promise<void> {
   for (const f of openFiles.values()) {
     if (f.diff || !isDirty(f)) continue // a diff tab shares its file's model, which is saved via the file tab
-    await window.forge.writeFile(f.path, f.model.getValue())
-    history.record(f.path, f.model.getValue())
-    f.savedVersion = f.model.getAlternativeVersionId()
+    const value = f.model.getValue()
+    const version = f.model.getAlternativeVersionId()
+    await window.forge.writeFile(f.path, value)
+    f.savedText = value
+    history.record(f.path, value)
+    f.savedVersion = version
   }
   renderTabs()
 }
@@ -1231,6 +1374,11 @@ registerBuiltinCommands({
     if (active && !active.diff) showFileHistory(active.path)
     else report('Open a file to see its git history', true)
   },
+  gitBranches: () => showBranches(),
+  gitNextChange: () => gutter.next(),
+  gitForcePush: () => gitUi.push(true),
+  gitAnnotate: toggleAnnotate,
+  gitPrevChange: () => gutter.prev(),
   gitFetch: () => {
     const root = rootDir
     if (!root) return report('Open a project first', true)

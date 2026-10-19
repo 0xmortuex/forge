@@ -5,7 +5,7 @@ const path = require('node:path')
 const { run } = require('../harness.cjs')
 
 run('git', { 'a.txt': 'one\ntwo\n', 'src/b.ts': 'export const b = 1\n' }, async (t) => {
-  const { js, key, waitFor, check, root, sleep } = t
+  const { js, key, type, waitFor, check, root, sleep } = t
   const text = (/** @type {string} */ id) => js(`document.getElementById(${JSON.stringify(id)}).textContent`)
   const git = (/** @type {string[]} */ ...args) => {
     const r = spawnSync('git', args, { cwd: root, encoding: 'utf8' })
@@ -119,12 +119,13 @@ run('git', { 'a.txt': 'one\ntwo\n', 'src/b.ts': 'export const b = 1\n' }, async 
   check('diff tabs are closed after a commit', !(await text('tabs')).includes('(diff)'))
 
   // Branches
-  const menuClick = (/** @type {string} */ label) =>
-    js(`[...document.querySelectorAll('.ctx-item')].find(i => i.textContent.includes(${JSON.stringify(label)})).click()`)
+  // The branch widget opens the Branches popup: "New Branch…" is its first row.
   await js("document.getElementById('branch-widget').click()")
-  await waitFor(() => js("document.querySelectorAll('.ctx-item').length > 0"), 3000)
-  await menuClick('New Branch')
+  await waitFor(() => js("!document.getElementById('quick').hidden"), 3000)
+  await type('New Branch')
   await sleep(200)
+  key('Enter')
+  await sleep(300)
   await js("(() => { const i = document.getElementById('ask-input'); i.value = 'feature'; document.getElementById('ask-box').requestSubmit() })()")
   check(
     'New Branch creates and switches to it',
@@ -132,7 +133,9 @@ run('git', { 'a.txt': 'one\ntwo\n', 'src/b.ts': 'export const b = 1\n' }, async 
       !!(await waitFor(async () => (await text('branch-name')) === 'feature', 5000))
   )
   await js("document.getElementById('branch-widget').click()")
-  await waitFor(() => js("document.querySelectorAll('.ctx-item').length > 0"), 3000)
-  await menuClick('main')
-  check('picking a branch from the menu switches to it', !!(await waitFor(() => git('branch', '--show-current') === 'main', 8000)))
+  await waitFor(() => js("!document.getElementById('quick').hidden"), 3000)
+  await type('main')
+  await sleep(200)
+  key('Enter')
+  check('picking a branch from the popup switches to it', !!(await waitFor(() => git('branch', '--show-current') === 'main', 8000)))
 })

@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { readFile, writeFile } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import { ipcMain } from 'electron'
 
@@ -17,6 +18,8 @@ export interface GitStatus {
   ahead: number
   behind: number
   changes: GitChange[]
+  /** Paths git ignores (a folder is listed once, not file by file). */
+  ignored: string[]
 }
 
 export interface StashEntry {
@@ -174,6 +177,7 @@ async function status(root: string): Promise<GitStatus | null> {
   let ahead = 0
   let behind = 0
   const changes: GitChange[] = []
+  const ignored: string[] = []
   for (let i = 0; i < fields.length; i++) {
     const f = fields[i] ?? ''
     if (!f) continue
@@ -200,8 +204,11 @@ async function status(root: string): Promise<GitStatus | null> {
       changes.push({ path: resolve(repo.top, f.split(' ').slice(10).join(' ')), kind: 'conflict' })
     } else if (f.startsWith('? ')) changes.push({ path: resolve(repo.top, f.slice(2)), kind: 'untracked' })
   }
+  // Ignored files and folders (a folder as one entry). status --ignored would list every file inside them instead.
+  const ignoredOut = await git(root, ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '--full-name', '-z'])
+  for (const p of ignoredOut.split('\0')) if (p) ignored.push(resolve(repo.top, p))
   const detached = branch === '(detached)'
-  return { branch: detached ? oid.slice(0, 7) : branch, detached, upstream, ahead, behind, changes }
+  return { branch: detached ? oid.slice(0, 7) : branch, detached, upstream, ahead, behind, changes, ignored }
 }
 
 /** `git blame --porcelain` for a whole file: one entry per final line (index = line - 1). */
@@ -442,6 +449,14 @@ export function registerGit(): void {
     return null
   })
 
+  /** Resolves a conflicted file: take one side wholesale, or just mark the edited file resolved. Stages it either way. */
+  ipcMain.handle('git:resolve', async (_e, root: string, abs: string, how: 'ours' | 'theirs' | 'mark') => {
+    const repo = await needRepo(root)
+    const rel = toGitPath(repo, abs)
+    if (how !== 'mark') await git(root, ['checkout', `--${how}`, '--', rel])
+    await git(root, ['add', '--', rel])
+  })
+
   ipcMain.handle('git:reset', async (_e, root: string, sha: string, mode: 'soft' | 'mixed' | 'hard') => {
     await needRepo(root)
     await git(root, ['reset', `--${mode}`, sha])
@@ -493,22 +508,35 @@ export function registerGit(): void {
     await git(root, ['switch', '-c', name])
   })
 
-  /** Pushes the current branch; with no upstream yet, publishes it to origin and sets the upstream. */
-  ipcMain.handle('git:push', async (_e, root: string) => {
+  /**
+   * Pushes the current branch; with no upstream yet, publishes it to origin and sets the upstream. `force` uses
+   * --force-with-lease: it overwrites the remote branch only if nobody else has pushed to it since you last looked.
+   */
+  ipcMain.handle('git:push', async (_e, root: string, force = false) => {
     await needRepo(root)
     const st = await status(root)
     if (!st || st.detached) throw new Error('Cannot push: HEAD is detached')
-    if (st.upstream) return void (await git(root, ['push'], true))
+    if (st.upstream) return void (await git(root, ['push', ...(force ? ['--force-with-lease'] : [])], true))
     const remotes = (await git(root, ['remote'])).split('\n').map((s) => s.trim()).filter(Boolean)
     if (!remotes.length) throw new Error('Cannot push: this repository has no remote configured')
     if (!remotes.includes('origin')) throw new Error(`Cannot push: no "origin" remote (found: ${remotes.join(', ')})`)
-    await git(root, ['push', '--set-upstream', 'origin', st.branch], true)
+    await git(root, ['push', '--set-upstream', ...(force ? ['--force-with-lease'] : []), 'origin', st.branch], true)
   })
 
-  /** Fast-forward only: never creates a merge commit behind the user's back. */
-  ipcMain.handle('git:pull', async (_e, root: string) => {
+  /** How to bring in the remote's commits: fast-forward only (the default: never a merge behind your back), merge, or rebase. */
+  ipcMain.handle('git:pull', async (_e, root: string, mode: 'ff-only' | 'merge' | 'rebase' = 'ff-only'): Promise<OpResult> => {
     await needRepo(root)
-    await git(root, ['pull', '--ff-only'], true)
+    const args = mode === 'rebase' ? ['pull', '--rebase'] : mode === 'merge' ? ['pull', '--no-rebase', '--no-edit'] : ['pull', '--ff-only']
+    // Conflicts stop a merge/rebase half way: that is a state the user resolves, not an error (the network flag is needed
+    // for pull, so this repeats what operation() does).
+    try {
+      const out = await git(root, args, true)
+      return { ok: true, conflicts: false, message: out.trim() || 'Pulled' }
+    } catch (err) {
+      const st = await status(root)
+      if (st?.changes.some((c) => c.kind === 'conflict')) return { ok: false, conflicts: true, message: 'The pull stopped on conflicts. Resolve them, then continue — or abort.' }
+      throw err
+    }
   })
 
   ipcMain.handle('git:stashList', async (_e, root: string): Promise<StashEntry[]> => {
@@ -527,6 +555,12 @@ export function registerGit(): void {
     await needRepo(root)
     // -u: untracked files are part of "my changes" too.
     await git(root, ['stash', 'push', '--include-untracked', ...(message.trim() ? ['-m', message.trim()] : [])])
+  })
+
+  /** Applies a stash but keeps it in the list. */
+  ipcMain.handle('git:stashApply', async (_e, root: string, ref: string) => {
+    await needRepo(root)
+    await git(root, ['stash', 'apply', ref])
   })
 
   ipcMain.handle('git:stashPop', async (_e, root: string, ref: string) => {
@@ -553,12 +587,25 @@ export function registerGit(): void {
   })
 
   /** Commits exactly `paths`: stages them, then `commit --only` so other staged work is left out. */
-  ipcMain.handle('git:commit', async (_e, root: string, message: string, paths: string[]) => {
+  ipcMain.handle('git:commit', async (_e, root: string, message: string, paths: string[], amend = false) => {
     const repo = await needRepo(root)
-    if (!message.trim()) throw new Error('Commit message is empty')
-    if (!paths.length) throw new Error('No files selected to commit')
+    if (!amend && !message.trim()) throw new Error('Commit message is empty')
+    if (!amend && !paths.length) throw new Error('No files selected to commit')
     const rels = paths.map((p) => toGitPath(repo, p))
-    await git(root, ['add', '--', ...rels])
-    await git(root, ['commit', '-m', message, '--only', '--', ...rels])
+    if (rels.length) await git(root, ['add', '--', ...rels])
+    if (!amend) return void (await git(root, ['commit', '-m', message, '--only', '--', ...rels]))
+    // Amend: fold the selected files (if any) into the previous commit, optionally with a new message.
+    const msg = message.trim() ? ['-m', message] : ['--no-edit']
+    await git(root, ['commit', '--amend', ...msg, ...(rels.length ? ['--only', '--', ...rels] : [])])
+  })
+
+  /** Adds a path to the repository's .gitignore (created if needed). */
+  ipcMain.handle('git:ignore', async (_e, root: string, abs: string) => {
+    const repo = await needRepo(root)
+    const file = join(repo.top, '.gitignore')
+    const existing = existsSync(file) ? await readFile(file, 'utf8') : ''
+    const line = `/${toGitPath(repo, abs)}`
+    if (existing.split(/\r?\n/).includes(line)) return
+    await writeFile(file, existing + (existing && !existing.endsWith('\n') ? '\n' : '') + line + '\n', 'utf8')
   })
 }

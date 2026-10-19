@@ -6,6 +6,7 @@ import type { DebugEvent, DebugEval, DebugKind, DebugScope, DebugVar } from '../
 import type { BlameLine, BranchInfo, ChangeKind, CommitDetails, CommitFile, CommitInfo, GitStatus, LogQuery, OpResult, StashEntry } from '../main/git'
 import type { SearchResult } from '../main/search'
 import type { Snapshot } from '../main/history'
+import type { FsChange } from '../main/watch'
 import type { PtySpec } from '../main/terminal'
 
 const api = {
@@ -69,6 +70,8 @@ const api = {
   gitBranchFrom: (root: string, name: string, from: string): Promise<void> => ipcRenderer.invoke('git:branch-from', root, name, from),
   gitDeleteBranch: (root: string, name: string, force: boolean, remote: boolean): Promise<void> => ipcRenderer.invoke('git:delete-branch', root, name, force, remote),
   gitRenameBranch: (root: string, from: string, to: string): Promise<void> => ipcRenderer.invoke('git:rename-branch', root, from, to),
+  gitStashApply: (root: string, ref: string): Promise<void> => ipcRenderer.invoke('git:stashApply', root, ref),
+  gitIgnore: (root: string, path: string): Promise<void> => ipcRenderer.invoke('git:ignore', root, path),
   gitFetch: (root: string): Promise<void> => ipcRenderer.invoke('git:fetch', root),
   gitMerge: (root: string, branch: string): Promise<OpResult> => ipcRenderer.invoke('git:merge', root, branch),
   gitRebase: (root: string, onto: string): Promise<OpResult> => ipcRenderer.invoke('git:rebase', root, onto),
@@ -77,6 +80,7 @@ const api = {
   gitContinue: (root: string): Promise<OpResult> => ipcRenderer.invoke('git:continue', root),
   gitAbort: (root: string): Promise<void> => ipcRenderer.invoke('git:abort', root),
   gitInProgress: (root: string): Promise<string | null> => ipcRenderer.invoke('git:in-progress', root),
+  gitResolve: (root: string, path: string, how: 'ours' | 'theirs' | 'mark'): Promise<void> => ipcRenderer.invoke('git:resolve', root, path, how),
   gitReset: (root: string, sha: string, mode: 'soft' | 'mixed' | 'hard'): Promise<void> => ipcRenderer.invoke('git:reset', root, sha, mode),
   gitTag: (root: string, name: string, sha: string): Promise<void> => ipcRenderer.invoke('git:tag', root, name, sha),
   gitDiffFiles: (root: string, ref: string): Promise<CommitFile[]> => ipcRenderer.invoke('git:diff-files', root, ref),
@@ -88,16 +92,15 @@ const api = {
   gitSwitch: (root: string, branch: string): Promise<void> => ipcRenderer.invoke('git:switch', root, branch),
   gitCreateBranch: (root: string, name: string): Promise<void> =>
     ipcRenderer.invoke('git:createBranch', root, name),
-  gitPush: (root: string): Promise<void> => ipcRenderer.invoke('git:push', root),
-  gitPull: (root: string): Promise<void> => ipcRenderer.invoke('git:pull', root),
+  gitPush: (root: string, force = false): Promise<void> => ipcRenderer.invoke('git:push', root, force),
+  gitPull: (root: string, mode: 'ff-only' | 'merge' | 'rebase' = 'ff-only'): Promise<OpResult> => ipcRenderer.invoke('git:pull', root, mode),
   gitStashList: (root: string): Promise<StashEntry[]> => ipcRenderer.invoke('git:stashList', root),
   gitStashPush: (root: string, message: string): Promise<void> => ipcRenderer.invoke('git:stashPush', root, message),
   gitStashPop: (root: string, ref: string): Promise<void> => ipcRenderer.invoke('git:stashPop', root, ref),
   gitStashDrop: (root: string, ref: string): Promise<void> => ipcRenderer.invoke('git:stashDrop', root, ref),
   gitRevert: (root: string, path: string, kind: ChangeKind): Promise<void> =>
     ipcRenderer.invoke('git:revert', root, path, kind),
-  gitCommit: (root: string, message: string, paths: string[]): Promise<void> =>
-    ipcRenderer.invoke('git:commit', root, message, paths),
+  gitCommit: (root: string, message: string, paths: string[], amend = false): Promise<void> => ipcRenderer.invoke('git:commit', root, message, paths, amend),
   debugLaunch: (cwd: string, cols: number, rows: number, spec: PtySpec, kind: DebugKind): Promise<number> =>
     ipcRenderer.invoke('debug:launch', cwd, cols, rows, spec, kind),
   debugSetBreakpoints: (path: string, lines: number[]): Promise<void> =>
@@ -119,6 +122,14 @@ const api = {
   openSnippetsDir: (): Promise<string> => ipcRenderer.invoke('snippets:openDir'),
   toggleFullscreen: (): Promise<boolean> => ipcRenderer.invoke('win:toggleFullscreen'),
   extensionsList: (): Promise<ExtensionInfo[]> => ipcRenderer.invoke('extensions:list'),
+  /** Starts watching the project folder for changes made outside Forge (replacing any earlier watch). */
+  watchRoot: (root: string): Promise<void> => ipcRenderer.invoke('fs:watch', root),
+  onFsChanged: (cb: (change: FsChange) => void): void => {
+    ipcRenderer.on('fs:changed', (_e, change: FsChange) => cb(change))
+  },
+  onFsWatchError: (cb: (message: string) => void): void => {
+    ipcRenderer.on('fs:watchError', (_e, message: string) => cb(message))
+  },
   openExtensionsDir: (): Promise<string> => ipcRenderer.invoke('extensions:openDir'),
   /** The window is closing: write anything pending, then call flushed(). */
   onFlush: (cb: () => void): void => {

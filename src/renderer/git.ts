@@ -7,6 +7,14 @@ export interface GitDeps {
   report: (msg: string, isError?: boolean) => void
   guard: (label: string, fn: () => Promise<void>) => Promise<void>
   openDiff: (path: string, kind: ChangeKind) => Promise<void>
+  /** Opens a file in the editor (a conflicted file is resolved there). */
+  openFile: (path: string) => Promise<void>
+  /** Writes every modified open file to disk (git only sees what is on disk). */
+  saveAll: () => Promise<void>
+  /** The "Pull strategy" setting. */
+  pullMode: () => 'ff-only' | 'merge' | 'rebase'
+  /** Called with the ignored paths after every refresh (the tree dims them). */
+  onIgnored: (paths: string[]) => void
   /** Called with the new status after every refresh so the tree can recolor itself. */
   onStatus: (changes: GitChange[]) => void
   /** The working tree changed under us (branch switch / commit): reload open files, close stale diffs. */
@@ -28,6 +36,8 @@ const dirname = (p: string): string => p.replace(/[\\/][^\\/]*$/, '')
 
 export function initGit(deps: GitDeps): {
   refresh: () => Promise<void>
+  pull: () => void
+  push: (force: boolean) => void
   updateBlame: (path: string | null, line: number, dirty: boolean) => void
   changeKind: (path: string) => ChangeKind | undefined
 } {
@@ -37,6 +47,8 @@ export function initGit(deps: GitDeps): {
   const list = byId('commit-list')
   const message = byId<HTMLTextAreaElement>('commit-msg')
   const commitBtn = byId<HTMLButtonElement>('commit-btn')
+  const pushCommitBtn = byId<HTMLButtonElement>('commit-push-btn')
+  const amendBox = byId<HTMLInputElement>('commit-amend')
   const blameEl = byId('st-blame')
 
   byId('branch-icon').innerHTML = icons.branch
@@ -46,6 +58,7 @@ export function initGit(deps: GitDeps): {
   byId('commit-stash').innerHTML = icons.stash
 
   let status: GitStatus | null = null
+  let operation: string | null = null // a merge / rebase / cherry-pick / revert that is stopped half way
   const checked = new Map<string, boolean>() // path -> included in next commit (default true)
   const norm = (p: string): string => p.replace(/\\/g, '/').toLowerCase()
 
@@ -55,6 +68,7 @@ export function initGit(deps: GitDeps): {
     const root = deps.getRoot()
     try {
       status = root ? await window.forge.gitStatus(root) : null
+      operation = root && status ? await window.forge.gitInProgress(root) : null
     } catch (err) {
       status = null
       render()
@@ -63,6 +77,7 @@ export function initGit(deps: GitDeps): {
     }
     render()
     deps.onStatus(status?.changes ?? [])
+    deps.onIgnored(status?.ignored ?? [])
   }
 
   function render(): void {
@@ -81,7 +96,11 @@ export function initGit(deps: GitDeps): {
       commitBtn.disabled = true
       return
     }
-    commitBtn.disabled = false
+    const conflicted = status.changes.some((c) => c.kind === 'conflict')
+    // While a merge is open, the button finishes it instead (git does not allow a partial commit then).
+    commitBtn.textContent = operation ? `Complete ${operation}` : 'Commit'
+    commitBtn.disabled = conflicted
+    commitBtn.title = conflicted ? 'Resolve the conflicts first: open a conflicted file, accept a side, then right-click → Mark as Resolved' : ''
     summary.textContent = status.changes.length
       ? `${status.changes.length} change${status.changes.length === 1 ? '' : 's'}`
       : 'No changes'
@@ -104,7 +123,8 @@ export function initGit(deps: GitDeps): {
       dir.className = 'dir'
       dir.textContent = dirname(c.path).slice(root.length).replace(/^[\\/]/, '')
       row.append(box, badge, name, dir)
-      row.onclick = () => void deps.openDiff(c.path, c.kind).catch(() => undefined) // reported by the opener
+      // A conflicted file has no meaningful diff: it is resolved in the editor, where its conflict blocks are marked.
+      row.onclick = () => void (c.kind === 'conflict' ? deps.openFile(c.path) : deps.openDiff(c.path, c.kind)).catch(() => undefined) // reported by the opener
       row.oncontextmenu = (ev) => {
         ev.preventDefault()
         showMenu(ev.clientX, ev.clientY, changeMenu(c))
@@ -117,30 +137,98 @@ export function initGit(deps: GitDeps): {
   commitBtn.onclick = () => {
     const root = deps.getRoot()
     if (!root || !status) return
-    const paths = status.changes.filter((c) => checked.get(c.path) ?? true).map((c) => c.path)
+    if (operation) {
+      const op = operation
+      commitBtn.disabled = true
+      void deps
+        .guard(`Complete ${op}`, async () => {
+          const res = await window.forge.gitContinue(root)
+          deps.report(res.ok ? `Completed the ${op}` : res.message, !res.ok)
+          await deps.onWorktreeChanged()
+          await refresh()
+        })
+        .catch(() => undefined) // already reported by guard
+        .finally(() => (commitBtn.disabled = !status))
+      return
+    }
+    void commit(root, false)
+  }
+  byId('commit-push-btn').onclick = () => {
+    const root = deps.getRoot()
+    if (root && status) void commit(root, true)
+  }
+
+  /** Commits the ticked files (saving open ones first), and pushes too if asked. */
+  async function commit(root: string, thenPush: boolean): Promise<void> {
+    if (!status || operation) return
+    const amend = amendBox.checked
+    const paths = status.changes.filter((c) => c.kind !== 'conflict' && (checked.get(c.path) ?? true)).map((c) => c.path)
     commitBtn.disabled = true
-    void deps
-      .guard('Commit', async () => {
-        await window.forge.gitCommit(root, message.value, paths)
+    pushCommitBtn.disabled = true
+    await deps
+      .guard(thenPush ? 'Commit and push' : 'Commit', async () => {
+        await deps.saveAll() // git only commits what is on disk
+        await window.forge.gitCommit(root, message.value, paths, amend)
         message.value = ''
+        amendBox.checked = false
         for (const p of paths) checked.delete(p)
-        deps.report(`Committed ${paths.length} file${paths.length === 1 ? '' : 's'}`)
+        deps.report(amend ? 'Amended the last commit' : `Committed ${paths.length} file${paths.length === 1 ? '' : 's'}`)
         await deps.onWorktreeChanged()
+        if (thenPush) {
+          await window.forge.gitPush(root)
+          deps.report('Pushed')
+        }
         await refresh()
       })
       .catch(() => undefined) // already reported by guard
-      .finally(() => (commitBtn.disabled = !status))
+      .finally(() => {
+        commitBtn.disabled = !status
+        pushCommitBtn.disabled = !status
+      })
+  }
+
+  // Ticking "Amend" fills in the previous commit's message, so it can be kept or changed.
+  amendBox.onchange = () => {
+    const root = deps.getRoot()
+    if (!amendBox.checked || !root || message.value.trim()) return
+    void deps
+      .guard('Amend', async () => {
+        const last = await window.forge.gitCommitDetails(root, 'HEAD')
+        message.value = last.body ? `${last.subject}\n\n${last.body}` : last.subject
+      })
+      .catch(() => undefined) // already reported by guard
   }
   byId('commit-refresh').onclick = () => void refresh().catch(() => undefined)
 
   // ---- Revert / push / pull / stash ----
   function changeMenu(c: GitChange): (MenuItem | 'sep')[] {
-    const items: (MenuItem | 'sep')[] = [{ label: 'Show Diff', run: () => void deps.openDiff(c.path, c.kind).catch(() => undefined) }]
     const root = deps.getRoot()
+    if (c.kind === 'conflict') {
+      const name = basename(c.path)
+      const resolve = (how: 'ours' | 'theirs' | 'mark', done: string): void =>
+        void runOp('Resolve', async () => {
+          if (!root) return false
+          if (how === 'mark') await deps.saveAll() // the resolved text must be on disk before it is staged
+          await window.forge.gitResolve(root, c.path, how)
+          return true
+        }, done, true)
+      return [
+        { label: 'Open Conflicted File', run: () => void deps.openFile(c.path).catch(() => undefined) },
+        'sep',
+        { label: 'Accept Ours (whole file)', run: () => resolve('ours', `Took our version of ${name}`) },
+        { label: 'Accept Theirs (whole file)', run: () => resolve('theirs', `Took their version of ${name}`) },
+        { label: 'Mark as Resolved', run: () => resolve('mark', `Marked ${name} as resolved`) }
+      ]
+    }
+    const items: (MenuItem | 'sep')[] = [{ label: 'Show Diff', run: () => void deps.openDiff(c.path, c.kind).catch(() => undefined) }]
     if (!root) return items
     items.push('sep')
     const name = basename(c.path)
     if (c.kind === 'untracked') {
+      items.push({
+        label: 'Add to .gitignore',
+        run: () => void runOp('Ignore', async () => void (await window.forge.gitIgnore(root, c.path)), `Added ${name} to .gitignore`, false)
+      })
       items.push({
         label: 'Delete…',
         danger: true,
@@ -186,13 +274,35 @@ export function initGit(deps: GitDeps): {
       .catch(() => undefined) // already reported by guard
   }
 
-  byId('commit-pull').onclick = () => {
+  function pull(): void {
     const root = deps.getRoot()
-    if (root && status) void runOp('Pull', () => window.forge.gitPull(root), 'Pulled', true)
+    if (!root || !status) return
+    void deps
+      .guard('Pull', async () => {
+        const res = await window.forge.gitPull(root, deps.pullMode())
+        deps.report(res.conflicts ? res.message : res.ok && /Already up to date/i.test(res.message) ? 'Already up to date' : 'Pulled', res.conflicts)
+        await deps.onWorktreeChanged()
+        await refresh()
+      })
+      .catch(() => undefined) // already reported by guard
   }
-  byId('commit-push').onclick = () => {
+
+  function push(force: boolean): void {
     const root = deps.getRoot()
-    if (root && status) void runOp('Push', () => window.forge.gitPush(root), 'Pushed', false)
+    if (!root || !status) return
+    if (!force) return void runOp('Push', () => window.forge.gitPush(root), 'Pushed', false)
+    void runOp('Force push', async () => {
+      if (!confirm('Force-push the current branch? Commits on the remote that you do not have will be overwritten. (It refuses if someone else has pushed since you last fetched.)')) return false
+      await window.forge.gitPush(root, true)
+      return true
+    }, 'Force-pushed', false)
+  }
+
+  byId('commit-pull').onclick = pull
+  byId('commit-push').onclick = () => push(false)
+  byId('commit-push').oncontextmenu = (ev) => {
+    ev.preventDefault()
+    showMenu(ev.clientX, ev.clientY, [{ label: 'Force Push (with lease)…', danger: true, run: () => push(true) }])
   }
   byId('commit-stash').onclick = () => {
     const root = deps.getRoot()
@@ -216,6 +326,10 @@ export function initGit(deps: GitDeps): {
         if (stashes.length) items.push('sep')
         for (const s of stashes) {
           items.push({
+            label: `Apply: ${s.message}`,
+            run: () => void runOp('Stash apply', () => window.forge.gitStashApply(root, s.ref), `Applied ${s.ref} (kept in the stash list)`, true)
+          })
+          items.push({
             label: `Pop: ${s.message}`,
             run: () => void runOp('Stash pop', () => window.forge.gitStashPop(root, s.ref), `Applied and removed ${s.ref}`, true)
           })
@@ -231,44 +345,6 @@ export function initGit(deps: GitDeps): {
           })
         }
         showMenu(rect.left, rect.bottom + 4, items)
-      })
-      .catch(() => undefined) // already reported by guard
-  }
-
-  // ---- Branches ----
-  branchWidget.onclick = () => {
-    const root = deps.getRoot()
-    if (!root || !status) return
-    const current = status.branch
-    void deps
-      .guard('Git branches', async () => {
-        const branches = await window.forge.gitBranches(root)
-        const rect = branchWidget.getBoundingClientRect()
-        const items: (MenuItem | 'sep')[] = branches.map((b) => ({
-          label: (b === current ? '● ' : '   ') + b,
-          run: () => {
-            if (b !== current) void switchTo(() => window.forge.gitSwitch(root, b), `Switched to ${b}`)
-          }
-        }))
-        items.push('sep', { label: 'New Branch…', run: () => void newBranch(root) })
-        showMenu(rect.left, rect.bottom + 4, items)
-      })
-      .catch(() => undefined)
-  }
-
-  async function newBranch(root: string): Promise<void> {
-    const name = await askText('New branch name')
-    if (!name) return
-    await switchTo(() => window.forge.gitCreateBranch(root, name), `Created and switched to ${name}`)
-  }
-
-  async function switchTo(action: () => Promise<void>, done: string): Promise<void> {
-    await deps
-      .guard('Git', async () => {
-        await action()
-        deps.report(done)
-        await deps.onWorktreeChanged()
-        await refresh()
       })
       .catch(() => undefined) // already reported by guard
   }
@@ -329,6 +405,8 @@ export function initGit(deps: GitDeps): {
 
   return {
     refresh,
+    pull,
+    push,
     updateBlame,
     changeKind: (path) => status?.changes.find((c) => norm(c.path) === norm(path))?.kind
   }

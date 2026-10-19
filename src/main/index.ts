@@ -9,6 +9,7 @@ import { registerSettings } from './settings'
 import { searchProject } from './search'
 import { killAllLsp, registerLsp } from './lsp'
 import { registerHistory } from './history'
+import { registerWatch, stopWatching } from './watch'
 import { registerScratch } from './scratch'
 import { killAllTerminals, registerTerminal } from './terminal'
 import { walkFiles } from './walk'
@@ -131,9 +132,11 @@ registerLsp()
 registerGit()
 registerDebug()
 registerHistory()
+registerWatch()
 registerScratch()
 let terminalsEnded = false
 app.on('before-quit', (e) => {
+  stopWatching()
   killAllLsp()
   if (terminalsEnded) return
   // Hold the quit until the terminals have exited, then quit again (see killAllTerminals).
