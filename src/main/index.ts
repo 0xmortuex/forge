@@ -15,6 +15,7 @@ import { registerInspect } from './inspect'
 import { registerAi } from './ai'
 import { closeAllDatabases, registerDatabase } from './database'
 import { registerDuplicates } from './duplicates'
+import { registerSpell } from './spell'
 import { registerWatch, stopWatching } from './watch'
 import { registerScratch } from './scratch'
 import { killAllTerminals, registerTerminal } from './terminal'
@@ -177,6 +178,7 @@ registerInspect()
 registerAi()
 registerDatabase()
 registerDuplicates()
+registerSpell()
 registerWatch()
 registerScratch()
 let terminalsEnded = false

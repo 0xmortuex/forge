@@ -13,6 +13,7 @@ import type { HttpRequestSpec, HttpResponse } from '../main/http'
 import type { InspectResult } from '../main/inspect'
 import type { DbQueryResult, DbSchema } from '../main/database'
 import type { DupResult } from '../main/duplicates'
+import type { SpellDictionary } from '../main/spell'
 import type { FileDiff } from '../main/gitpatch'
 import type { AiEvent, AiRequest } from '../main/ai'
 import type { PtySpec } from '../main/terminal'
@@ -47,6 +48,7 @@ const api = {
     ipcRenderer.on('ai:event', listener)
     return () => ipcRenderer.removeListener('ai:event', listener)
   },
+  spellDictionary: (): Promise<SpellDictionary> => ipcRenderer.invoke('spell:dictionary'),
   findDuplicates: (root: string, minLines?: number): Promise<DupResult> => ipcRenderer.invoke('duplicates:find', root, minLines),
   dbOpen: (path: string): Promise<DbSchema> => ipcRenderer.invoke('db:open', path),
   dbQuery: (path: string, sql: string, limit?: number): Promise<DbQueryResult> => ipcRenderer.invoke('db:query', path, sql, limit),

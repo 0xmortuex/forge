@@ -113,6 +113,8 @@ export const DEFS: SettingDef[] = [
   { key: 'inlayHints', category: 'Editor', group: 'Display', label: 'Inline hints', default: 'onUnlessPressed',
     description: 'Parameter names and inferred types shown inside the code, from the language server.',
     control: { type: 'select', options: opts(['on', 'Always'], ['onUnlessPressed', 'Always (hold Ctrl+Alt to hide)'], ['offUnlessPressed', 'Never (hold Ctrl+Alt to show)'], ['off', 'Never']) } },
+  { key: 'spellcheck', category: 'Editor', group: 'Display', label: 'Check spelling', default: true, control: onOff,
+    description: 'Underlines misspelled words in comments, strings, Markdown and text files (English). Ctrl+. offers corrections.' },
   { key: 'emmet', category: 'Editor', group: 'Display', label: 'Emmet abbreviations', default: true, control: onOff,
     description: 'Type ul>li*3 or df in an HTML or CSS file and press Tab (or pick the suggestion) to expand it.' },
   { key: 'codeVision', category: 'Editor', group: 'Display', label: 'Show usages above declarations', default: true, control: onOff,

@@ -122,7 +122,8 @@ export function initProblems(deps: ProblemsDeps): ProblemsView {
   }
 
   function draw(): void {
-    const all = monaco.editor.getModelMarkers({}).filter((m) => m.resource.scheme === 'file')
+    // Typos are shown in the editor only: they would bury the real problems in this list.
+    const all = monaco.editor.getModelMarkers({}).filter((m) => m.resource.scheme === 'file' && m.owner !== 'spell')
     counts.error = counts.warning = counts.info = 0
     const open: Item[] = []
     for (const m of all) {

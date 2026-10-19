@@ -16,3 +16,5 @@ suite passed. "Not done" and "known gaps" are listed honestly at the end of this
 
 ## Editing
 - **Emmet** for HTML, XML, handlebars, razor, CSS, SCSS and Less: completion and Tab expansion.
+- **Spell checker** (English): typos in comments, strings, Markdown and text files; Quick Fix corrects, adds to the
+  dictionary or ignores. Words used as identifiers in the same file are never flagged in its comments.

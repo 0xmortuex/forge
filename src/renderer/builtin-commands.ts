@@ -15,6 +15,7 @@ export interface BuiltinDeps {
   toggleSide: (side: 'project' | 'commit') => void
   toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai' | 'database' | 'duplicates') => void
   findDuplicates: () => void
+  addWordToDictionary: () => void
   runHttp: () => void
   nextTab: (delta: 1 | -1) => void
   aiAction: (action: 'explain' | 'fix' | 'tests' | 'document' | 'refactor') => void
@@ -269,6 +270,7 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'code.inspect', category: 'Code', title: 'Inspect Code', run: d.inspectCode })
   register({ id: 'view.resetLayout', category: 'View', title: 'Reset Layout', run: d.resetLayout })
   register({ id: 'nav.goToTest', category: 'Navigate', title: 'Go to Test / Source', keys: 'Ctrl+Shift+T', run: d.goToTest })
+  register({ id: 'spell.addWord', category: 'Code', title: 'Add Word at Cursor to Dictionary', run: d.addWordToDictionary })
   register({ id: 'code.duplicates', category: 'Code', title: 'Find Duplicated Code', run: d.findDuplicates })
   register({ id: 'view.database', category: 'View', title: 'Toggle Database Window', run: () => d.toggleView('database') })
   register({ id: 'ai.toggle', category: 'AI', title: 'Toggle AI Assistant', keys: 'Alt+8', run: () => d.toggleView('ai') })

@@ -50,6 +50,7 @@ import { showSelectionHistory } from './selhistory'
 import { initDatabase } from './database'
 import { initDuplicates } from './duplicates'
 import { initEmmet } from './emmet'
+import { addToDictionary, initSpell, wordAtCursor } from './spell'
 import { initAiInline } from './aiinline'
 import type { Action } from './ai'
 import { naming, relatedFiles } from './related'
@@ -1500,6 +1501,7 @@ tw.setOnShow('ai', () => {
 })
 initAiInline({ report })
 initEmmet(editor)
+initSpell()
 {
   // Extensions hear about edits a moment after typing stops, not on every keystroke.
   let timer: number | undefined
@@ -1877,6 +1879,12 @@ registerBuiltinCommands({
   },
   gitSelectionHistory: () => void showSelectionHistoryOf().catch((err: unknown) => report(`History for selection: ${err instanceof Error ? err.message : String(err)}`, true)),
   findDuplicates: () => void dupView.scan().catch((err: unknown) => report(`Duplicates: ${err instanceof Error ? err.message : String(err)}`, true)),
+  addWordToDictionary: () => {
+    const word = wordAtCursor(editor)
+    if (!word) return report('Put the cursor in a word first', true)
+    addToDictionary(word)
+    report(`Added "${word.toLowerCase()}" to the dictionary`)
+  },
   gitBranches: () => showBranches(),
   nextTab: (delta) => cycleTab(delta),
   aiAction: (action) => runAiAction(action),
