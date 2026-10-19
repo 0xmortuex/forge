@@ -27,6 +27,7 @@ const api = {
   copyText: (text: string): Promise<void> => ipcRenderer.invoke('clipboard:write', text),
   exists: (path: string): Promise<boolean> => ipcRenderer.invoke('fs:exists', path),
   readDataUrl: (path: string): Promise<{ url: string; bytes: number }> => ipcRenderer.invoke('fs:readDataUrl', path),
+  openInBrowser: (path: string): Promise<void> => ipcRenderer.invoke('shell:openInBrowser', path),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
   httpSend: (spec: HttpRequestSpec): Promise<HttpResponse> => ipcRenderer.invoke('http:send', spec),
   copy: (from: string, to: string): Promise<void> => ipcRenderer.invoke('fs:copy', from, to),
@@ -93,6 +94,7 @@ const api = {
   gitTag: (root: string, name: string, sha: string): Promise<void> => ipcRenderer.invoke('git:tag', root, name, sha),
   gitDiffFiles: (root: string, ref: string): Promise<CommitFile[]> => ipcRenderer.invoke('git:diff-files', root, ref),
   gitStatus: (root: string): Promise<GitStatus | null> => ipcRenderer.invoke('git:status', root),
+  gitHeadText: (root: string, path: string): Promise<string | null> => ipcRenderer.invoke('git:head-text', root, path),
   gitShow: (root: string, path: string): Promise<string> => ipcRenderer.invoke('git:show', root, path),
   gitBlame: (root: string, path: string): Promise<BlameLine[] | null> =>
     ipcRenderer.invoke('git:blame', root, path),

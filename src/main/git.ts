@@ -479,6 +479,18 @@ export function registerGit(): void {
     return git(root, ['show', `HEAD:${toGitPath(repo, abs)}`])
   })
 
+  /** The file at HEAD, or null when there is none to compare with (no repository, no commits, or the file is new). */
+  ipcMain.handle('git:head-text', async (_e, root: string, abs: string): Promise<string | null> => {
+    const repo = await repoFor(root)
+    if (!repo) return null
+    try {
+      return await git(root, ['show', `HEAD:${toGitPath(repo, abs)}`])
+    } catch (err) {
+      if (/exists on disk, but not in|does not exist in|invalid object name|unknown revision|bad revision|ambiguous argument/i.test((err as Error).message)) return null
+      throw err
+    }
+  })
+
   /** Null when the file isn't tracked yet (nothing to blame) — a normal state, not an error. */
   ipcMain.handle('git:blame', async (_e, root: string, abs: string): Promise<BlameLine[] | null> => {
     const repo = await needRepo(root)

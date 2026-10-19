@@ -74,9 +74,23 @@
         <main id="editor-area" class="island">
           <div id="tabs"></div>
           <div id="breadcrumbs" hidden></div>
-          <div id="editor"></div>
-          <div id="image-view" hidden></div>
-          <div id="diff" hidden></div>
+          <div id="editors">
+            <div id="pane1">
+              <div id="editor"></div>
+              <div id="image-view" hidden></div>
+              <div id="diff" hidden></div>
+            </div>
+            <div class="splitter v" id="split-editors" hidden></div>
+            <div id="pane2" hidden>
+              <div id="pane2-head">
+                <span id="pane2-name"></span>
+                <span class="grow"></span>
+                <button class="icon-btn small" id="pane2-swap" title="Show this file in the main editor">⇄</button>
+                <button class="icon-btn small" id="pane2-close" title="Close the split">✕</button>
+              </div>
+              <div id="editor2"></div>
+            </div>
+          </div>
           <div id="welcome">
             <div class="w-hero">
               <div class="w-logo">F</div>

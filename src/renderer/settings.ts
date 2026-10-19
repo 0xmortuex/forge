@@ -131,6 +131,9 @@ export const DEFS: SettingDef[] = [
   { key: 'autoSaveDelay', category: 'Editor', group: 'Editing', label: 'Auto save delay', default: 1000, control: { type: 'number', min: 200, max: 10000, step: 100, unit: 'ms' } },
 
   // ---- Terminal ----
+  { key: 'terminalShell', category: 'Terminal', group: 'Shell', label: 'Shell', default: 'default',
+    description: 'What new terminals run. Takes effect for terminals opened from now on.',
+    control: { type: 'select', options: opts(['default', 'System default'], ['powershell', 'Windows PowerShell'], ['pwsh', 'PowerShell 7 (pwsh)'], ['cmd', 'Command Prompt'], ['git-bash', 'Git Bash'], ['wsl', 'WSL']) } },
   { key: 'terminalFontFamily', category: 'Terminal', group: 'Font', label: 'Font family', default: DEFAULT_TERMINAL_FONT, control: { type: 'text', list: ['Cascadia Mono', 'Cascadia Code', 'Consolas', 'JetBrains Mono', 'Fira Code', 'Courier New'], placeholder: 'Font name or CSS list' } },
   { key: 'terminalFontSize', category: 'Terminal', group: 'Font', label: 'Font size', default: 13, control: { type: 'number', min: 8, max: 32, step: 1, unit: 'px' } },
   { key: 'terminalLineHeight', category: 'Terminal', group: 'Font', label: 'Line height', default: 1, control: { type: 'number', min: 1, max: 2, step: 0.05, unit: '×' } },

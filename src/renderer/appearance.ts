@@ -177,6 +177,7 @@ function applyEditor(key?: string): void {
   if (!editor || !diff) return
   const o = editorOptions()
   editor.updateOptions(o)
+  for (const e of extras) e.updateOptions(o)
   diff.updateOptions(o as monaco.editor.IDiffEditorOptions)
   if (key === 'tabSize' || key === 'insertSpaces') {
     for (const m of monaco.editor.getModels()) m.updateOptions({ tabSize: num('tabSize'), insertSpaces: bool('insertSpaces') })
@@ -216,6 +217,13 @@ export function initAppearance(): string {
 }
 
 /** Once the editors exist, setting changes can reach them. */
+const extras = new Set<monaco.editor.IStandaloneCodeEditor>()
+/** Another editor (the split pane) that follows the editor settings too. */
+export function bindExtraEditor(e: monaco.editor.IStandaloneCodeEditor): void {
+  extras.add(e)
+  e.updateOptions(editorOptions())
+}
+
 export function bindEditors(e: monaco.editor.IStandaloneCodeEditor, d: monaco.editor.IStandaloneDiffEditor): void {
   editor = e
   diff = d

@@ -1,6 +1,7 @@
 import { Terminal, type ITheme } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import { settings } from './settings'
 
 // Set from the active theme (see themes.ts); until then, a neutral dark default.
 let currentTheme: ITheme = { background: '#263238', foreground: '#b0bec5', cursor: '#26c6b0' }
@@ -67,9 +68,15 @@ function isAppShortcut(e: KeyboardEvent): boolean {
   if (e.altKey && !e.ctrlKey && !e.metaKey && /^Digit\d$/.test(e.code)) return true
   if (/^F\d+$/.test(e.key)) return true
   if (!e.ctrlKey && !e.metaKey) return false
-  if (e.code === 'Comma' || e.code === 'Backquote') return true
+  if (e.code === 'Comma' || e.code === 'Backquote' || e.code === 'Tab' || e.code === 'PageDown' || e.code === 'PageUp') return true
   if (e.altKey) return e.code === 'KeyZ' || e.code === 'KeyS'
   return e.shiftKey && (e.code === 'KeyP' || e.code === 'KeyF')
+}
+
+/** The shell chosen in Settings, as something to start; undefined = the system default. */
+export function shellSpec(): { file: string; args: string[] } | undefined {
+  const choice = settings.get<string>('terminalShell')
+  return choice === 'default' ? undefined : { file: choice === 'powershell' ? 'powershell.exe' : choice === 'cmd' ? 'cmd.exe' : choice === 'wsl' ? 'wsl.exe' : choice, args: [] }
 }
 
 /** One pty-backed xterm shown in `container`. */
@@ -138,7 +145,7 @@ export function createTerminalView(
   function startShell(): Promise<void> {
     const cwd = getCwd()
     if (!cwd) throw new Error('Open a folder first (Ctrl+O) — the terminal starts in the project folder')
-    return begin((cols, rows) => window.forge.termCreate(cwd, cols, rows))
+    return begin((cols, rows) => window.forge.termCreate(cwd, cols, rows, shellSpec()))
   }
 
   return {

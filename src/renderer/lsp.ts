@@ -122,6 +122,8 @@ export function initLsp(deps: LspDeps): {
   documentSymbols: (model: monaco.editor.ITextModel) => Promise<monaco.languages.DocumentSymbol[] | null>
   /** Symbols matching `query` anywhere in the project (from every running language server). */
   workspaceSymbols: (query: string) => Promise<SymbolHit[]>
+  /** Before files are renamed or moved: lets the language servers update imports. Returns how many edits were made. */
+  willRename: (files: { from: string; to: string }[]) => Promise<number>
 } {
   const docs = new Map<string, Doc>()
   // Completion items keep their raw LSP form so they can be resolved lazily.
@@ -691,6 +693,25 @@ export function initLsp(deps: LspDeps): {
     return out
   }
 
+  async function willRename(files: { from: string; to: string }[]): Promise<number> {
+    const root = deps.getRoot()
+    if (!root) return 0
+    const answers = await window.forge.lspWorkspace(root, 'workspace/willRenameFiles', {
+      files: files.map((f) => ({ oldUri: monaco.Uri.file(f.from).toString(), newUri: monaco.Uri.file(f.to).toString() }))
+    })
+    let edits = 0
+    for (const a of answers) {
+      // A server that does not do this (python, clangd ...) says so; that is not a problem.
+      if (a.error) {
+        if (/unhandled method|method not found|not supported/i.test(a.error)) continue
+        deps.report(`Updating references (${a.server}): ${a.error}`, true)
+        continue
+      }
+      if (a.result) edits += (await applyWorkspaceEdit(a.result as WorkspaceEdit, { getModel: deps.getModel })).edits
+    }
+    return edits
+  }
+
   deps.editor.addAction({
     id: 'forge.goImplementation',
     label: 'Go to Implementation',
@@ -826,6 +847,7 @@ export function initLsp(deps: LspDeps): {
     closeDoc,
     documentSymbols,
     workspaceSymbols,
+    willRename,
     async quietFormat(fn) {
       quietFormat = true
       try {

@@ -15,6 +15,9 @@ export interface BuiltinDeps {
   toggleSide: (side: 'project' | 'commit') => void
   toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http') => void
   runHttp: () => void
+  nextTab: (delta: 1 | -1) => void
+  openInBrowser: () => void
+  splitEditor: (how: 'right' | 'down' | 'none') => void
   runTests: () => void
   findReplace: () => void
   newTerminal: () => void
@@ -239,6 +242,12 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'view.http', category: 'View', title: 'Toggle HTTP Response', run: () => d.toggleView('http') })
   register({ id: 'http.run', category: 'Code', title: 'Run HTTP Request', keys: 'Ctrl+Enter', run: d.runHttp })
   register({ id: 'run.tests', category: 'Run', title: 'Run Tests in This File', run: d.runTests })
+  register({ id: 'editor.splitRight', category: 'View', title: 'Split Right', run: () => d.splitEditor('right') })
+  register({ id: 'editor.splitDown', category: 'View', title: 'Split Down', run: () => d.splitEditor('down') })
+  register({ id: 'editor.unsplit', category: 'View', title: 'Unsplit', run: () => d.splitEditor('none') })
+  register({ id: 'tab.next', category: 'Navigate', title: 'Next Tab', keys: 'Ctrl+Tab', run: () => d.nextTab(1) })
+  register({ id: 'tab.prev', category: 'Navigate', title: 'Previous Tab', keys: 'Ctrl+Shift+Tab', run: () => d.nextTab(-1) })
+  register({ id: 'file.openInBrowser', category: 'File', title: 'Open in Browser', run: d.openInBrowser })
   register({ id: 'view.todo', category: 'View', title: 'Toggle TODO Window', run: () => d.toggleView('todo') })
   register({ id: 'nav.replaceInFiles', category: 'Navigate', title: 'Replace in Files', keys: 'Ctrl+Shift+R', run: d.findReplace })
   register({ id: 'view.git', category: 'View', title: 'Toggle Git Window', keys: 'Alt+9', run: () => d.toggleView('git') })

@@ -2,6 +2,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
 import { realpathSync } from 'node:fs'
 import { access, cp, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { registerDebug } from './debug'
 import { registerExtensions, registerExtensionScheme } from './extensions'
 import { registerGit } from './git'
@@ -110,6 +111,12 @@ ipcMain.handle('fs:readDataUrl', async (_e, path: string): Promise<{ url: string
   const buf = await readFile(path)
   if (buf.length > MAX_IMAGE_BYTES) throw new Error(`${basename(path)} is too large to show (${Math.round(buf.length / 1048576)} MB)`)
   return { url: `data:${mime};base64,${buf.toString('base64')}`, bytes: buf.length }
+})
+
+/** Opens an HTML or SVG file from the project in the default browser. */
+ipcMain.handle('shell:openInBrowser', (_e, path: string) => {
+  if (!/\.(html?|svg|xhtml)$/i.test(path)) throw new Error('Only HTML and SVG files can be opened in the browser')
+  return shell.openExternal(pathToFileURL(path).href)
 })
 
 /** Opens a web or mail link in the user's browser. Anything else is refused. */

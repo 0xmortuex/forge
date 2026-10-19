@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { delimiter, extname, isAbsolute, join } from 'node:path'
+import { delimiter, dirname, extname, isAbsolute, join } from 'node:path'
 import { ipcMain, type WebContents } from 'electron'
 import * as pty from 'node-pty'
 
@@ -32,6 +32,18 @@ export function findOnPath(cmd: string): string {
   throw new Error(`${cmd} not found on PATH`)
 }
 
+/** "git-bash" means the bash that ships with Git for Windows; everything else is looked up on PATH. */
+function resolveProgram(name: string): string {
+  if (name !== 'git-bash') return findOnPath(name)
+  const git = findOnPath('git') // ...\Git\cmd\git.exe (or ...\bin\git.exe)
+  const root = dirname(dirname(git))
+  for (const rel of [join('bin', 'bash.exe'), join('usr', 'bin', 'bash.exe')]) {
+    const candidate = join(root, rel)
+    if (existsSync(candidate)) return candidate
+  }
+  throw new Error('Git Bash was not found next to git. Install Git for Windows, or choose another shell in Settings.')
+}
+
 /**
  * Starts a pseudo-terminal running `spec` (default: the user's shell) and streams it to `wc`.
  * `tap` sees every chunk of output first, e.g. to read a debugger's listening URL;
@@ -46,7 +58,7 @@ export function startPty(
   tap?: (data: string) => void,
   onExit?: (code: number) => void
 ): number {
-  const file = spec ? findOnPath(spec.file) : process.platform === 'win32' ? 'powershell.exe' : (process.env['SHELL'] ?? '/bin/bash')
+  const file = spec ? resolveProgram(spec.file) : process.platform === 'win32' ? 'powershell.exe' : (process.env['SHELL'] ?? '/bin/bash')
   const id = nextId++
   const term = pty.spawn(file, spec?.args ?? [], {
     name: 'xterm-256color',

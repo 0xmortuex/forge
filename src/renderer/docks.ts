@@ -147,6 +147,8 @@ export function createToolWindows(deps: ToolWindowDeps): ToolWindows {
         decorate(tab, w)
         d.tabs.append(tab)
       }
+      // With many windows in one dock the tabs overflow: keep the shown one in view.
+      d.tabs.querySelector('.btab.active')?.scrollIntoView({ inline: 'nearest', block: 'nearest' })
     }
     const stripeButton = (w: ToolWindowDef & { dock: DockName }): HTMLButtonElement => {
       const b = document.createElement('button')
@@ -203,6 +205,16 @@ export function createToolWindows(deps: ToolWindowDeps): ToolWindows {
     if (w.dock === to) return
     w.dock = to
     show(id)
+  }
+
+  // The mouse wheel scrolls a crowded tab bar sideways.
+  for (const name of DOCK_NAMES) {
+    const tabs = docks[name].tabs
+    tabs.addEventListener('wheel', (e) => {
+      if (!e.deltaY || tabs.scrollWidth <= tabs.clientWidth) return
+      e.preventDefault()
+      tabs.scrollLeft += e.deltaY
+    }, { passive: false })
   }
 
   // ---- Resizing: the left and right docks have a width, the bottom one a height ----

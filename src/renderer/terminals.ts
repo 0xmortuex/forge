@@ -1,5 +1,6 @@
 import { icons } from './icons'
-import { createTerminalView, type TerminalView } from './terminal'
+import { createTerminalView, shellSpec, type TerminalView } from './terminal'
+import { askText } from './menu'
 
 interface Pane {
   name: string
@@ -46,6 +47,14 @@ export function initTerminals(deps: TerminalsDeps): { show: () => void; newTermi
       }
       tab.append(name, close)
       tab.onclick = () => activate(p)
+      tab.ondblclick = () => {
+        void askText('Rename terminal', p.name).then((n) => {
+          if (n) {
+            p.name = n
+            render()
+          }
+        })
+      }
       tabsEl.append(tab)
     }
     const add = document.createElement('button')
@@ -97,7 +106,7 @@ export function initTerminals(deps: TerminalsDeps): { show: () => void; newTermi
     void deps
       .guard('Terminal', async () => {
         if (!cwd) throw new Error('Open a folder first (Ctrl+O) — the terminal starts in the project folder')
-        await pane.view.begin((cols, rows) => window.forge.termCreate(cwd, cols, rows))
+        await pane.view.begin((cols, rows) => window.forge.termCreate(cwd, cols, rows, shellSpec()))
       })
       .catch(async () => {
         // The error is already reported; don't leave a dead empty tab behind.

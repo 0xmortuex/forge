@@ -9,7 +9,7 @@ import JsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import CssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import HtmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
-import { initAppearance, bindEditors, editorOptions, setCustomCss } from './appearance'
+import { initAppearance, bindEditors, bindExtraEditor, editorOptions, setCustomCss } from './appearance'
 import { ensureSettingsFile, flushSettings, settings, userData } from './settings'
 import { initRipples, notifications, shouldToast, toast } from './effects'
 import { initPalette } from './commands'
@@ -49,6 +49,7 @@ import { initPreview } from './preview'
 import { initBreakpointsWindow } from './breakpoints'
 import { initHttpClient } from './httpclient'
 import { initTestRunner } from './testrunner'
+import { initSplit } from './split'
 import { formatForSave, initEditorConfig } from './editorconfig'
 import { initAnnotate } from './annotate'
 import type { ChangeKind, GitChange } from '../main/git'
@@ -274,6 +275,7 @@ function tabMenu(f: OpenFile): (MenuItem | 'sep')[] {
   return [
     { label: 'Close', run: () => void requestClose(f) },
     { label: 'Close Others', run: () => closeAll(f) },
+    ...(f.diff || f.image ? [] : [{ label: 'Split Right', run: () => split.open(f.path, 'right') }, { label: 'Split Down', run: () => split.open(f.path, 'down') }]),
     { label: 'Close All', run: () => closeAll() },
     'sep',
     { label: 'Copy Path', run: () => void window.forge.copyText(f.path) },
@@ -403,6 +405,14 @@ function showImage(f: OpenFile | null): void {
   view.replaceChildren(img, info)
 }
 
+/** Ctrl+Tab and friends: the next (or previous) tab, wrapping around. */
+function cycleTab(delta: 1 | -1): void {
+  const all = [...openFiles.values()]
+  if (all.length < 2) return
+  const i = all.findIndex((f) => f === active)
+  activate(all[(i + delta + all.length) % all.length] ?? null)
+}
+
 /** User-initiated close: asks first if that would throw away unsaved edits. */
 function requestClose(f: OpenFile): boolean {
   const unsaved = f.diff ? f.diff.shared : f
@@ -416,6 +426,7 @@ function closeFile(f: OpenFile): void {
   // A diff that edits this file's model must go first, or it would be left holding a disposed model.
   if (!f.diff) for (const d of [...openFiles.values()]) if (d.diff?.shared === f) closeFile(d)
   openFiles.delete(tabKey(f))
+  if (!f.diff) split.onFileClosed(f.path)
   if (f.diff) {
     // Monaco requires the diff editor to let go of its models before they are disposed.
     if (active === f) diffEditor.setModel(null)
@@ -433,6 +444,38 @@ function closeFile(f: OpenFile): void {
 
 // Windows paths are case-insensitive, and servers/Monaco may hand back a different drive-letter case.
 const samePath = (a: string, b: string): boolean => norm(a).toLowerCase() === norm(b).toLowerCase()
+
+const split = initSplit({
+  area: $('editors'),
+  pane: $('pane2'),
+  splitter: $('split-editors'),
+  host: $('editor2'),
+  name: $('pane2-name'),
+  getModel: (path) => [...openFiles.values()].find((f) => !f.diff && !f.image && samePath(f.path, path))?.model,
+  makeEditor: (host) => {
+    const e = monaco.editor.create(host, {
+      ...editorOptions(),
+      theme: themeName,
+      automaticLayout: true,
+      glyphMargin: true,
+      padding: { top: 6 },
+      renderLineHighlight: 'all',
+      scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10 },
+      model: null
+    })
+    bindExtraEditor(e)
+    return e
+  },
+  save: (path) => {
+    const f = [...openFiles.values()].find((x) => !x.diff && !x.image && samePath(x.path, path))
+    if (f) void saveActive({}, f).catch(() => undefined) // reported by guarded
+  },
+  activate: (path) => {
+    const f = [...openFiles.values()].find((x) => !x.diff && samePath(x.path, path))
+    if (f) activate(f)
+  },
+  changed: () => saveSession()
+})
 
 const editorConfig = initEditorConfig({
   getRoot: () => rootDir,
@@ -487,14 +530,14 @@ async function openFile(path: string, line?: number, column = 1): Promise<void> 
   }
 }
 
-async function saveActive(opts: { format?: boolean } = {}): Promise<void> {
+async function saveActive(opts: { format?: boolean } = {}, target?: OpenFile): Promise<void> {
   // From a diff tab, Save writes the file the diff is editing.
-  const f = active?.diff ? active.diff.shared : active
+  const f = target ?? (active?.diff ? active.diff.shared : active)
   if (!f || f.image) return // an image has no text to save
   await guarded(`Save ${basename(f.path)}`, async () => {
     // Format first when asked to (not for auto-save, which would move the text under the cursor), and only
     // when the editor is showing this file. A language without a formatter is skipped quietly.
-    if (opts.format !== false && settings.get<boolean>('formatOnSave') && active && !active.diff) {
+    if (opts.format !== false && !target && settings.get<boolean>('formatOnSave') && active && !active.diff) {
       await lsp.quietFormat(async () => {
         await editor.getAction('editor.action.formatDocument')?.run()
       })
@@ -756,6 +799,7 @@ async function renameEntry(path: string): Promise<void> {
     checkName(name)
     closeFilesUnder(path)
     const parent = parentOf(path)
+    await updateReferences(path, joinPath(parent, name))
     await window.forge.rename(path, joinPath(parent, name))
     await refreshDir(parent)
     refreshGit()
@@ -806,6 +850,7 @@ async function moveEntry(from: string, toDir: string): Promise<void> {
   await guarded(`Move ${basename(from)}`, async () => {
     const dest = joinPath(toDir, basename(from))
     closeFilesUnder(from)
+    await updateReferences(from, dest)
     await window.forge.rename(from, dest)
     await refreshDir(parentOf(from))
     await refreshDir(toDir)
@@ -833,8 +878,19 @@ async function pasteInto(dir: string): Promise<void> {
 async function moveEntryChecked(from: string, toDir: string): Promise<void> {
   const dest = joinPath(toDir, basename(from))
   closeFilesUnder(from)
+  await updateReferences(from, dest)
   await window.forge.rename(from, dest)
   await refreshDir(parentOf(from))
+}
+
+/** Asks the language servers to update imports for a rename or move. A failure is reported, but does not stop the rename. */
+async function updateReferences(from: string, to: string): Promise<void> {
+  try {
+    const n = await lsp.willRename([{ from, to }])
+    if (n) report(`Updated ${n} reference${n === 1 ? '' : 's'} to ${basename(from)} (open files are changed in the editor — save them)`)
+  } catch (err) {
+    report(`Updating references: ${err instanceof Error ? err.message : String(err)}`, true)
+  }
 }
 
 async function duplicateEntry(path: string): Promise<void> {
@@ -1043,6 +1099,11 @@ window.addEventListener('keydown', (e) => {
   // Cmd is the "Ctrl" of macOS.
   if (!(e.ctrlKey || (isMac && e.metaKey))) return
   if (e.code === 'Comma' && !e.shiftKey && !e.altKey) { e.preventDefault(); settingsUi.open(); return }
+  if (!e.altKey && (e.code === 'Tab' || e.code === 'PageDown' || e.code === 'PageUp')) {
+    e.preventDefault()
+    cycleTab(e.code === 'PageUp' || (e.code === 'Tab' && e.shiftKey) ? -1 : 1)
+    return
+  }
   if (e.altKey && !e.shiftKey && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
     e.preventDefault()
     void (e.code === 'ArrowLeft' ? nav.back() : nav.forward()).catch(() => undefined) // reported by the opener
@@ -1444,20 +1505,14 @@ window.addEventListener('focus', () => {
   if (settings.get<boolean>('gitRefreshOnFocus')) refreshGit() // changes made outside Forge
 })
 
-// Git can't show a file that isn't in HEAD (untracked, or the repository has no commits yet): no change marks then.
-const NOT_IN_HEAD = /not inside a git repository|exists on disk, but not in|does not exist in|invalid object name|unknown revision|bad revision/i
+// A file that isn't in HEAD (untracked, or the repository has no commits yet) has no change marks.
 const gutter = initGutter({
   editor,
   currentPath: () => (active && !active.diff ? active.path : null),
   headText: async (path) => {
     const root = rootDir
     if (!root) return null
-    try {
-      return await window.forge.gitShow(root, path)
-    } catch (err) {
-      if (NOT_IN_HEAD.test(err instanceof Error ? err.message : String(err))) return null
-      throw err
-    }
+    return window.forge.gitHeadText(root, path)
   },
   openDiff: (path) => void openDiff(path, 'modified').catch(() => undefined), // reported by the opener
   enabled: () => settings.get<boolean>('gitGutter'),
@@ -1645,6 +1700,16 @@ registerBuiltinCommands({
     else report('Open a file to see its git history', true)
   },
   gitBranches: () => showBranches(),
+  nextTab: (delta) => cycleTab(delta),
+  openInBrowser: () => {
+    if (!active || active.diff || active.image) return report('Open an HTML file to show it in the browser', true)
+    window.forge.openInBrowser(active.path).catch((err: unknown) => report(`Open in browser: ${err instanceof Error ? err.message : String(err)}`, true))
+  },
+  splitEditor: (how) => {
+    if (how === 'none') return split.close()
+    if (active && !active.diff && !active.image) split.open(active.path, how)
+    else report('Open a text file to split the editor', true)
+  },
   runTests: () => void testRunner.runFile().catch((err: unknown) => report(`Run tests: ${String(err)}`, true)),
   runHttp: () => void httpClient.runAtCursor().catch((err: unknown) => report(`HTTP: ${String(err)}`, true)),
   findReplace: () => {
