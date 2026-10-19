@@ -268,16 +268,11 @@ const isDirty = (f: OpenFile): boolean =>
   f.diff ? (f.diff.shared ? isDirty(f.diff.shared) : false) : f.model.getAlternativeVersionId() !== f.savedVersion
 
 function tabMenu(f: OpenFile): (MenuItem | 'sep')[] {
-  const closeAll = (keep?: OpenFile): void => {
-    for (const other of [...openFiles.values()]) {
-      if (other !== keep && !requestClose(other)) return // the user said no to discarding something: stop there
-    }
-  }
   return [
     { label: 'Close', run: () => void requestClose(f) },
-    { label: 'Close Others', run: () => closeAll(f) },
+    { label: 'Close Others', run: () => closeTabs(f) },
     ...(f.diff || f.image ? [] : [{ label: 'Split Right', run: () => split.open(f.path, 'right') }, { label: 'Split Down', run: () => split.open(f.path, 'down') }]),
-    { label: 'Close All', run: () => closeAll() },
+    { label: 'Close All', run: () => closeTabs() },
     'sep',
     { label: 'Copy Path', run: () => void window.forge.copyText(f.path) },
     { label: 'Reveal in File Explorer', run: () => void window.forge.reveal(f.path) },
@@ -434,8 +429,47 @@ function cycleTab(delta: 1 | -1): void {
 function requestClose(f: OpenFile): boolean {
   const unsaved = f.diff ? f.diff.shared : f
   if (unsaved && isDirty(unsaved) && !confirm(`${basename(unsaved.path)} has unsaved changes. Close it and discard them?`)) return false
+  if (!f.diff) {
+    recentlyClosed.push(f.path)
+    if (recentlyClosed.length > 20) recentlyClosed.shift()
+  }
   closeFile(f)
   return true
+}
+
+/** Files the user closed, most recent last, for Reopen Closed Tab. */
+const recentlyClosed: string[] = []
+
+function reopenClosedTab(): void {
+  while (recentlyClosed.length) {
+    const path = recentlyClosed.pop() as string
+    if ([...openFiles.values()].some((f) => !f.diff && samePath(f.path, path))) continue // it is open again already
+    void openFile(path).catch((err: unknown) => report(`Reopen ${basename(path)}: ${err instanceof Error ? err.message : String(err)}`, true))
+    return
+  }
+  report('No closed tab to reopen', true)
+}
+
+/** Close All / Close Others: stops at the first file whose unsaved edits the user wants to keep. */
+function closeTabs(keep?: OpenFile): void {
+  for (const other of [...openFiles.values()]) {
+    if (other !== keep && !requestClose(other)) return
+  }
+}
+
+/** Throws away the unsaved edits of the active file and reads it from disk again. */
+async function reloadFromDisk(): Promise<void> {
+  const f = active
+  if (!f || f.diff || f.image) throw new Error('Open a text file first')
+  if (isDirty(f) && !confirm(`${basename(f.path)} has unsaved changes. Reload it from disk and discard them?`)) return
+  const text = await window.forge.readFile(f.path)
+  f.savedText = text
+  f.model.pushStackElement()
+  f.model.pushEditOperations([], [{ range: f.model.getFullModelRange(), text }], () => null)
+  f.model.pushStackElement()
+  f.savedVersion = f.model.getAlternativeVersionId()
+  renderTabs()
+  report(`Reloaded ${basename(f.path)} from disk`)
 }
 
 function closeFile(f: OpenFile): void {
@@ -1656,6 +1690,9 @@ window.addEventListener(
     else if (e.key === 'F7' && mods(false, false, false)) act(() => quiet(dbg.control('stepInto')))
     else if (e.key === 'F2' && mods(true, false, false)) act(() => quiet(runUi.stop()))
     else if (e.key === 'F1' && mods(false, false, false)) act(() => palette.open())
+    else if (e.key === 'F6' && mods(false, true, false)) act(() => {
+      if (active && !active.diff) void renameEntry(active.path)
+    })
   },
   true
 )
@@ -1724,6 +1761,22 @@ registerBuiltinCommands({
   },
   gitBranches: () => showBranches(),
   nextTab: (delta) => cycleTab(delta),
+  reopenClosedTab: () => reopenClosedTab(),
+  closeAllTabs: () => closeTabs(),
+  closeOtherTabs: () => {
+    if (active) closeTabs(active)
+  },
+  saveAll: () => void saveAllDirty().then(() => report('Saved all files')).catch((err: unknown) => report(`Save All: ${err instanceof Error ? err.message : String(err)}`, true)),
+  reloadFromDisk: () => void reloadFromDisk().catch((err: unknown) => report(`Reload from disk: ${err instanceof Error ? err.message : String(err)}`, true)),
+  renameCurrentFile: () => {
+    if (!active || active.diff) return report('Open a file to rename first', true)
+    void renameEntry(active.path)
+  },
+  newFile: () => {
+    if (!rootDir) return report('Open a folder first (Ctrl+O)', true)
+    const here = active && !active.diff ? active.path.replace(/[\\/][^\\/]*$/, '') : rootDir
+    void createEntry(here, 'file')
+  },
   goToTest: () => goToTest(),
   resetLayout: () => {
     // Tool windows go back to their original docks and sizes (the CSS defaults); the open files are left alone.

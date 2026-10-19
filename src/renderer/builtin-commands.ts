@@ -16,6 +16,13 @@ export interface BuiltinDeps {
   toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http') => void
   runHttp: () => void
   nextTab: (delta: 1 | -1) => void
+  reopenClosedTab: () => void
+  closeAllTabs: () => void
+  closeOtherTabs: () => void
+  saveAll: () => void
+  reloadFromDisk: () => void
+  renameCurrentFile: () => void
+  newFile: () => void
   goToTest: () => void
   resetLayout: () => void
   inspectCode: () => void
@@ -86,6 +93,13 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'file.open', category: 'File', title: 'Open Folder…', keys: 'Ctrl+O', run: d.openFolder })
   register({ id: 'file.save', category: 'File', title: 'Save', keys: 'Ctrl+S', run: d.saveActive })
   register({ id: 'file.close', category: 'File', title: 'Close Tab', keys: 'Ctrl+W', run: d.closeActiveTab })
+  register({ id: 'file.closeOthers', category: 'File', title: 'Close Other Tabs', run: d.closeOtherTabs })
+  register({ id: 'file.closeAll', category: 'File', title: 'Close All Tabs', run: d.closeAllTabs })
+  register({ id: 'file.reopenClosed', category: 'File', title: 'Reopen Closed Tab', run: d.reopenClosedTab })
+  register({ id: 'file.saveAll', category: 'File', title: 'Save All', run: d.saveAll })
+  register({ id: 'file.reload', category: 'File', title: 'Reload from Disk', run: d.reloadFromDisk })
+  register({ id: 'file.rename', category: 'File', title: 'Rename File…', keys: 'Shift+F6', run: d.renameCurrentFile })
+  register({ id: 'file.new', category: 'File', title: 'New File…', run: d.newFile })
   register({ id: 'nav.search', category: 'Navigate', title: 'Search Everywhere', keys: 'Shift+Shift', run: d.openSearch })
   register({ id: 'nav.class', category: 'Navigate', title: 'Go to Class', keys: 'Ctrl+N', run: () => d.openSearchScope('symbols', true) })
   register({ id: 'nav.file', category: 'Navigate', title: 'Go to File', keys: 'Ctrl+Shift+N', run: () => d.openSearchScope('files') })
