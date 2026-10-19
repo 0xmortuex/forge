@@ -1,5 +1,6 @@
 import * as monaco from 'monaco-editor'
 import { fileIcon } from './icons'
+import type { InspectResult } from '../main/inspect'
 
 // The Problems window: every diagnostic of the open files, grouped by file. It reads Monaco's markers, so whatever
 // reports them (the language servers today) shows up here.
@@ -11,6 +12,10 @@ export interface ProblemsDeps {
   openAt: (path: string, line: number, column: number) => Promise<void>
   /** Told the totals after every change (for the badge and the status bar). */
   onCounts: (errors: number, warnings: number, infos: number) => void
+  /** Runs the project checkers (tsc, ESLint); rejects with a readable message when there is nothing to run. */
+  inspect: () => Promise<InspectResult>
+  /** Told when the button's inspection fails (nothing to run, a checker crashed). */
+  onError: (err: unknown) => void
 }
 
 const MS = monaco.MarkerSeverity
@@ -21,6 +26,8 @@ const LABEL: Record<Level, string> = { error: 'Errors', warning: 'Warnings', inf
 
 export interface ProblemsView {
   refresh: () => void
+  /** Runs the project inspection and shows its results below the open files' problems. */
+  inspect: () => Promise<void>
 }
 
 export function initProblems(deps: ProblemsDeps): ProblemsView {
@@ -30,10 +37,16 @@ export function initProblems(deps: ProblemsDeps): ProblemsView {
   list.id = 'problems-list'
   list.className = 'tool-list'
   deps.root.replaceChildren(bar, list)
+  const inspectBtn = document.createElement('button')
+  inspectBtn.id = 'problems-inspect'
+  inspectBtn.className = 'btn'
+  inspectBtn.textContent = 'Inspect Code'
+  inspectBtn.title = 'Run tsc and ESLint over the whole project'
 
   const shown: Record<Level, boolean> = { error: true, warning: true, info: true }
   const counts: Record<Level, number> = { error: 0, warning: 0, info: 0 }
   const folded = new Set<string>()
+  let inspection: InspectResult | null = null
   const toggles = {} as Record<Level, HTMLButtonElement>
   for (const l of ['error', 'warning', 'info'] as const) {
     const b = document.createElement('button')
@@ -46,36 +59,29 @@ export function initProblems(deps: ProblemsDeps): ProblemsView {
     toggles[l] = b
     bar.append(b)
   }
+  bar.append(inspectBtn)
 
-  function draw(): void {
-    const all = monaco.editor.getModelMarkers({}).filter((m) => m.resource.scheme === 'file')
-    counts.error = counts.warning = counts.info = 0
-    const byFile = new Map<string, monaco.editor.IMarker[]>()
-    for (const m of all) {
-      const l = level(m.severity)
-      counts[l]++
-      if (!shown[l]) continue
-      const path = m.resource.fsPath
-      const group = byFile.get(path) ?? []
-      group.push(m)
-      byFile.set(path, group)
+  /** One problem as the list shows it, whether it came from an open file's markers or from a project inspection. */
+  interface Item { path: string; line: number; col: number; level: Level; message: string; where: string }
+
+  function section(items: Item[], title: string | null): void {
+    const byFile = new Map<string, Item[]>()
+    for (const it of items) {
+      const group = byFile.get(it.path) ?? []
+      group.push(it)
+      byFile.set(it.path, group)
     }
-    for (const l of ['error', 'warning', 'info'] as const) toggles[l].textContent = `${GLYPH[l]} ${LABEL[l]} ${counts[l]}`
-    deps.onCounts(counts.error, counts.warning, counts.info)
-
-    list.replaceChildren()
-    if (!byFile.size) {
-      const hint = document.createElement('div')
-      hint.className = 'hint'
-      hint.textContent = all.length ? 'Everything is hidden by the filters above' : 'No problems in the open files'
-      list.append(hint)
-      return
+    if (title !== null && byFile.size) {
+      const h = document.createElement('div')
+      h.className = 'psection'
+      h.textContent = title
+      list.append(h)
     }
     const files = [...byFile.entries()].sort(
-      ([pa, a], [pb, b]) =>
-        b.filter((m) => m.severity === MS.Error).length - a.filter((m) => m.severity === MS.Error).length || pa.localeCompare(pb)
+      ([pa, a], [pb, b]) => b.filter((m) => m.level === 'error').length - a.filter((m) => m.level === 'error').length || pa.localeCompare(pb)
     )
-    for (const [path, markers] of files) {
+    for (const [path, group] of files) {
+      const key = `${title ?? ''}|${path}`
       const head = document.createElement('div')
       head.className = 'pfile'
       head.innerHTML = fileIcon(path.split(/[\\/]/).pop() ?? path)
@@ -84,35 +90,75 @@ export function initProblems(deps: ProblemsDeps): ProblemsView {
       name.textContent = deps.relPath(path)
       const count = document.createElement('span')
       count.className = 'pcount'
-      count.textContent = String(markers.length)
+      count.textContent = String(group.length)
       head.append(name, count)
-      const open = !folded.has(path)
+      const open = !folded.has(key)
       head.classList.toggle('closed', !open)
       head.onclick = () => {
-        if (folded.has(path)) folded.delete(path)
-        else folded.add(path)
+        if (folded.has(key)) folded.delete(key)
+        else folded.add(key)
         draw()
       }
       list.append(head)
       if (!open) continue
-      for (const m of [...markers].sort((a, b) => a.startLineNumber - b.startLineNumber || a.startColumn - b.startColumn)) {
+      for (const m of [...group].sort((a, b) => a.line - b.line || a.col - b.col)) {
         const row = document.createElement('div')
-        const l = level(m.severity)
-        row.className = `prob ${l}`
-        row.dataset['line'] = String(m.startLineNumber)
+        row.className = `prob ${m.level}`
+        row.dataset['line'] = String(m.line)
         const icon = document.createElement('span')
         icon.className = 'pico'
-        icon.textContent = GLYPH[l]
+        icon.textContent = GLYPH[m.level]
         const msg = document.createElement('span')
         msg.className = 'pmsg'
         msg.textContent = m.message
         const where = document.createElement('span')
         where.className = 'pwhere'
-        where.textContent = `${m.source ? m.source + ' ' : ''}${m.code ? String(typeof m.code === 'object' ? m.code.value : m.code) + ' ' : ''}[${m.startLineNumber}:${m.startColumn}]`
+        where.textContent = m.where
         row.append(icon, msg, where)
-        row.onclick = () => void deps.openAt(path, m.startLineNumber, m.startColumn).catch(() => undefined) // reported by the opener
+        row.onclick = () => void deps.openAt(path, m.line, m.col).catch(() => undefined) // reported by the opener
         list.append(row)
       }
+    }
+  }
+
+  function draw(): void {
+    const all = monaco.editor.getModelMarkers({}).filter((m) => m.resource.scheme === 'file')
+    counts.error = counts.warning = counts.info = 0
+    const open: Item[] = []
+    for (const m of all) {
+      const l = level(m.severity)
+      counts[l]++
+      if (!shown[l]) continue
+      const code = m.code ? String(typeof m.code === 'object' ? m.code.value : m.code) + ' ' : ''
+      open.push({ path: m.resource.fsPath, line: m.startLineNumber, col: m.startColumn, level: l, message: m.message, where: `${m.source ? m.source + ' ' : ''}${code}[${m.startLineNumber}:${m.startColumn}]` })
+    }
+    for (const l of ['error', 'warning', 'info'] as const) toggles[l].textContent = `${GLYPH[l]} ${LABEL[l]} ${counts[l]}`
+    deps.onCounts(counts.error, counts.warning, counts.info)
+
+    const project: Item[] = (inspection?.problems ?? [])
+      .map((p) => ({ path: p.path, line: p.line, col: p.col, level: p.severity, message: p.message, where: `${p.source} ${p.code ? p.code + ' ' : ''}[${p.line}:${p.col}]` }))
+      .filter((p) => shown[p.level])
+
+    list.replaceChildren()
+    section(open, inspection ? 'Open files' : null)
+    if (inspection) section(project, `Project analysis · ${inspection.ran.join(', ')} · ${inspection.problems.length} problem${inspection.problems.length === 1 ? '' : 's'}`)
+    if (!open.length && !project.length) {
+      const hint = document.createElement('div')
+      hint.className = 'hint'
+      hint.textContent = all.length || inspection?.problems.length ? 'Everything is hidden by the filters above' : inspection ? 'The project analysis found no problems' : 'No problems in the open files. Use Inspect Code to check the whole project.'
+      list.append(hint)
+    }
+  }
+
+  async function inspect(): Promise<void> {
+    inspectBtn.disabled = true
+    inspectBtn.textContent = 'Inspecting…'
+    try {
+      inspection = await deps.inspect()
+      draw()
+    } finally {
+      inspectBtn.disabled = false
+      inspectBtn.textContent = 'Inspect Code'
     }
   }
 
@@ -123,5 +169,6 @@ export function initProblems(deps: ProblemsDeps): ProblemsView {
   }
   monaco.editor.onDidChangeMarkers(later)
   draw()
-  return { refresh: draw }
+  inspectBtn.onclick = () => void inspect().catch((err: unknown) => deps.onError(err))
+  return { refresh: draw, inspect }
 }

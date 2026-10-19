@@ -1287,8 +1287,13 @@ const breadcrumbs = initBreadcrumbs({
   currentPath: () => (active && !active.diff ? relPath(active.path) : null),
   getSymbols: (model) => lsp.documentSymbols(model)
 })
-initProblems({
+const problemsView = initProblems({
   root: $('view-problems'),
+  inspect: () => {
+    if (!rootDir) throw new Error('Open a folder first (Ctrl+O)')
+    return window.forge.inspect(rootDir)
+  },
+  onError: (err) => report(`Inspect Code: ${err instanceof Error ? err.message : String(err)}`, true),
   relPath,
   openAt: openFile,
   onCounts: (errors, warnings) => tw.setBadge('problems', String(errors || warnings || ''), errors ? 'err' : 'warn')
@@ -1701,6 +1706,10 @@ registerBuiltinCommands({
   },
   gitBranches: () => showBranches(),
   nextTab: (delta) => cycleTab(delta),
+  inspectCode: () => {
+    showView('problems')
+    problemsView.inspect().catch((err: unknown) => report(`Inspect Code: ${err instanceof Error ? err.message : String(err)}`, true))
+  },
   openInBrowser: () => {
     if (!active || active.diff || active.image) return report('Open an HTML file to show it in the browser', true)
     window.forge.openInBrowser(active.path).catch((err: unknown) => report(`Open in browser: ${err instanceof Error ? err.message : String(err)}`, true))

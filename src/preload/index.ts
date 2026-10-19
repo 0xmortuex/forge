@@ -9,6 +9,7 @@ import type { SearchOptions, SearchResult } from '../main/search'
 import type { Snapshot } from '../main/history'
 import type { FsChange } from '../main/watch'
 import type { HttpRequestSpec, HttpResponse } from '../main/http'
+import type { InspectResult } from '../main/inspect'
 import type { PtySpec } from '../main/terminal'
 
 const api = {
@@ -29,6 +30,7 @@ const api = {
   readDataUrl: (path: string): Promise<{ url: string; bytes: number }> => ipcRenderer.invoke('fs:readDataUrl', path),
   openInBrowser: (path: string): Promise<void> => ipcRenderer.invoke('shell:openInBrowser', path),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
+  inspect: (root: string): Promise<InspectResult> => ipcRenderer.invoke('inspect:run', root),
   httpSend: (spec: HttpRequestSpec): Promise<HttpResponse> => ipcRenderer.invoke('http:send', spec),
   copy: (from: string, to: string): Promise<void> => ipcRenderer.invoke('fs:copy', from, to),
   createFile: (path: string): Promise<void> => ipcRenderer.invoke('fs:createFile', path),

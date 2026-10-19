@@ -479,6 +479,8 @@ html.ready body { transition: opacity 280ms ease-out; }
 .chip.on.warning { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, transparent); background: color-mix(in srgb, var(--warn) 12%, transparent); }
 .chip.on.info { color: var(--info); border-color: color-mix(in srgb, var(--info) 50%, transparent); background: color-mix(in srgb, var(--info) 12%, transparent); }
 .pfile { display: flex; align-items: center; gap: 6px; height: var(--row-lg); padding: 0 8px; border-radius: 6px; font-weight: 600; color: var(--text-hi); user-select: none; }
+.psection { padding: 8px 8px 2px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-dim); }
+#view-problems .tool-bar .btn { margin-left: auto; }
 .pfile:hover { background: var(--hover); }
 .pfile .pcount { margin-left: auto; color: var(--text-dim); font-weight: 400; }
 .prob { display: flex; align-items: baseline; gap: 8px; padding: 2px 8px 2px 28px; border-radius: 6px; user-select: none; transition: background var(--t-fast); }

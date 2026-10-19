@@ -11,6 +11,7 @@ import { replaceInFiles, searchProject, type SearchOptions } from './search'
 import { killAllLsp, registerLsp } from './lsp'
 import { registerHistory } from './history'
 import { registerHttp } from './http'
+import { registerInspect } from './inspect'
 import { registerWatch, stopWatching } from './watch'
 import { registerScratch } from './scratch'
 import { killAllTerminals, registerTerminal } from './terminal'
@@ -167,6 +168,7 @@ registerGit()
 registerDebug()
 registerHistory()
 registerHttp()
+registerInspect()
 registerWatch()
 registerScratch()
 let terminalsEnded = false
