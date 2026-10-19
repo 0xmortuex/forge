@@ -13,6 +13,7 @@ import { registerHistory } from './history'
 import { registerHttp } from './http'
 import { registerInspect } from './inspect'
 import { registerAi } from './ai'
+import { closeAllDatabases, registerDatabase } from './database'
 import { registerWatch, stopWatching } from './watch'
 import { registerScratch } from './scratch'
 import { killAllTerminals, registerTerminal } from './terminal'
@@ -173,12 +174,14 @@ registerHistory()
 registerHttp()
 registerInspect()
 registerAi()
+registerDatabase()
 registerWatch()
 registerScratch()
 let terminalsEnded = false
 app.on('before-quit', (e) => {
   stopWatching()
   killAllLsp()
+  closeAllDatabases()
   if (terminalsEnded) return
   // Hold the quit until the terminals have exited, then quit again (see killAllTerminals).
   e.preventDefault()

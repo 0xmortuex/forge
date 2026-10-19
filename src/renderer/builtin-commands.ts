@@ -13,7 +13,7 @@ export interface BuiltinDeps {
   openSearchScope: (scope: 'all' | 'files' | 'symbols' | 'actions', classesOnly?: boolean) => void
   showFind: () => void
   toggleSide: (side: 'project' | 'commit') => void
-  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai') => void
+  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai' | 'database') => void
   runHttp: () => void
   nextTab: (delta: 1 | -1) => void
   aiAction: (action: 'explain' | 'fix' | 'tests' | 'document' | 'refactor') => void
@@ -267,6 +267,7 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'code.inspect', category: 'Code', title: 'Inspect Code', run: d.inspectCode })
   register({ id: 'view.resetLayout', category: 'View', title: 'Reset Layout', run: d.resetLayout })
   register({ id: 'nav.goToTest', category: 'Navigate', title: 'Go to Test / Source', keys: 'Ctrl+Shift+T', run: d.goToTest })
+  register({ id: 'view.database', category: 'View', title: 'Toggle Database Window', run: () => d.toggleView('database') })
   register({ id: 'ai.toggle', category: 'AI', title: 'Toggle AI Assistant', keys: 'Alt+8', run: () => d.toggleView('ai') })
   register({ id: 'ai.newChat', category: 'AI', title: 'New AI Chat', run: d.aiNewChat })
   register({ id: 'ai.explain', category: 'AI', title: 'Explain Code', run: () => d.aiAction('explain') })

@@ -46,6 +46,7 @@ import { initConflicts } from './conflicts'
 import { initGutter } from './gutter'
 import { initTodo } from './todo'
 import { initAiChat } from './aichat'
+import { initDatabase } from './database'
 import { initAiInline } from './aiinline'
 import type { Action } from './ai'
 import { naming, relatedFiles } from './related'
@@ -217,9 +218,10 @@ tw.register({ id: 'hierarchy', title: 'Hierarchy', icon: icons.hierarchy, root: 
 tw.register({ id: 'structure', title: 'Structure', icon: icons.structure, root: $('view-structure'), dock: 'right', shortcut: 'Alt+7' })
 tw.register({ id: 'preview', title: 'Preview', icon: icons.preview, root: $('view-preview'), dock: 'right' })
 tw.register({ id: 'bookmarks', title: 'Bookmarks', icon: icons.bookmark, root: $('view-bookmarks'), dock: 'right' })
+tw.register({ id: 'database', title: 'Database', icon: icons.database, root: $('view-db'), dock: 'bottom' })
 tw.register({ id: 'ai', title: 'AI Assistant', icon: icons.ai, root: $('view-ai'), dock: 'right', shortcut: 'Alt+8' })
 
-type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai'
+type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai' | 'database'
 type Side = 'project' | 'commit'
 const showSide = (side: Side): void => tw.show(side)
 const toggleSide = (side: Side): void => tw.toggle(side)
@@ -541,11 +543,15 @@ const editorConfig = initEditorConfig({
 })
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|ico|bmp|avif)$/i
+/** SQLite files open in the Database window instead of as text. */
+const DB_EXT = /\.(db|sqlite3?|db3)$/i
 
 async function openFile(path: string, line?: number, column = 1): Promise<void> {
   const existing = [...openFiles.values()].find((f) => !f.diff && samePath(f.path, path))
   if (existing) activate(existing)
-  else if (IMAGE_EXT.test(path)) {
+  else if (DB_EXT.test(path)) {
+    await guarded(`Open ${basename(path)}`, () => dbView.open(path))
+  } else if (IMAGE_EXT.test(path)) {
     await guarded(`Open ${basename(path)}`, async () => {
       const image = await window.forge.readDataUrl(path)
       // An image has no text, but the tab machinery wants a model: an empty one that can never be edited.
@@ -1402,6 +1408,14 @@ const preview = initPreview({
   isVisible: () => tw.isOpen('preview'),
   report
 })
+// ---- Database ----
+const dbView = initDatabase({
+  root: $('view-db'),
+  reveal: () => tw.show('database'),
+  copy: (text) => void window.forge.copyText(text),
+  report
+})
+
 // ---- AI Assistant ----
 const aiChat = initAiChat({
   root: $('view-ai'),

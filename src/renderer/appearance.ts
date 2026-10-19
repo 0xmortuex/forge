@@ -177,7 +177,7 @@ function applyEditor(key?: string): void {
   if (!editor || !diff) return
   const o = editorOptions()
   editor.updateOptions(o)
-  for (const e of extras) e.updateOptions(o)
+  for (const [e, own] of extras) e.updateOptions({ ...o, ...own })
   diff.updateOptions(o as monaco.editor.IDiffEditorOptions)
   if (key === 'tabSize' || key === 'insertSpaces') {
     for (const m of monaco.editor.getModels()) m.updateOptions({ tabSize: num('tabSize'), insertSpaces: bool('insertSpaces') })
@@ -217,11 +217,14 @@ export function initAppearance(): string {
 }
 
 /** Once the editors exist, setting changes can reach them. */
-const extras = new Set<monaco.editor.IStandaloneCodeEditor>()
-/** Another editor (the split pane) that follows the editor settings too. */
-export function bindExtraEditor(e: monaco.editor.IStandaloneCodeEditor): void {
-  extras.add(e)
-  e.updateOptions(editorOptions())
+const extras = new Map<monaco.editor.IStandaloneCodeEditor, monaco.editor.IEditorOptions>()
+/**
+ * Another editor (the split pane, the SQL editor) that follows the editor settings too. `own` are options that editor keeps
+ * whatever the settings say (a SQL editor never shows a minimap), re-applied after every settings change.
+ */
+export function bindExtraEditor(e: monaco.editor.IStandaloneCodeEditor, own: monaco.editor.IEditorOptions = {}): void {
+  extras.set(e, own)
+  e.updateOptions({ ...editorOptions(), ...own })
 }
 
 export function bindEditors(e: monaco.editor.IStandaloneCodeEditor, d: monaco.editor.IStandaloneDiffEditor): void {

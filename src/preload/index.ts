@@ -10,6 +10,7 @@ import type { Snapshot } from '../main/history'
 import type { FsChange } from '../main/watch'
 import type { HttpRequestSpec, HttpResponse } from '../main/http'
 import type { InspectResult } from '../main/inspect'
+import type { DbQueryResult, DbSchema } from '../main/database'
 import type { AiEvent, AiRequest } from '../main/ai'
 import type { PtySpec } from '../main/terminal'
 
@@ -43,6 +44,10 @@ const api = {
     ipcRenderer.on('ai:event', listener)
     return () => ipcRenderer.removeListener('ai:event', listener)
   },
+  dbOpen: (path: string): Promise<DbSchema> => ipcRenderer.invoke('db:open', path),
+  dbQuery: (path: string, sql: string, limit?: number): Promise<DbQueryResult> => ipcRenderer.invoke('db:query', path, sql, limit),
+  dbStop: (path: string): Promise<void> => ipcRenderer.invoke('db:stop', path),
+  dbClose: (path: string): Promise<void> => ipcRenderer.invoke('db:close', path),
   inspect: (root: string): Promise<InspectResult> => ipcRenderer.invoke('inspect:run', root),
   httpSend: (spec: HttpRequestSpec): Promise<HttpResponse> => ipcRenderer.invoke('http:send', spec),
   copy: (from: string, to: string): Promise<void> => ipcRenderer.invoke('fs:copy', from, to),

@@ -31,6 +31,7 @@ export const icons = {
   collapseAll: svg('<path d="M4.5 3.5L8 7l3.5-3.5M4.5 12.5L8 9l3.5 3.5"/>', 14),
   locate: svg('<circle cx="8" cy="8" r="3.2"/><circle cx="8" cy="8" r=".6" fill="currentColor"/><path d="M8 1.5v2.2M8 12.3v2.2M1.5 8h2.2M12.3 8h2.2"/>', 14),
   newFile: svg('<path d="M4 2h5l3 3v8.5a.5.5 0 01-.5.5h-7.5a.5.5 0 01-.5-.5v-11a.5.5 0 01.5-.5zM8 7.5v4M6 9.5h4"/>', 14),
+  database: svg('<ellipse cx="8" cy="4" rx="5" ry="2"/><path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>', 18),
   ai: svg('<path d="M7 2l1.4 3.6L12 7 8.4 8.4 7 12 5.6 8.4 2 7l3.6-1.4z"/><path d="M12.5 9.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/>', 18),
   hierarchy: svg('<rect x="6" y="2" width="4" height="3" rx="1"/><rect x="1.5" y="11" width="4" height="3" rx="1"/><rect x="10.5" y="11" width="4" height="3" rx="1"/><path d="M8 5v2.5M3.5 11V9a1 1 0 011-1h7a1 1 0 011 1v2"/>', 18),
   bell: svg('<path d="M4 11V7a4 4 0 018 0v4l1 1.5H3zM6.5 14a1.5 1.5 0 003 0"/>', 14),
@@ -51,14 +52,14 @@ const EXT_COLORS: Record<string, string> = {
   ts: '#4fc3f7', tsx: '#4fc3f7', js: '#ffd54f', jsx: '#ffd54f', mjs: '#ffd54f', cjs: '#ffd54f', json: '#ffb74d',
   css: '#7e8bff', scss: '#f06292', html: '#ff8a65', md: '#90caf9', py: '#81c784', c: '#64b5f6',
   h: '#9575cd', cpp: '#64b5f6', rs: '#ff8a65', mx: '#c792ea', yaml: '#ef9a9a', yml: '#ef9a9a',
-  toml: '#ef9a9a', lock: '#78909c', gitignore: '#78909c', sh: '#a5d6a7', txt: '#90a4ae', svg: '#ffb74d', png: '#ce93d8'
+  toml: '#ef9a9a', lock: '#78909c', gitignore: '#78909c', sh: '#a5d6a7', txt: '#90a4ae', svg: '#ffb74d', png: '#ce93d8', db: '#4db6ac', sqlite: '#4db6ac', sqlite3: '#4db6ac', db3: '#4db6ac', sql: '#4db6ac'
 }
 
 // The letters drawn on a file's badge.
 const EXT_LABEL: Record<string, string> = {
   ts: 'TS', tsx: 'TSX', js: 'JS', jsx: 'JSX', mjs: 'JS', cjs: 'JS', json: '{}', css: 'CSS', scss: 'SC', html: '<>', md: 'MD',
   py: 'PY', c: 'C', h: 'H', cpp: 'C+', rs: 'RS', mx: 'MX', yaml: 'YM', yml: 'YM', toml: 'TM', lock: 'LK',
-  gitignore: 'GI', sh: 'SH', txt: 'TXT', svg: 'SVG', png: 'IMG'
+  gitignore: 'GI', sh: 'SH', txt: 'TXT', svg: 'SVG', png: 'IMG', db: 'DB', sqlite: 'DB', sqlite3: 'DB', db3: 'DB', sql: 'SQL'
 }
 
 const extOf = (name: string): string => (name.includes('.') ? (name.split('.').pop() ?? '').toLowerCase() : '')

@@ -26,6 +26,8 @@ with an end-to-end test suite that drives the real UI.
 - **Navigation and tooling** — recent files/locations, back/forward, bookmarks, call and type hierarchy, inlay
   hints, find/replace in files, local history, scratch files, live templates, split editor, Markdown preview, a
   built-in HTTP client for `.http` files, EditorConfig and a TODO window.
+- **Database viewer** — open a SQLite file from the project tree: browse tables, views and columns, run SQL with
+  syntax highlighting, sort and copy results as CSV. Read-only by construction, and a runaway query can be stopped.
 - **AI, on your terms** — a chat window, Explain/Fix/Write Tests on a selection, inline suggestions and commit messages,
   against any OpenAI-compatible server (OpenAI, Claude, Ollama, LM Studio…). Off until you set it up; the key is stored
   encrypted; you approve each server before code is sent. See [docs/AI.md](docs/AI.md).
@@ -43,6 +45,7 @@ with an end-to-end test suite that drives the real UI.
 | **Git** | Branch widget with ahead/behind, Git window (graph log, commit details, branches), Commit window with amend, editable diffs, gutter hunks with rollback, blame, merge conflicts with Accept Yours/Theirs, file history, colored tree, push (publishes new branches, force-with-lease), pull (merge, rebase or fast-forward), stash, revert, reset, tags. Uses the `git` CLI. |
 | **Search & refactor** | Find/Replace in the file and in the project (case, whole word, regex, file mask), rename with import updates when files are renamed or moved, find usages, go to implementation / type definition, call and type hierarchy, TODO window, and Inspect Code (runs `tsc`, ESLint and pyright over the whole project into the Problems window). |
 | **Run & debug** | `.forge/run.json` configurations (Node, Python, shell commands, or the current file) with a dialog to edit them, run arrows next to Vitest/Jest/node:test/pytest tests, a Run tab with a real terminal, Node debugger (V8 inspector) and Python debugger (`debugpy`, over DAP) with conditional breakpoints, logpoints and watches. |
+| **Database** | `.db` / `.sqlite` / `.sqlite3` files open in the Database window: schema tree with row counts, a SQL editor (<kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs the selection or everything), a result grid with NULL/BLOB display, sorting, several result sets, row limit and *Copy as CSV*. SQLite itself refuses writes and the file is never touched. |
 | **AI** | AI Assistant window (<kbd>Alt</kbd>+<kbd>8</kbd>) with streaming Markdown answers and Insert/Replace buttons on code, *AI:* actions in the editor's context menu, opt-in inline ghost-text suggestions, *Generate message* in the Commit window. Bring your own server and key. |
 | **Customization** | Themes, accent, fonts, layout density, panel shape, motion, editor and terminal options, custom shortcuts, command palette. |
 
@@ -53,6 +56,8 @@ with an end-to-end test suite that drives the real UI.
 ![Inspect Code: project-wide tsc results below the open files' problems](docs/inspect.png)
 
 ![The built-in HTTP client: a .http file with a run arrow, and the response](docs/http-client.png)
+
+![The Database window: schema tree, a SQL query and its result grid](docs/database.png)
 
 ![The AI Assistant answering a question about the selected code, shown against a local test server](docs/ai-chat.png)
 
@@ -172,6 +177,7 @@ Python debugging needs `debugpy` (`uv pip install debugpy`). Mort support needs 
 - Markdown preview does not load remote images (the content security policy blocks them).
 - The pytest runner and the `clangd` integration have not been exercised end to end.
 - The built-in IDE shortcuts (Alt+digit, F-keys, Ctrl+Shift+P …) work inside the terminal; your own custom shortcuts do not.
+- The database viewer is SQLite only and read-only; files over 256 MB are not opened, and a query is stopped after 30 seconds.
 - The AI features are tested against a mock server only; they have not been run against a real service in this repository's CI. Answers can be wrong: read what you insert.
 - The extension API is small (version 2); its permissions are a declaration and an API guard, not a sandbox.
 

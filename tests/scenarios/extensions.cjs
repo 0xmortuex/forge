@@ -78,6 +78,8 @@ run(
     await js('document.querySelector(\'.snav[data-cat="Extensions"]\').click()')
     await sleep(300)
     await js("document.querySelector('.switch[data-ext=\"quiet\"]').click()")
+    // Activation is asynchronous (the module is imported first): wait until the switch shows it is on.
+    await waitFor(() => js("document.querySelector('.switch[data-ext=\"quiet\"]')?.classList.contains('on') === true"), 5000)
     await js("document.getElementById('settings-close').click()")
     check('...and its command appears', (await paletteFor('quiet command')).includes('Quiet Command'))
     key('Escape')

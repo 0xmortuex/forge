@@ -55,7 +55,7 @@ run(
     await open('c.txt')
     key('End', ['control'])
     await type('JUNK')
-    check('typing marks the file modified', (await editorText()).includes('JUNK'))
+    check('typing marks the file modified', !!(await waitFor(async () => (await editorText()).includes('JUNK'), 4000)))
     await runPalette('Reload from Disk')
     check('Reload from Disk restores the saved text', !!(await waitFor(async () => (await editorText()) === 'charlie', 4000)), await editorText())
 

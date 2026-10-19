@@ -24,6 +24,7 @@
     "monaco-editor": "^0.52.2",
     "node-pty": "^1.1.0",
     "pyright": "^1.1.414",
+    "sql.js": "^1.15.1",
     "typescript-language-server": "^6.0.2",
     "vscode-jsonrpc": "^9.0.3",
     "vscode-languageserver-protocol": "^3.18.4",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/sql.js": "^1.4.11",
     "@types/ws": "^8.18.2",
     "electron": "^33.2.0",
     "electron-vite": "^2.3.0",
