@@ -113,6 +113,8 @@ export const DEFS: SettingDef[] = [
   { key: 'inlayHints', category: 'Editor', group: 'Display', label: 'Inline hints', default: 'onUnlessPressed',
     description: 'Parameter names and inferred types shown inside the code, from the language server.',
     control: { type: 'select', options: opts(['on', 'Always'], ['onUnlessPressed', 'Always (hold Ctrl+Alt to hide)'], ['offUnlessPressed', 'Never (hold Ctrl+Alt to show)'], ['off', 'Never']) } },
+  { key: 'emmet', category: 'Editor', group: 'Display', label: 'Emmet abbreviations', default: true, control: onOff,
+    description: 'Type ul>li*3 or df in an HTML or CSS file and press Tab (or pick the suggestion) to expand it.' },
   { key: 'codeVision', category: 'Editor', group: 'Display', label: 'Show usages above declarations', default: true, control: onOff,
     description: 'A "3 references" label above functions, classes and methods (TypeScript/JavaScript); click it to list them.' },
   { key: 'aiBaseUrl', category: 'AI', group: 'Connection', label: 'Server URL', default: '',

@@ -19,7 +19,8 @@ with an end-to-end test suite that drives the real UI.
   and quick fixes for TypeScript/JavaScript, Python, C/C++ and [Mort](https://github.com/0xmortuex/Mort), through
   language servers.
 - **Git without leaving the editor** — a Git window with a commit graph, branches, merge/rebase/cherry-pick/revert,
-  a merge-conflict resolver, gutter change markers with rollback, a commit window where you can pick files, hunks or
+  interactive rebase (reorder, squash, fixup, reword, drop), history for a selection (`git log -L`), a merge-conflict
+  resolver, gutter change markers with rollback, a commit window where you can pick files, hunks or
   even single lines to commit, editable side-by-side diffs, blame, stash and tags.
 - **Run and debug** — run configurations (with a GUI editor), test run arrows, and a debugger for Node and Python
   with conditional breakpoints, logpoints, watches, stepping, call stack and expression evaluation.
@@ -39,10 +40,11 @@ with an end-to-end test suite that drives the real UI.
 | | |
 | --- | --- |
 | **Layout** | Left, right and bottom docks with a stripe on each edge; move any tool window between them (right-click its button, or drag it to another edge). Sizes and placement are remembered. |
-| **Editor** | Monaco, tabs (reorder by dragging, middle-click to close), breadcrumbs, Structure window, Problems window, project tree (create / rename / delete to the Recycle Bin), Search Everywhere (double-<kbd>Shift</kbd>), project-wide search, Zen mode, full screen, session restore with recent projects. |
+| **Editor** | Monaco, Emmet abbreviations in HTML and CSS files, tabs (reorder by dragging, middle-click to close), breadcrumbs, Structure window, Problems window, project tree (create / rename / delete to the Recycle Bin), Search Everywhere (double-<kbd>Shift</kbd>), project-wide search, Zen mode, full screen, session restore with recent projects. |
 | **Languages** | TypeScript/JavaScript (`typescript-language-server`) and Python (`pyright`) are bundled. C/C++ uses `clangd` if it is on your `PATH`. Mort uses its own `mortc lsp`. Find usages, rename, reformat, quick fixes, format on save, and "N references" labels above declarations (TypeScript/JavaScript; a setting turns them off). |
 | **Terminal** | Real shells (node-pty + xterm.js), as many as you like, in renamable tabs; choose PowerShell, cmd, Git Bash or WSL in Settings. |
-| **Git** | Branch widget with ahead/behind, Git window (graph log, commit details, branches), Commit window with amend and partial commits (choose hunks or single lines per file), editable diffs, gutter hunks with rollback, blame, merge conflicts with Accept Yours/Theirs, file history, colored tree, push (publishes new branches, force-with-lease), pull (merge, rebase or fast-forward), stash, revert, reset, tags. Uses the `git` CLI. |
+| **Git** | Branch widget with ahead/behind, Git window (graph log, commit details, branches, *Interactively Rebase from Here…*), *Show History for Selection*, Commit window with amend and partial commits (choose hunks or single lines per file), editable diffs, gutter hunks with rollback, blame, merge conflicts with Accept Yours/Theirs, file history, colored tree, push (publishes new branches, force-with-lease), pull (merge, rebase or fast-forward), stash, revert, reset, tags. Uses the `git` CLI. |
+| **Code quality** | *Inspect Code* (tsc, ESLint, pyright over the whole project) and *Find Duplicated Code* (copy-paste detection with every place listed). |
 | **Search & refactor** | Find/Replace in the file and in the project (case, whole word, regex, file mask), rename with import updates when files are renamed or moved, find usages, go to implementation / type definition, call and type hierarchy, TODO window, and Inspect Code (runs `tsc`, ESLint and pyright over the whole project into the Problems window). |
 | **Run & debug** | `.forge/run.json` configurations (Node, Python, shell commands, or the current file) with a dialog to edit them, run arrows next to Vitest/Jest/node:test/pytest tests, a Run tab with a real terminal, Node debugger (V8 inspector) and Python debugger (`debugpy`, over DAP) with conditional breakpoints, logpoints and watches. |
 | **Database** | `.db` / `.sqlite` / `.sqlite3` files open in the Database window: schema tree with row counts, a SQL editor (<kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs the selection or everything), a result grid with NULL/BLOB display, sorting, several result sets, row limit and *Copy as CSV*. SQLite itself refuses writes and the file is never touched. |
@@ -166,7 +168,7 @@ Python debugging needs `debugpy` (`uv pip install debugpy`). Mort support needs 
   theme; every setting is declared once in `settings.ts`, from which the Settings window is generated.
 - `tests/` — end-to-end scenarios. Each boots the built app against a temporary project and a throwaway user-data
   folder, sends real key and mouse events, and asserts on the DOM and the filesystem (`pnpm test`).
-- `docs/` — [extension guide](docs/EXTENSIONS.md), [AI features](docs/AI.md); `examples/` — a working example extension.
+- `docs/` — [extension guide](docs/EXTENSIONS.md), [AI features](docs/AI.md), [what was added overnight](docs/OVERNIGHT.md); `examples/` — a working example extension.
 
 ## Known limitations
 

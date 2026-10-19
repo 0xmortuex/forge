@@ -14,6 +14,7 @@ import { registerHttp } from './http'
 import { registerInspect } from './inspect'
 import { registerAi } from './ai'
 import { closeAllDatabases, registerDatabase } from './database'
+import { registerDuplicates } from './duplicates'
 import { registerWatch, stopWatching } from './watch'
 import { registerScratch } from './scratch'
 import { killAllTerminals, registerTerminal } from './terminal'
@@ -175,6 +176,7 @@ registerHttp()
 registerInspect()
 registerAi()
 registerDatabase()
+registerDuplicates()
 registerWatch()
 registerScratch()
 let terminalsEnded = false

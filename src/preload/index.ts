@@ -4,13 +4,15 @@ import type { ExtensionInfo } from '../main/extensions'
 import type { LoadedUserData } from '../main/settings'
 import type { DebugEvent, DebugEval, DebugKind, DebugScope, DebugVar } from '../main/debug'
 import type { Breakpoint } from '../main/debug-types'
-import type { BlameLine, BranchInfo, ChangeKind, CommitDetails, CommitFile, CommitInfo, GitStatus, LogQuery, OpResult, StashEntry } from '../main/git'
+import type { BlameLine, BranchInfo, ChangeKind, CommitDetails, CommitFile, CommitInfo, GitStatus, LogQuery, OpResult, RebaseInfo, SelectionCommit, StashEntry } from '../main/git'
+import type { RebaseStep } from '../main/rebaseplan'
 import type { SearchOptions, SearchResult } from '../main/search'
 import type { Snapshot } from '../main/history'
 import type { FsChange } from '../main/watch'
 import type { HttpRequestSpec, HttpResponse } from '../main/http'
 import type { InspectResult } from '../main/inspect'
 import type { DbQueryResult, DbSchema } from '../main/database'
+import type { DupResult } from '../main/duplicates'
 import type { FileDiff } from '../main/gitpatch'
 import type { AiEvent, AiRequest } from '../main/ai'
 import type { PtySpec } from '../main/terminal'
@@ -45,6 +47,7 @@ const api = {
     ipcRenderer.on('ai:event', listener)
     return () => ipcRenderer.removeListener('ai:event', listener)
   },
+  findDuplicates: (root: string, minLines?: number): Promise<DupResult> => ipcRenderer.invoke('duplicates:find', root, minLines),
   dbOpen: (path: string): Promise<DbSchema> => ipcRenderer.invoke('db:open', path),
   dbQuery: (path: string, sql: string, limit?: number): Promise<DbQueryResult> => ipcRenderer.invoke('db:query', path, sql, limit),
   dbStop: (path: string): Promise<void> => ipcRenderer.invoke('db:stop', path),
@@ -132,6 +135,9 @@ const api = {
   gitRevert: (root: string, path: string, kind: ChangeKind): Promise<void> =>
     ipcRenderer.invoke('git:revert', root, path, kind),
   gitDiffForCommit: (root: string, changes: { path: string; kind: ChangeKind }[]): Promise<string> => ipcRenderer.invoke('git:diff-for-commit', root, changes),
+  gitSelectionHistory: (root: string, abs: string, start: number, end: number): Promise<SelectionCommit[]> => ipcRenderer.invoke('git:selection-history', root, abs, start, end),
+  gitRebasePlan: (root: string, from: string): Promise<RebaseInfo> => ipcRenderer.invoke('git:rebase-plan', root, from),
+  gitRebaseRun: (root: string, base: string, steps: RebaseStep[]): Promise<OpResult> => ipcRenderer.invoke('git:rebase-run', root, base, steps),
   gitFileHunks: (root: string, abs: string): Promise<FileDiff | null> => ipcRenderer.invoke('git:file-hunks', root, abs),
   gitCommitPartial: (root: string, message: string, whole: string[], partial: { path: string; fingerprint: string; selected: number[][] }[]): Promise<void> =>
     ipcRenderer.invoke('git:commit-partial', root, message, whole, partial),

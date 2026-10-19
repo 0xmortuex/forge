@@ -46,7 +46,10 @@ import { initConflicts } from './conflicts'
 import { initGutter } from './gutter'
 import { initTodo } from './todo'
 import { initAiChat } from './aichat'
+import { showSelectionHistory } from './selhistory'
 import { initDatabase } from './database'
+import { initDuplicates } from './duplicates'
+import { initEmmet } from './emmet'
 import { initAiInline } from './aiinline'
 import type { Action } from './ai'
 import { naming, relatedFiles } from './related'
@@ -218,10 +221,11 @@ tw.register({ id: 'hierarchy', title: 'Hierarchy', icon: icons.hierarchy, root: 
 tw.register({ id: 'structure', title: 'Structure', icon: icons.structure, root: $('view-structure'), dock: 'right', shortcut: 'Alt+7' })
 tw.register({ id: 'preview', title: 'Preview', icon: icons.preview, root: $('view-preview'), dock: 'right' })
 tw.register({ id: 'bookmarks', title: 'Bookmarks', icon: icons.bookmark, root: $('view-bookmarks'), dock: 'right' })
+tw.register({ id: 'duplicates', title: 'Duplicates', icon: icons.duplicates, root: $('view-dup'), dock: 'bottom' })
 tw.register({ id: 'database', title: 'Database', icon: icons.database, root: $('view-db'), dock: 'bottom' })
 tw.register({ id: 'ai', title: 'AI Assistant', icon: icons.ai, root: $('view-ai'), dock: 'right', shortcut: 'Alt+8' })
 
-type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai' | 'database'
+type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai' | 'database' | 'duplicates'
 type Side = 'project' | 'commit'
 const showSide = (side: Side): void => tw.show(side)
 const toggleSide = (side: Side): void => tw.toggle(side)
@@ -1408,6 +1412,36 @@ const preview = initPreview({
   isVisible: () => tw.isOpen('preview'),
   report
 })
+/** The commits that changed the selected lines (or the current line), with the diff of just those lines. */
+async function showSelectionHistoryOf(): Promise<void> {
+  if (!rootDir || !active || active.diff || active.image) throw new Error('Open a file in a git project first')
+  const sel = editor.getSelection()
+  const start = sel ? sel.startLineNumber : 1
+  let end = sel ? sel.endLineNumber : 1
+  if (sel && !sel.isEmpty() && sel.endColumn === 1 && end > start) end-- // a selection that ends at the start of a line does not include that line
+  await saveAllDirty() // line numbers must match what git sees
+  const commits = await window.forge.gitSelectionHistory(rootDir, active.path, start, end)
+  await showSelectionHistory(relPath(active.path), start === end ? `line ${start}` : `lines ${start}-${end}`, commits, (text) => void window.forge.copyText(text))
+}
+editor.addAction({
+  id: 'forge.selectionHistory',
+  label: 'Show History for Selection',
+  contextMenuGroupId: 'navigation',
+  contextMenuOrder: 2.7,
+  run: () => void showSelectionHistoryOf().catch((err: unknown) => report(`History for selection: ${err instanceof Error ? err.message : String(err)}`, true))
+})
+
+// ---- Duplicated code ----
+const dupView = initDuplicates({
+  root: $('view-dup'),
+  getRoot: () => rootDir,
+  relPath,
+  openAt: (path, line) => openFile(path, line),
+  reveal: () => tw.show('duplicates'),
+  onCount: (n) => tw.setBadge('duplicates', n ? String(n) : '', 'warn'),
+  report
+})
+
 // ---- Database ----
 const dbView = initDatabase({
   root: $('view-db'),
@@ -1465,6 +1499,7 @@ tw.setOnShow('ai', () => {
   aiChat.focus()
 })
 initAiInline({ report })
+initEmmet(editor)
 {
   // Extensions hear about edits a moment after typing stops, not on every keystroke.
   let timer: number | undefined
@@ -1635,6 +1670,8 @@ const gitUi = initGit({
 /** Fire-and-forget refresh; gitUi.refresh() already reports its own failures. */
 function refreshGit(): void {
   void gitUi.refresh().catch(() => undefined)
+  // A commit made elsewhere (the terminal, another tool) must show up in the Git window if it is open.
+  if (tw.isOpen('git')) void gitLog.refresh().catch(() => undefined)
 }
 tw.setOnShow('commit', refreshGit)
 window.addEventListener('focus', () => {
@@ -1838,6 +1875,8 @@ registerBuiltinCommands({
     if (active && !active.diff) showFileHistory(active.path)
     else report('Open a file to see its git history', true)
   },
+  gitSelectionHistory: () => void showSelectionHistoryOf().catch((err: unknown) => report(`History for selection: ${err instanceof Error ? err.message : String(err)}`, true)),
+  findDuplicates: () => void dupView.scan().catch((err: unknown) => report(`Duplicates: ${err instanceof Error ? err.message : String(err)}`, true)),
   gitBranches: () => showBranches(),
   nextTab: (delta) => cycleTab(delta),
   aiAction: (action) => runAiAction(action),

@@ -13,7 +13,8 @@ export interface BuiltinDeps {
   openSearchScope: (scope: 'all' | 'files' | 'symbols' | 'actions', classesOnly?: boolean) => void
   showFind: () => void
   toggleSide: (side: 'project' | 'commit') => void
-  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai' | 'database') => void
+  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai' | 'database' | 'duplicates') => void
+  findDuplicates: () => void
   runHttp: () => void
   nextTab: (delta: 1 | -1) => void
   aiAction: (action: 'explain' | 'fix' | 'tests' | 'document' | 'refactor') => void
@@ -46,6 +47,7 @@ export interface BuiltinDeps {
   compareWithClipboard: () => void
   showNotifications: () => void
   gitFileHistory: () => void
+  gitSelectionHistory: () => void
   gitBranches: () => void
   gitNextChange: () => void
   gitAnnotate: () => void
@@ -267,6 +269,7 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'code.inspect', category: 'Code', title: 'Inspect Code', run: d.inspectCode })
   register({ id: 'view.resetLayout', category: 'View', title: 'Reset Layout', run: d.resetLayout })
   register({ id: 'nav.goToTest', category: 'Navigate', title: 'Go to Test / Source', keys: 'Ctrl+Shift+T', run: d.goToTest })
+  register({ id: 'code.duplicates', category: 'Code', title: 'Find Duplicated Code', run: d.findDuplicates })
   register({ id: 'view.database', category: 'View', title: 'Toggle Database Window', run: () => d.toggleView('database') })
   register({ id: 'ai.toggle', category: 'AI', title: 'Toggle AI Assistant', keys: 'Alt+8', run: () => d.toggleView('ai') })
   register({ id: 'ai.newChat', category: 'AI', title: 'New AI Chat', run: d.aiNewChat })
@@ -281,6 +284,7 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'view.todo', category: 'View', title: 'Toggle TODO Window', run: () => d.toggleView('todo') })
   register({ id: 'nav.replaceInFiles', category: 'Navigate', title: 'Replace in Files', keys: 'Ctrl+Shift+R', run: d.findReplace })
   register({ id: 'view.git', category: 'View', title: 'Toggle Git Window', keys: 'Alt+9', run: () => d.toggleView('git') })
+  register({ id: 'git.selectionHistory', category: 'Git', title: 'Show History for Selection', run: d.gitSelectionHistory })
   register({ id: 'git.fileHistory', category: 'Git', title: 'Show Git History for File', run: d.gitFileHistory })
   register({ id: 'git.branches', category: 'Git', title: 'Branches…', run: d.gitBranches })
   register({ id: 'git.annotate', category: 'Git', title: 'Annotate with Git Blame', run: d.gitAnnotate })

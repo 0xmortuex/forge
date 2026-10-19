@@ -864,3 +864,60 @@ body.no-breadcrumbs #breadcrumbs { display: none; }
 .partial-line.add .partial-sign { color: var(--ok); }
 .partial-line.del .partial-sign { color: var(--err); }
 .partial-text { flex: 1; }
+
+/* ---- Interactive rebase ---- */
+#rebase { align-items: center; z-index: 60; }
+.rebase-box { width: min(900px, 92vw); max-height: min(80vh, 780px); display: flex; flex-direction: column; }
+.rebase-head { flex: none; padding: 12px 16px 8px; border-bottom: 1px solid var(--border); }
+.rebase-title { font-weight: 700; color: var(--text-hi); }
+.rebase-sub { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
+.rebase-warn { flex: none; margin: 8px 16px 0; padding: 6px 10px; border-radius: 8px; background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn); font-size: 12px; }
+.rebase-list { flex: 1; min-height: 0; overflow: auto; padding: 8px 12px; }
+.rebase-row { display: flex; align-items: center; gap: 10px; padding: 3px 4px; border-radius: 6px; }
+.rebase-row:hover { background: var(--hover); }
+.rebase-row.drop .rebase-subject { text-decoration: line-through; opacity: .55; }
+.rebase-row.squash, .rebase-row.fixup { padding-left: 24px; }
+.rebase-action { width: 96px; flex: none; }
+.rebase-sha { font-family: "JetBrains Mono", Consolas, monospace; color: var(--text-dim); flex: none; }
+.rebase-subject { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-hi); }
+.rebase-pushed { font-size: 10px; font-weight: 700; padding: 0 6px; border-radius: 8px; background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+.rebase-msg-label { margin: 4px 0 2px 116px; font-size: 11px; color: var(--text-dim); }
+.rebase-msg { margin: 0 0 6px 116px; width: calc(100% - 116px); resize: vertical; font-family: inherit; }
+.rebase-foot { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); }
+.rebase-problem { flex: 1; min-width: 0; color: var(--err); font-size: 12px; }
+
+/* ---- History for selection ---- */
+#selhistory { align-items: center; z-index: 60; }
+.selhist-box { width: min(1100px, 94vw); height: min(78vh, 760px); display: flex; flex-direction: column; }
+.selhist-head { flex: none; padding: 12px 16px 8px; border-bottom: 1px solid var(--border); }
+.selhist-title { font-weight: 700; color: var(--text-hi); }
+.selhist-sub { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
+.selhist-body { flex: 1; min-height: 0; display: flex; }
+.selhist-list { flex: none; width: 330px; overflow: auto; border-right: 1px solid var(--border); padding: 4px; }
+.selhist-commit { padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+.selhist-commit:hover { background: var(--hover); }
+.selhist-commit.sel { background: var(--sel); }
+.selhist-subject { color: var(--text-hi); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selhist-meta { color: var(--text-dim); font-size: 11px; margin-top: 1px; }
+.selhist-patch { flex: 1; min-width: 0; margin: 0; overflow: auto; padding: 8px 0; font: 12.5px/1.5 "JetBrains Mono", Consolas, monospace; user-select: text; }
+.selhist-patch > div { padding: 0 14px; white-space: pre; }
+.selhist-patch .add { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+.selhist-patch .del { background: color-mix(in srgb, var(--err) 14%, transparent); color: var(--err); }
+.selhist-patch .hunk { color: var(--info); }
+.selhist-patch .meta { color: var(--text-dim); }
+.selhist-foot { flex: none; display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); }
+
+/* ---- Duplicates window ---- */
+.dup-status { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); font-size: 12px; padding: 0 6px; }
+.dup-status.err { color: var(--err); white-space: normal; }
+.dup-min { width: 96px; }
+.dup-group { display: flex; align-items: center; gap: 8px; height: var(--row-lg); padding: 0 10px; border-radius: 6px; cursor: pointer; user-select: none; }
+.dup-group:hover { background: var(--hover); }
+.dup-chev { width: 12px; color: var(--text-dim); font-size: 11px; }
+.dup-title { font-weight: 700; color: var(--warn); flex: none; }
+.dup-where { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dup-sample { margin: 2px 12px 6px 30px; padding: 8px 12px; border-radius: 8px; background: var(--island-2); overflow: auto; font: 12px/1.5 "JetBrains Mono", Consolas, monospace; max-height: 220px; user-select: text; }
+.dup-occ { display: flex; gap: 10px; padding: 1px 12px 1px 30px; border-radius: 6px; cursor: pointer; }
+.dup-occ:hover { background: var(--hover); }
+.dup-path { color: var(--text-hi); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dup-range { color: var(--text-dim); margin-left: auto; flex: none; }

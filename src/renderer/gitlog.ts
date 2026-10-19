@@ -3,6 +3,7 @@ import { fileIcon } from './icons'
 import { icons } from './icons'
 import { askText, showMenu, type MenuItem } from './menu'
 import { quickPick } from './quick'
+import { chooseRebase } from './rebase'
 
 // The Git window: the commit history with a graph, filters, and the details and changed files of the selected commit.
 // Operations on a commit (cherry-pick, revert, new branch, reset ...) are in its context menu.
@@ -347,6 +348,24 @@ export function initGitLog(deps: GitLogDeps): GitLog {
       .catch(() => undefined)
   }
 
+  /** Reorder, squash, reword or drop this commit and the ones after it. */
+  async function interactiveRebase(c: CommitInfo): Promise<void> {
+    const root = deps.getRoot()
+    if (!root) return
+    await deps
+      .guard('Interactive rebase', async () => {
+        const info = await window.forge.gitRebasePlan(root, c.sha)
+        const steps = await chooseRebase(info)
+        if (!steps) return
+        const res = await window.forge.gitRebaseRun(root, info.base, steps)
+        deps.report(res.conflicts ? res.message : 'Rebase done', res.conflicts)
+        await deps.onWorktreeChanged()
+        await deps.refreshStatus()
+        await refresh()
+      })
+      .catch(() => undefined) // reported by guard
+  }
+
   function commitMenu(c: CommitInfo): (MenuItem | 'sep')[] {
     const root = deps.getRoot()
     if (!root) return []
@@ -365,6 +384,7 @@ export function initGitLog(deps: GitLogDeps): GitLog {
       'sep',
       { label: 'Cherry-Pick', run: () => void runOp(`Cherry-pick ${short}`, () => window.forge.gitCherryPick(root, c.sha)) },
       { label: 'Revert Commit', run: () => void runOp(`Revert ${short}`, () => window.forge.gitRevertCommit(root, c.sha)) },
+      { label: 'Interactively Rebase from Here…', run: () => void interactiveRebase(c) },
       'sep',
       { label: 'Checkout Revision', run: () => void plain('Checkout', () => window.forge.gitCheckout(root, c.sha, 'detached'), `Checked out ${short} (detached HEAD)`) },
       {

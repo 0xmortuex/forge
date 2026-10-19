@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { basename, join, relative, resolve } from 'node:path'
 import { ipcMain } from 'electron'
 import { buildPatch, parseDiff, type FileDiff } from './gitpatch'
+import { planTodo, withExecLines, type RebaseStep } from './rebaseplan'
 
 export type ChangeKind = 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | 'conflict'
 
@@ -81,6 +82,32 @@ export interface BranchInfo {
 }
 
 /** The result of an operation that can stop half way for the user to resolve (merge, rebase, cherry-pick...). */
+export interface SelectionCommit {
+  sha: string
+  author: string
+  /** ISO date. */
+  date: string
+  subject: string
+  /** The commit's diff, limited to the lines asked about. */
+  patch: string
+}
+
+export interface RebaseCommit {
+  sha: string
+  subject: string
+  /** The whole message (subject and body). */
+  message: string
+  /** Already on the upstream branch: rewriting it means a force push, and trouble for anyone who has it. */
+  pushed: boolean
+}
+
+export interface RebaseInfo {
+  base: string
+  upstream: string | null
+  /** Oldest first. */
+  commits: RebaseCommit[]
+}
+
 export interface OpResult {
   ok: boolean
   /** True when it stopped on conflicts: resolve them, then continue or abort. */
@@ -278,9 +305,9 @@ function parseLog(out: string): CommitInfo[] {
 const PRETTY = `--pretty=format:%H${FS}%P${FS}%an${FS}%ae${FS}%at${FS}%D${FS}%s${RS}`
 
 /** git exits non-zero when a merge-like operation stops on conflicts; that is a state, not a failure. */
-async function operation(root: string, args: string[], what: string): Promise<OpResult> {
+async function operation(root: string, args: string[], what: string, env?: NodeJS.ProcessEnv): Promise<OpResult> {
   try {
-    const out = await git(root, args)
+    const out = env ? await gitIn(root, args, env) : await git(root, args)
     return { ok: true, conflicts: false, message: out.trim() || `${what} done` }
   } catch (err) {
     const message = (err as Error).message
@@ -429,6 +456,63 @@ export function registerGit(): void {
   ipcMain.handle('git:rebase', async (_e, root: string, onto: string): Promise<OpResult> => {
     await needRepo(root)
     return operation(root, ['rebase', onto], `Rebasing onto ${onto}`)
+  })
+
+  /** The commits an interactive rebase "from here" would rewrite: the given commit and everything after it, oldest first. */
+  ipcMain.handle('git:rebase-plan', async (_e, root: string, from: string): Promise<RebaseInfo> => {
+    await needRepo(root)
+    const parent = await git(root, ['rev-parse', '--verify', '--quiet', `${from}^`]).then(
+      (out) => out.trim(),
+      () => ''
+    )
+    if (!parent) throw new Error('This is the first commit: there is nothing before it to rebase onto')
+    await git(root, ['merge-base', '--is-ancestor', from, 'HEAD']).catch(() => {
+      throw new Error('That commit is not part of the current branch')
+    })
+    if ((await git(root, ['rev-list', '--merges', `${parent}..HEAD`])).trim()) {
+      throw new Error('The commits since there include a merge commit, which Forge cannot rebase interactively')
+    }
+    const log = await git(root, ['log', '--reverse', '--format=%H%x00%B%x01', `${parent}..HEAD`])
+    const upstream = await git(root, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']).then(
+      (out) => out.trim(),
+      () => null
+    )
+    // Commits of the range that the upstream does not have yet are the safe ones to rewrite.
+    const unpushed = upstream ? new Set((await git(root, ['rev-list', `${parent}..HEAD`, '--not', upstream])).split('\n').filter(Boolean)) : null
+    // Records end with \x01 and hold the id and the message, separated by a NUL (both are impossible in a commit message).
+    const commits = log
+      .split('\x01')
+      .map((r) => r.replace(/^\n/, ''))
+      .filter((r) => r.trim())
+      .map((r): RebaseCommit => {
+        const [sha = '', message = ''] = r.split('\0')
+        const text = message.trim()
+        return { sha, subject: text.split('\n')[0] ?? '', message: text, pushed: unpushed ? !unpushed.has(sha) : false }
+      })
+    return { base: parent, upstream, commits }
+  })
+
+  /**
+   * Runs an interactive rebase from the user's plan, with no editor: the plan is the todo list. A stop on conflicts comes back as
+   * a result (the usual Continue / Abort take over); the message files stay in .git/forge-rebase until the next rebase.
+   */
+  ipcMain.handle('git:rebase-run', async (_e, root: string, base: string, steps: RebaseStep[]): Promise<OpResult> => {
+    const repo = await needRepo(root)
+    const gitDir = resolve(repo.top, (await git(root, ['rev-parse', '--git-dir'])).trim())
+    if (existsSync(join(gitDir, 'rebase-merge')) || existsSync(join(gitDir, 'rebase-apply'))) throw new Error('A rebase is already in progress: continue or abort it first')
+    const plan = planTodo(steps)
+    const dir = join(gitDir, 'forge-rebase')
+    await rm(dir, { recursive: true, force: true })
+    await mkdir(dir, { recursive: true })
+    const fwd = (p: string): string => p.split('\\').join('/')
+    for (const m of plan.messages) await writeFile(join(dir, `msg-${m.n}.txt`), m.text)
+    const todoPath = join(dir, 'todo.txt')
+    await writeFile(todoPath, withExecLines(plan.todo, (n) => fwd(join(dir, `msg-${n}.txt`))))
+    // git runs the sequence editor through sh with the todo file as its last argument: cp puts ours in its place.
+    const env = { GIT_SEQUENCE_EDITOR: `cp "${fwd(todoPath)}"`, GIT_EDITOR: 'true' }
+    const result = await operation(root, ['rebase', '-i', '--autostash', base], 'Rebasing', env)
+    if (result.ok) await rm(dir, { recursive: true, force: true })
+    return result
   })
 
   ipcMain.handle('git:cherry-pick', async (_e, root: string, sha: string): Promise<OpResult> => {
@@ -664,6 +748,22 @@ export function registerGit(): void {
       parts.push(text.includes('\0') ? `new file ${name}: (binary file)\n` : `new file ${name}:\n${text.split('\n').slice(0, 80).join('\n')}\n`)
     }
     return parts.join('\n')
+  })
+
+  /** The commits that touched a range of lines of a file, each with the part of its diff that concerns those lines (git log -L). */
+  ipcMain.handle('git:selection-history', async (_e, root: string, abs: string, start: number, end: number): Promise<SelectionCommit[]> => {
+    const repo = await needRepo(root)
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < start) throw new Error('Not a valid range of lines')
+    const marker = '@@FORGE-COMMIT@@'
+    const out = await git(root, ['log', `-L${start},${end}:${toGitPath(repo, abs)}`, '--no-color', `--format=${marker}%x00%H%x00%an%x00%aI%x00%s`])
+    return out
+      .split(marker)
+      .filter((chunk) => chunk.trim())
+      .map((chunk): SelectionCommit => {
+        const eol = chunk.indexOf('\n')
+        const [, sha = '', author = '', date = '', subject = ''] = chunk.slice(0, eol < 0 ? chunk.length : eol).split('\0')
+        return { sha, author, date, subject, patch: eol < 0 ? '' : chunk.slice(eol + 1).trim() }
+      })
   })
 
   /** A modified file's changes against HEAD, as hunks and lines, for choosing which of them to commit. */
