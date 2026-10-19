@@ -147,6 +147,9 @@ const api = {
   openThemesDir: (): Promise<string> => ipcRenderer.invoke('themes:openDir'),
   openSnippetsDir: (): Promise<string> => ipcRenderer.invoke('snippets:openDir'),
   toggleFullscreen: (): Promise<boolean> => ipcRenderer.invoke('win:toggleFullscreen'),
+  extensionDataLoad: (id: string): Promise<Record<string, unknown>> => ipcRenderer.invoke('extensions:data-load', id),
+  extensionDataSave: (id: string, json: string): Promise<void> => ipcRenderer.invoke('extensions:data-save', id, json),
+  extensionFetch: (id: string, spec: HttpRequestSpec): Promise<HttpResponse> => ipcRenderer.invoke('extensions:fetch', id, spec),
   extensionsList: (): Promise<ExtensionInfo[]> => ipcRenderer.invoke('extensions:list'),
   /** Starts watching the project folder for changes made outside Forge (replacing any earlier watch). */
   watchRoot: (root: string): Promise<void> => ipcRenderer.invoke('fs:watch', root),

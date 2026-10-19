@@ -395,6 +395,16 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
       const info = el('div', 'info')
       info.append(el('div', 'label', `${ext.info.name}${ext.info.version ? ' ' + ext.info.version : ''}`))
       if (ext.info.description) info.append(el('div', 'desc', ext.info.description))
+      if (ext.info.permissions.length) {
+        const wants: Record<string, string> = {
+          network: 'make web requests',
+          ai: 'send text to your AI server',
+          files: 'read files in your project'
+        }
+        const asks = el('div', 'desc ext-permissions', `Asks to: ${ext.info.permissions.map((p) => wants[p] ?? p).join(', ')}`)
+        asks.style.color = 'var(--warn)'
+        info.append(asks)
+      }
       const status = el('div', 'desc', ext.status === 'active' ? 'Active' : ext.status === 'error' ? `Problem: ${ext.error ?? 'unknown'}` : 'Off')
       if (ext.status === 'error') status.style.color = 'var(--err)'
       if (ext.status === 'active') status.style.color = 'var(--ok)'

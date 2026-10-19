@@ -1,0 +1,7 @@
+{
+  "name": "AI Summary",
+  "version": "1.0.0",
+  "description": "Summarizes the active file in one paragraph using the AI server set up in Settings → AI.",
+  "main": "index.js",
+  "permissions": ["ai"]
+}

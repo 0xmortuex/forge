@@ -27,7 +27,8 @@ with an end-to-end test suite that drives the real UI.
 - **AI, on your terms** — a chat window, Explain/Fix/Write Tests on a selection, inline suggestions and commit messages,
   against any OpenAI-compatible server (OpenAI, Claude, Ollama, LM Studio…). Off until you set it up; the key is stored
   encrypted; you approve each server before code is sent. See [docs/AI.md](docs/AI.md).
-- **Extensible** — a small, documented extension API (off by default), plus drop-in theme files.
+- **Extensible** — a small, documented extension API (panels, storage, events, permission-gated network/AI/file access;
+  off by default), plus drop-in theme files.
 
 ## Features
 
@@ -168,7 +169,7 @@ Python debugging needs `debugpy` (`uv pip install debugpy`). Mort support needs 
 - The pytest runner and the `clangd` integration have not been exercised end to end.
 - The built-in IDE shortcuts (Alt+digit, F-keys, Ctrl+Shift+P …) work inside the terminal; your own custom shortcuts do not.
 - The AI features are tested against a mock server only; they have not been run against a real service in this repository's CI. Answers can be wrong: read what you insert.
-- The extension API is deliberately small (version 1).
+- The extension API is small (version 2); its permissions are a declaration and an API guard, not a sandbox.
 
 ## License
 

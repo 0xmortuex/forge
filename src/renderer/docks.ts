@@ -58,6 +58,8 @@ export interface ToolWindowDeps {
 
 export interface ToolWindows {
   register: (def: ToolWindowDef) => void
+  /** Removes a window (and its stripe button); used for windows that extensions add and take away. */
+  unregister: (id: string) => void
   setOnShow: (id: string, fn: () => void) => void
   show: (id: string, opts?: { restore?: boolean }) => void
   toggle: (id: string) => void
@@ -274,6 +276,15 @@ export function createToolWindows(deps: ToolWindowDeps): ToolWindows {
       if (windows.has(def.id)) throw new Error(`Tool window registered twice: ${def.id}`)
       windows.set(def.id, { ...def })
       homes.set(def.id, def.dock)
+      render()
+    },
+    unregister(id) {
+      const w = get(id)
+      windows.delete(id)
+      homes.delete(id)
+      badges.delete(id)
+      if (docks[w.dock].active === id) docks[w.dock].active = undefined
+      w.root.remove()
       render()
     },
     setOnShow(id, fn) {

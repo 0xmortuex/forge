@@ -385,6 +385,7 @@ function activate(f: OpenFile | null): void {
   updateStatus()
   breadcrumbs.refresh()
   if (f && !f.diff) nav.visit()
+  if (f && !f.diff) extensions.emit('activate', { path: f.path })
   if (f && !f.diff && settings.get<boolean>('treeFollow')) void locateInTree(f.path).catch((err: unknown) => report(`Locate in tree: ${String(err)}`, true))
 }
 
@@ -478,6 +479,7 @@ async function reloadFromDisk(): Promise<void> {
 
 function closeFile(f: OpenFile): void {
   if (!openFiles.has(tabKey(f))) return // already closed, e.g. together with the file it shows
+  if (!f.diff) extensions.emit('close', { path: f.path })
   // A diff that edits this file's model must go first, or it would be left holding a disposed model.
   if (!f.diff) for (const d of [...openFiles.values()]) if (d.diff?.shared === f) closeFile(d)
   openFiles.delete(tabKey(f))
@@ -1444,6 +1446,16 @@ for (const [i, [id, label, action]] of ([['ai.explain', 'Explain Code', 'explain
 }
 tw.setOnShow('ai', () => aiChat.focus())
 initAiInline({ report })
+{
+  // Extensions hear about edits a moment after typing stops, not on every keystroke.
+  let timer: number | undefined
+  editor.onDidChangeModelContent(() => {
+    window.clearTimeout(timer)
+    timer = window.setTimeout(() => {
+      if (active && !active.diff) extensions.emit('change', { path: active.path })
+    }, 300)
+  })
+}
 tw.setOnShow('preview', () => void preview.refresh().catch((e: unknown) => report(`Preview: ${String(e)}`, true)))
 {
   let timer: number | undefined
@@ -1891,6 +1903,7 @@ registerBuiltinCommands({
 keymap.init(report) // custom shortcuts, now that every command exists
 initExtensions({
   report,
+  panels: tw,
   editor: {
     getText: () => (active && !active.diff ? active.model.getValue() : null),
     getSelectedText: () => {

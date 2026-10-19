@@ -1,0 +1,6 @@
+{
+  "name": "Notes Panel",
+  "version": "1.0.0",
+  "description": "A side panel with a private note for each file; notes are remembered between sessions.",
+  "main": "index.js"
+}
