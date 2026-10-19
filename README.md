@@ -16,10 +16,14 @@ with an end-to-end test suite that drives the real UI.
 - **Real language intelligence** — completion, hover, go-to-definition, diagnostics, rename, find usages, formatting
   and quick fixes for TypeScript/JavaScript, Python, C/C++ and [Mort](https://github.com/0xmortuex/Mort), through
   language servers.
-- **Git without leaving the editor** — commit window with per-file selection, editable side-by-side diffs, blame,
-  branches, push/pull/stash/revert.
-- **Run and debug** — run configurations, and a debugger for Node and Python with breakpoints, stepping, call
-  stack, variables and expression evaluation.
+- **Git without leaving the editor** — a Git window with a commit graph, branches, merge/rebase/cherry-pick/revert,
+  a merge-conflict resolver, gutter change markers with rollback, commit window with per-file selection, editable
+  side-by-side diffs, blame, stash and tags.
+- **Run and debug** — run configurations (with a GUI editor), test run arrows, and a debugger for Node and Python
+  with conditional breakpoints, logpoints, watches, stepping, call stack and expression evaluation.
+- **Navigation and tooling** — recent files/locations, back/forward, bookmarks, call and type hierarchy, inlay
+  hints, find/replace in files, local history, scratch files, live templates, split editor, Markdown preview, a
+  built-in HTTP client for `.http` files, EditorConfig and a TODO window.
 - **Extensible** — a small, documented extension API (off by default), plus drop-in theme files.
 
 ## Features
@@ -29,9 +33,10 @@ with an end-to-end test suite that drives the real UI.
 | **Layout** | Left, right and bottom docks with a stripe on each edge; move any tool window between them (right-click its button, or drag it to another edge). Sizes and placement are remembered. |
 | **Editor** | Monaco, tabs (reorder by dragging, middle-click to close), breadcrumbs, Structure window, Problems window, project tree (create / rename / delete to the Recycle Bin), Search Everywhere (double-<kbd>Shift</kbd>), project-wide search, Zen mode, full screen, session restore with recent projects. |
 | **Languages** | TypeScript/JavaScript (`typescript-language-server`) and Python (`pyright`) are bundled. C/C++ uses `clangd` if it is on your `PATH`. Mort uses its own `mortc lsp`. Find usages, rename, reformat, quick fixes, format on save. |
-| **Terminal** | Real shells (node-pty + xterm.js), as many as you like, in tabs. |
-| **Git** | Branch widget with ahead/behind, Commit window, editable diffs, blame in the status bar, colored tree, push (publishes new branches), fast-forward pull, stash (with untracked files), revert. Uses the `git` CLI. |
-| **Run & debug** | `.forge/run.json` configurations (Node, Python, shell commands, or the current file), a Run tab with a real terminal, Node debugger (V8 inspector) and Python debugger (`debugpy`, over DAP). |
+| **Terminal** | Real shells (node-pty + xterm.js), as many as you like, in renamable tabs; choose PowerShell, cmd, Git Bash or WSL in Settings. |
+| **Git** | Branch widget with ahead/behind, Git window (graph log, commit details, branches), Commit window with amend, editable diffs, gutter hunks with rollback, blame, merge conflicts with Accept Yours/Theirs, file history, colored tree, push (publishes new branches, force-with-lease), pull (merge, rebase or fast-forward), stash, revert, reset, tags. Uses the `git` CLI. |
+| **Search & refactor** | Find/Replace in the file and in the project (case, whole word, regex, file mask), rename with import updates when files are renamed or moved, find usages, go to implementation / type definition, call and type hierarchy, TODO window. |
+| **Run & debug** | `.forge/run.json` configurations (Node, Python, shell commands, or the current file) with a dialog to edit them, run arrows next to Vitest/Jest/node:test/pytest tests, a Run tab with a real terminal, Node debugger (V8 inspector) and Python debugger (`debugpy`, over DAP) with conditional breakpoints, logpoints and watches. |
 | **Customization** | Themes, accent, fonts, layout density, panel shape, motion, editor and terminal options, custom shortcuts, command palette. |
 
 ![Git diff and the Commit window](docs/git-diff.png)
@@ -91,6 +96,14 @@ instead of overwriting it.
 | Run / Debug / Stop | <kbd>Shift</kbd>+<kbd>F10</kbd> / <kbd>Shift</kbd>+<kbd>F9</kbd> / <kbd>Ctrl</kbd>+<kbd>F2</kbd> |
 | Resume / Step over / Step into / Step out | <kbd>F9</kbd> / <kbd>F8</kbd> / <kbd>F7</kbd> / <kbd>Shift</kbd>+<kbd>F8</kbd> |
 | Toggle breakpoint | <kbd>Ctrl</kbd>+<kbd>F8</kbd> or click the gutter |
+| Recent files / Recent locations | <kbd>Ctrl</kbd>+<kbd>E</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> |
+| Back / Forward | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>→</kbd> |
+| Next / previous tab | <kbd>Ctrl</kbd>+<kbd>Tab</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> |
+| Replace in file / Replace in project | <kbd>Ctrl</kbd>+<kbd>H</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> |
+| Go to implementation / Find usages | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>B</kbd> / <kbd>Alt</kbd>+<kbd>F7</kbd> |
+| Toggle bookmark / Show bookmarks | <kbd>Ctrl</kbd>+<kbd>F11</kbd> / <kbd>Shift</kbd>+<kbd>F11</kbd> |
+| Next / previous change | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>↓</kbd> / <kbd>↑</kbd> |
+| Run HTTP request (in a `.http` file) | <kbd>Ctrl</kbd>+<kbd>Enter</kbd> |
 
 ## Getting started
 
@@ -135,9 +148,10 @@ Python debugging needs `debugpy` (`uv pip install debugpy`). Mort support needs 
 - Windows is the only platform it has actually been run on. CI type-checks and builds on Windows, Linux and macOS,
   and the code has macOS/Linux branches, but they are untested.
 - There is no packaged installer yet; run it from source.
-- Debugging covers Node and Python only (no conditional breakpoints or logpoints yet).
-- Git has no history viewer, merge-conflict UI or branch deletion; pull is fast-forward only.
-- One editor group (no split editors); Problems lists the open files only, not the whole project.
+- Debugging covers Node and Python only.
+- The split editor (two panes) has Monaco's built-in features but not Forge's refactor actions; Problems lists the open files only, not the whole project.
+- Markdown preview does not load remote images (the content security policy blocks them).
+- The pytest runner and the `clangd` integration have not been exercised end to end.
 - The built-in IDE shortcuts (Alt+digit, F-keys, Ctrl+Shift+P …) work inside the terminal; your own custom shortcuts do not.
 - The extension API is deliberately small (version 1).
 
