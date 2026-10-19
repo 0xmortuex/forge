@@ -12,6 +12,7 @@ import { killAllLsp, registerLsp } from './lsp'
 import { registerHistory } from './history'
 import { registerHttp } from './http'
 import { registerInspect } from './inspect'
+import { registerAi } from './ai'
 import { registerWatch, stopWatching } from './watch'
 import { registerScratch } from './scratch'
 import { killAllTerminals, registerTerminal } from './terminal'
@@ -169,6 +170,7 @@ registerDebug()
 registerHistory()
 registerHttp()
 registerInspect()
+registerAi()
 registerWatch()
 registerScratch()
 let terminalsEnded = false

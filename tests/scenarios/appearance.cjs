@@ -60,7 +60,7 @@ run(
 
     // ---- the Settings window ----
     await openSettings()
-    check('Ctrl+, opens the Settings window, with seven categories', (await settingsShown()) && (await js("document.querySelectorAll('.snav').length")) === 7)
+    check('Ctrl+, opens the Settings window, with eight categories', (await settingsShown()) && (await js("document.querySelectorAll('.snav').length")) === 8)
     const cards = await js("document.querySelectorAll('.theme-card').length")
     check('the gallery shows every built-in theme plus the custom one', cards >= 18, String(cards))
     check('the invalid theme file is reported in Settings', (await text('settings-body')).includes('bad.json'), (await text('settings-body')).slice(0, 200))

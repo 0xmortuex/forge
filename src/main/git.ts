@@ -611,6 +611,30 @@ export function registerGit(): void {
     await git(root, ['commit', '--amend', ...msg, ...(rels.length ? ['--only', '--', ...rels] : [])])
   })
 
+  /**
+   * What a commit of these changes would contain, as text for describing it: tracked changes as a diff against HEAD,
+   * new (untracked) files as their first lines. Used to write a commit message.
+   */
+  ipcMain.handle('git:diff-for-commit', async (_e, root: string, changes: { path: string; kind: ChangeKind }[]): Promise<string> => {
+    const repo = await needRepo(root)
+    const hasHead = await git(root, ['rev-parse', '--verify', '--quiet', 'HEAD']).then(
+      () => true,
+      () => false
+    )
+    const tracked = changes.filter((c) => c.kind !== 'untracked').map((c) => toGitPath(repo, c.path))
+    const parts: string[] = []
+    if (tracked.length) {
+      // The first commit of a repository has no HEAD to compare with: what is staged is all there is.
+      parts.push(await git(root, hasHead ? ['diff', 'HEAD', '--', ...tracked] : ['diff', '--cached', '--', ...tracked]))
+    }
+    for (const c of changes.filter((x) => x.kind === 'untracked')) {
+      const text = await readFile(c.path, 'utf8')
+      const name = toGitPath(repo, c.path)
+      parts.push(text.includes('\0') ? `new file ${name}: (binary file)\n` : `new file ${name}:\n${text.split('\n').slice(0, 80).join('\n')}\n`)
+    }
+    return parts.join('\n')
+  })
+
   /** Adds a path to the repository's .gitignore (created if needed). */
   ipcMain.handle('git:ignore', async (_e, root: string, abs: string) => {
     const repo = await needRepo(root)

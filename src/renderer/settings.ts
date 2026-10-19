@@ -27,6 +27,7 @@ export const CATEGORIES = [
   { id: 'Editor', color: 'var(--info)' },
   { id: 'Terminal', color: 'var(--ok)' },
   { id: 'Behavior', color: 'var(--warn)' },
+  { id: 'AI', color: 'var(--syn-string)' },
   { id: 'Keymap', color: 'var(--syn-keyword)' },
   { id: 'Extensions', color: 'var(--syn-func)' },
   { id: 'About', color: 'var(--err)' }
@@ -114,6 +115,15 @@ export const DEFS: SettingDef[] = [
     control: { type: 'select', options: opts(['on', 'Always'], ['onUnlessPressed', 'Always (hold Ctrl+Alt to hide)'], ['offUnlessPressed', 'Never (hold Ctrl+Alt to show)'], ['off', 'Never']) } },
   { key: 'codeVision', category: 'Editor', group: 'Display', label: 'Show usages above declarations', default: true, control: onOff,
     description: 'A "3 references" label above functions, classes and methods (TypeScript/JavaScript); click it to list them.' },
+  { key: 'aiBaseUrl', category: 'AI', group: 'Connection', label: 'Server URL', default: '',
+    description: 'Any OpenAI-compatible server: https://api.openai.com/v1, https://api.anthropic.com/v1, http://localhost:11434/v1 (Ollama), and so on. Your code is sent here, so only use a server you trust.',
+    control: { type: 'text', placeholder: 'https://api.openai.com/v1' } },
+  { key: 'aiModel', category: 'AI', group: 'Connection', label: 'Model', default: '',
+    description: 'The model name the server expects, for example gpt-4o-mini or claude-sonnet-5-5.', control: { type: 'text', placeholder: 'model name' } },
+  { key: 'aiInline', category: 'AI', group: 'Inline completions', label: 'Suggest code as you type', default: false, control: onOff,
+    description: 'Greyed-out suggestions that Tab accepts. Off by default: every pause in typing sends your surrounding code to the server and costs a request.' },
+  { key: 'aiInlineModel', category: 'AI', group: 'Inline completions', label: 'Model for suggestions', default: '',
+    description: 'Leave empty to use the model above. A small, fast model works best here.', control: { type: 'text', placeholder: 'same as above' } },
   { key: 'folding', category: 'Editor', group: 'Display', label: 'Code folding', default: true, control: onOff },
   { key: 'scrollBeyondLastLine', category: 'Editor', group: 'Display', label: 'Scroll past the last line', default: false, control: onOff },
 

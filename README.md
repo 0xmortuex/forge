@@ -24,6 +24,9 @@ with an end-to-end test suite that drives the real UI.
 - **Navigation and tooling** — recent files/locations, back/forward, bookmarks, call and type hierarchy, inlay
   hints, find/replace in files, local history, scratch files, live templates, split editor, Markdown preview, a
   built-in HTTP client for `.http` files, EditorConfig and a TODO window.
+- **AI, on your terms** — a chat window, Explain/Fix/Write Tests on a selection, inline suggestions and commit messages,
+  against any OpenAI-compatible server (OpenAI, Claude, Ollama, LM Studio…). Off until you set it up; the key is stored
+  encrypted; you approve each server before code is sent. See [docs/AI.md](docs/AI.md).
 - **Extensible** — a small, documented extension API (off by default), plus drop-in theme files.
 
 ## Features
@@ -37,6 +40,7 @@ with an end-to-end test suite that drives the real UI.
 | **Git** | Branch widget with ahead/behind, Git window (graph log, commit details, branches), Commit window with amend, editable diffs, gutter hunks with rollback, blame, merge conflicts with Accept Yours/Theirs, file history, colored tree, push (publishes new branches, force-with-lease), pull (merge, rebase or fast-forward), stash, revert, reset, tags. Uses the `git` CLI. |
 | **Search & refactor** | Find/Replace in the file and in the project (case, whole word, regex, file mask), rename with import updates when files are renamed or moved, find usages, go to implementation / type definition, call and type hierarchy, TODO window, and Inspect Code (runs `tsc`, ESLint and pyright over the whole project into the Problems window). |
 | **Run & debug** | `.forge/run.json` configurations (Node, Python, shell commands, or the current file) with a dialog to edit them, run arrows next to Vitest/Jest/node:test/pytest tests, a Run tab with a real terminal, Node debugger (V8 inspector) and Python debugger (`debugpy`, over DAP) with conditional breakpoints, logpoints and watches. |
+| **AI** | AI Assistant window (<kbd>Alt</kbd>+<kbd>8</kbd>) with streaming Markdown answers and Insert/Replace buttons on code, *AI:* actions in the editor's context menu, opt-in inline ghost-text suggestions, *Generate message* in the Commit window. Bring your own server and key. |
 | **Customization** | Themes, accent, fonts, layout density, panel shape, motion, editor and terminal options, custom shortcuts, command palette. |
 
 ![Git diff and the Commit window](docs/git-diff.png)
@@ -106,6 +110,7 @@ instead of overwriting it.
 | Back / Forward | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>→</kbd> |
 | Rename file | <kbd>Shift</kbd>+<kbd>F6</kbd> |
 | Go to test / source | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd> |
+| AI Assistant | <kbd>Alt</kbd>+<kbd>8</kbd> |
 | Next / previous tab | <kbd>Ctrl</kbd>+<kbd>Tab</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> |
 | Replace in file / Replace in project | <kbd>Ctrl</kbd>+<kbd>H</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> |
 | Go to implementation / Find usages | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>B</kbd> / <kbd>Alt</kbd>+<kbd>F7</kbd> |
@@ -149,7 +154,7 @@ Python debugging needs `debugpy` (`uv pip install debugpy`). Mort support needs 
   theme; every setting is declared once in `settings.ts`, from which the Settings window is generated.
 - `tests/` — end-to-end scenarios. Each boots the built app against a temporary project and a throwaway user-data
   folder, sends real key and mouse events, and asserts on the DOM and the filesystem (`pnpm test`).
-- `docs/` — [extension guide](docs/EXTENSIONS.md); `examples/` — a working example extension.
+- `docs/` — [extension guide](docs/EXTENSIONS.md), [AI features](docs/AI.md); `examples/` — a working example extension.
 
 ## Known limitations
 
@@ -162,6 +167,7 @@ Python debugging needs `debugpy` (`uv pip install debugpy`). Mort support needs 
 - Markdown preview does not load remote images (the content security policy blocks them).
 - The pytest runner and the `clangd` integration have not been exercised end to end.
 - The built-in IDE shortcuts (Alt+digit, F-keys, Ctrl+Shift+P …) work inside the terminal; your own custom shortcuts do not.
+- The AI features are tested against a mock server only; they have not been run against a real service in this repository's CI. Answers can be wrong: read what you insert.
 - The extension API is deliberately small (version 1).
 
 ## License

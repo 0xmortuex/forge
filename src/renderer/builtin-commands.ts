@@ -13,9 +13,11 @@ export interface BuiltinDeps {
   openSearchScope: (scope: 'all' | 'files' | 'symbols' | 'actions', classesOnly?: boolean) => void
   showFind: () => void
   toggleSide: (side: 'project' | 'commit') => void
-  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http') => void
+  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai') => void
   runHttp: () => void
   nextTab: (delta: 1 | -1) => void
+  aiAction: (action: 'explain' | 'fix' | 'tests' | 'document' | 'refactor') => void
+  aiNewChat: () => void
   reopenClosedTab: () => void
   closeAllTabs: () => void
   closeOtherTabs: () => void
@@ -265,6 +267,13 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'code.inspect', category: 'Code', title: 'Inspect Code', run: d.inspectCode })
   register({ id: 'view.resetLayout', category: 'View', title: 'Reset Layout', run: d.resetLayout })
   register({ id: 'nav.goToTest', category: 'Navigate', title: 'Go to Test / Source', keys: 'Ctrl+Shift+T', run: d.goToTest })
+  register({ id: 'ai.toggle', category: 'AI', title: 'Toggle AI Assistant', keys: 'Alt+8', run: () => d.toggleView('ai') })
+  register({ id: 'ai.newChat', category: 'AI', title: 'New AI Chat', run: d.aiNewChat })
+  register({ id: 'ai.explain', category: 'AI', title: 'Explain Code', run: () => d.aiAction('explain') })
+  register({ id: 'ai.fix', category: 'AI', title: 'Find and Fix Problems', run: () => d.aiAction('fix') })
+  register({ id: 'ai.tests', category: 'AI', title: 'Write Tests', run: () => d.aiAction('tests') })
+  register({ id: 'ai.document', category: 'AI', title: 'Write Documentation', run: () => d.aiAction('document') })
+  register({ id: 'ai.refactor', category: 'AI', title: 'Suggest Refactoring', run: () => d.aiAction('refactor') })
   register({ id: 'tab.next', category: 'Navigate', title: 'Next Tab', keys: 'Ctrl+Tab', run: () => d.nextTab(1) })
   register({ id: 'tab.prev', category: 'Navigate', title: 'Previous Tab', keys: 'Ctrl+Shift+Tab', run: () => d.nextTab(-1) })
   register({ id: 'file.openInBrowser', category: 'File', title: 'Open in Browser', run: d.openInBrowser })

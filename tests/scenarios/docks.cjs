@@ -31,7 +31,7 @@ run(
     await waitFor(() => js("document.getElementById('tree').textContent.includes('a.txt')"), 5000)
 
     check('the right dock starts closed', await hidden('right'))
-    check('the right stripe has Structure and Bookmarks', (await stripeIds('stripe-right')) === 'structure,preview,bookmarks', await stripeIds('stripe-right'))
+    check('the right stripe has Structure and Bookmarks', (await stripeIds('stripe-right')) === 'structure,preview,bookmarks,ai', await stripeIds('stripe-right'))
     check('the left stripe has Project and Commit on top', (await stripeIds('stripe-left-top')) === 'project,commit', await stripeIds('stripe-left-top'))
     check(
       'the bottom windows are below, nearest the edge first',
@@ -50,7 +50,7 @@ run(
     await menu('problems', 'Move to Right')
     check('Problems moved into the right dock', (await parentOf('view-problems')) === 'right', await parentOf('view-problems'))
     check('...which opened', !(await hidden('right')) && !(await hidden('view-problems')))
-    check('...and its stripe button moved to the right stripe', (await stripeIds('stripe-right')) === 'problems,structure,preview,bookmarks', await stripeIds('stripe-right'))
+    check('...and its stripe button moved to the right stripe', (await stripeIds('stripe-right')) === 'problems,structure,preview,bookmarks,ai', await stripeIds('stripe-right'))
     check('...and left the bottom tabs', !(await js("[...document.querySelectorAll('#bottom-tabs .btab')].some(b => b.dataset.win === 'problems')")))
     await js("document.querySelector('#right-tabs .btab[data-win=\"structure\"]').click()")
     check('the right dock switches windows with its tabs', !(await hidden('view-structure')) && (await hidden('view-problems')))
@@ -89,6 +89,7 @@ run(
     await menu('structure', 'Move to Left')
     await menu('bookmarks', 'Move to Left')
     await menu('preview', 'Move to Left')
+    await menu('ai', 'Move to Left')
     await menu('problems', 'Move to Left')
     check('a dock with no windows is hidden', await hidden('right'))
     check('...along with its stripe', await js("document.getElementById('stripe-right').hidden"))

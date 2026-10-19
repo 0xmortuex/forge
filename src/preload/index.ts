@@ -10,6 +10,7 @@ import type { Snapshot } from '../main/history'
 import type { FsChange } from '../main/watch'
 import type { HttpRequestSpec, HttpResponse } from '../main/http'
 import type { InspectResult } from '../main/inspect'
+import type { AiEvent, AiRequest } from '../main/ai'
 import type { PtySpec } from '../main/terminal'
 
 const api = {
@@ -30,6 +31,18 @@ const api = {
   readDataUrl: (path: string): Promise<{ url: string; bytes: number }> => ipcRenderer.invoke('fs:readDataUrl', path),
   openInBrowser: (path: string): Promise<void> => ipcRenderer.invoke('shell:openInBrowser', path),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
+  aiChat: (id: number, req: AiRequest): Promise<void> => ipcRenderer.invoke('ai:chat', id, req),
+  aiCancel: (id: number): Promise<void> => ipcRenderer.invoke('ai:cancel', id),
+  aiComplete: (req: AiRequest): Promise<string> => ipcRenderer.invoke('ai:complete', req),
+  aiTest: (baseUrl: string, model: string): Promise<{ reply: string; ms: number }> => ipcRenderer.invoke('ai:test', baseUrl, model),
+  aiKeySet: (key: string): Promise<void> => ipcRenderer.invoke('ai:key-set', key),
+  aiKeyClear: (): Promise<void> => ipcRenderer.invoke('ai:key-clear'),
+  aiKeyStatus: (): Promise<{ stored: boolean; encryption: boolean }> => ipcRenderer.invoke('ai:key-status'),
+  onAiEvent: (cb: (e: AiEvent) => void): (() => void) => {
+    const listener = (_e: unknown, event: AiEvent): void => cb(event)
+    ipcRenderer.on('ai:event', listener)
+    return () => ipcRenderer.removeListener('ai:event', listener)
+  },
   inspect: (root: string): Promise<InspectResult> => ipcRenderer.invoke('inspect:run', root),
   httpSend: (spec: HttpRequestSpec): Promise<HttpResponse> => ipcRenderer.invoke('http:send', spec),
   copy: (from: string, to: string): Promise<void> => ipcRenderer.invoke('fs:copy', from, to),
@@ -112,6 +125,7 @@ const api = {
   gitStashDrop: (root: string, ref: string): Promise<void> => ipcRenderer.invoke('git:stashDrop', root, ref),
   gitRevert: (root: string, path: string, kind: ChangeKind): Promise<void> =>
     ipcRenderer.invoke('git:revert', root, path, kind),
+  gitDiffForCommit: (root: string, changes: { path: string; kind: ChangeKind }[]): Promise<string> => ipcRenderer.invoke('git:diff-for-commit', root, changes),
   gitCommit: (root: string, message: string, paths: string[], amend = false): Promise<void> => ipcRenderer.invoke('git:commit', root, message, paths, amend),
   debugLaunch: (cwd: string, cols: number, rows: number, spec: PtySpec, kind: DebugKind): Promise<number> =>
     ipcRenderer.invoke('debug:launch', cwd, cols, rows, spec, kind),

@@ -45,6 +45,9 @@ import { initGitLog } from './gitlog'
 import { initConflicts } from './conflicts'
 import { initGutter } from './gutter'
 import { initTodo } from './todo'
+import { initAiChat } from './aichat'
+import { initAiInline } from './aiinline'
+import type { Action } from './ai'
 import { naming, relatedFiles } from './related'
 import { initPreview } from './preview'
 import { initBreakpointsWindow } from './breakpoints'
@@ -214,8 +217,9 @@ tw.register({ id: 'hierarchy', title: 'Hierarchy', icon: icons.hierarchy, root: 
 tw.register({ id: 'structure', title: 'Structure', icon: icons.structure, root: $('view-structure'), dock: 'right', shortcut: 'Alt+7' })
 tw.register({ id: 'preview', title: 'Preview', icon: icons.preview, root: $('view-preview'), dock: 'right' })
 tw.register({ id: 'bookmarks', title: 'Bookmarks', icon: icons.bookmark, root: $('view-bookmarks'), dock: 'right' })
+tw.register({ id: 'ai', title: 'AI Assistant', icon: icons.ai, root: $('view-ai'), dock: 'right', shortcut: 'Alt+8' })
 
-type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http'
+type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai'
 type Side = 'project' | 'commit'
 const showSide = (side: Side): void => tw.show(side)
 const toggleSide = (side: Side): void => tw.toggle(side)
@@ -1126,10 +1130,10 @@ if (isMac) document.body.classList.add('mac') // window buttons are on the left 
 
 window.addEventListener('keydown', (e) => {
   // Physical keys (e.code): on macOS, Alt+1 types a symbol, so e.key would never be "1".
-  const digit = e.altKey && !e.ctrlKey && !e.metaKey ? /^Digit([0123679])$/.exec(e.code)?.[1] : undefined
+  const digit = e.altKey && !e.ctrlKey && !e.metaKey ? /^Digit([01236789])$/.exec(e.code)?.[1] : undefined
   if (digit !== undefined) {
     e.preventDefault()
-    tw.toggle({ '0': 'commit', '1': 'project', '2': 'output', '3': 'terminal', '6': 'problems', '7': 'structure', '9': 'git' }[digit]!)
+    tw.toggle({ '0': 'commit', '1': 'project', '2': 'output', '3': 'terminal', '6': 'problems', '7': 'structure', '8': 'ai', '9': 'git' }[digit]!)
     return
   }
   if (e.key === 'F11' && e.shiftKey && !e.ctrlKey && !e.altKey) {
@@ -1396,6 +1400,50 @@ const preview = initPreview({
   isVisible: () => tw.isOpen('preview'),
   report
 })
+// ---- AI Assistant ----
+const aiChat = initAiChat({
+  root: $('view-ai'),
+  context: () => {
+    const m = active && !active.diff && !active.image ? editor.getModel() : null
+    const sel = editor.getSelection()
+    return {
+      path: m && active ? relPath(active.path) : null,
+      language: m ? m.getLanguageId() : null,
+      selection: m && sel && !sel.isEmpty() ? m.getValueInRange(sel) : '',
+      fileText: m ? m.getValue() : ''
+    }
+  },
+  insertAtCursor: (text) => {
+    const sel = editor.getSelection()
+    if (!sel || !editor.getModel()) return report('Open a file to insert into', true)
+    editor.pushUndoStop()
+    editor.executeEdits('ai', [{ range: new monaco.Range(sel.endLineNumber, sel.endColumn, sel.endLineNumber, sel.endColumn), text }])
+    editor.pushUndoStop()
+  },
+  replaceSelection: (text) => {
+    const sel = editor.getSelection()
+    if (!sel || sel.isEmpty()) return report('Select the code to replace first', true)
+    editor.pushUndoStop()
+    editor.executeEdits('ai', [{ range: sel, text }])
+    editor.pushUndoStop()
+  },
+  copy: (text) => {
+    void window.forge.copyText(text)
+    report('Copied')
+  },
+  reveal: () => tw.show('ai'),
+  openSettings: () => settingsUi.open('AI'),
+  openExternal: (url) => void window.forge.openExternal(url).catch((err: unknown) => report(`Open link: ${err instanceof Error ? err.message : String(err)}`, true)),
+  report
+})
+const runAiAction = (action: Action): void => {
+  aiChat.runAction(action).catch((err: unknown) => report(`AI: ${err instanceof Error ? err.message : String(err)}`, true))
+}
+for (const [i, [id, label, action]] of ([['ai.explain', 'Explain Code', 'explain'], ['ai.fix', 'Find and Fix Problems', 'fix'], ['ai.tests', 'Write Tests', 'tests'], ['ai.document', 'Write Documentation', 'document'], ['ai.refactor', 'Suggest Refactoring', 'refactor']] as [string, string, Action][]).entries()) {
+  editor.addAction({ id: `forge.${id}`, label: `AI: ${label}`, contextMenuGroupId: 'ai', contextMenuOrder: 1 + i / 10, run: () => runAiAction(action) })
+}
+tw.setOnShow('ai', () => aiChat.focus())
+initAiInline({ report })
 tw.setOnShow('preview', () => void preview.refresh().catch((e: unknown) => report(`Preview: ${String(e)}`, true)))
 {
   let timer: number | undefined
@@ -1761,6 +1809,8 @@ registerBuiltinCommands({
   },
   gitBranches: () => showBranches(),
   nextTab: (delta) => cycleTab(delta),
+  aiAction: (action) => runAiAction(action),
+  aiNewChat: () => aiChat.newChat(),
   reopenClosedTab: () => reopenClosedTab(),
   closeAllTabs: () => closeTabs(),
   closeOtherTabs: () => {

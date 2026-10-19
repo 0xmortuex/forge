@@ -28,6 +28,8 @@ export interface SessionState {
   /** Debugger breakpoints (with their conditions) and watch expressions. */
   breakpoints?: { path: string; line: number; condition?: string; logMessage?: string; disabled?: boolean }[]
   watches?: string[]
+  /** The AI server (host) the user agreed to send code to. */
+  aiApprovedHost?: string
   layout: Layout
 }
 
@@ -81,6 +83,7 @@ function load(raw: Record<string, unknown>): SessionState {
     bookmarks: bookmarkList(raw['bookmarks']),
     breakpoints: breakpointList(raw['breakpoints']),
     watches: strings(raw['watches']),
+    aiApprovedHost: str(raw['aiApprovedHost']),
     layout: {
       projectWidth: num(layout['projectWidth']),
       bottomHeight: num(layout['bottomHeight']),

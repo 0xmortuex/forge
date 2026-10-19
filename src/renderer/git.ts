@@ -1,4 +1,5 @@
 import type { BlameLine, ChangeKind, GitChange, GitStatus } from '../main/git'
+import { ask, cleanCommitMessage, commitPrompt } from './ai'
 import { icons } from './icons'
 import { askText, showMenu, type MenuItem } from './menu'
 
@@ -156,6 +157,29 @@ export function initGit(deps: GitDeps): {
   byId('commit-push-btn').onclick = () => {
     const root = deps.getRoot()
     if (root && status) void commit(root, true)
+  }
+
+  // "Generate message": the ticked changes are described by the AI server the user set up.
+  const aiBtn = byId<HTMLButtonElement>('commit-ai-btn')
+  aiBtn.onclick = () => {
+    const root = deps.getRoot()
+    if (!root || !status) return
+    const changes = status.changes.filter((c) => c.kind !== 'conflict' && (checked.get(c.path) ?? true)).map((c) => ({ path: c.path, kind: c.kind }))
+    if (!changes.length) return deps.report('Tick the files to describe first', true)
+    aiBtn.disabled = true
+    aiBtn.textContent = 'Writing…'
+    void deps
+      .guard('Generate commit message', async () => {
+        await deps.saveAll()
+        const diff = await window.forge.gitDiffForCommit(root, changes)
+        if (!diff.trim()) throw new Error('There is nothing to describe')
+        message.value = cleanCommitMessage(await ask(commitPrompt(diff), { maxTokens: 300, temperature: 0.2, timeoutMs: 60000 }))
+      })
+      .catch(() => undefined) // already reported by guard
+      .finally(() => {
+        aiBtn.disabled = false
+        aiBtn.textContent = 'Generate message'
+      })
   }
 
   /** Commits the ticked files (saving open ones first), and pushes too if asked. */

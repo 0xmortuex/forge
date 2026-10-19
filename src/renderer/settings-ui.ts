@@ -422,6 +422,87 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
     body.append(g)
   }
 
+  /** The API key (kept encrypted by the main process, never in settings.json) and a button that proves the setup works. */
+  function aiKeyGroup(): void {
+    const g = el('div', 'sgroup')
+    g.append(el('h3', '', 'API key'))
+    const row = el('div', 'srow')
+    const info = el('div', 'info')
+    info.append(el('div', 'label', 'API key'))
+    info.append(el('div', 'desc', 'Kept encrypted by your operating system, never in settings.json. Leave it empty for a local server such as Ollama.'))
+    const status = el('div', 'desc')
+    info.append(status)
+    const input = el('input', 'field')
+    input.id = 'ai-key-input'
+    input.type = 'password'
+    input.placeholder = 'paste a key'
+    input.autocomplete = 'off'
+    input.spellcheck = false
+    const save = el('button', 'btn', 'Save key')
+    save.id = 'ai-key-save'
+    const remove = el('button', 'btn', 'Remove')
+    remove.id = 'ai-key-remove'
+    const ctl = el('div', 'ctl')
+    ctl.append(input, save, remove)
+    row.append(info, ctl)
+    g.append(row)
+
+    const showStatus = (): void => {
+      window.forge.aiKeyStatus().then(
+        (st) => {
+          status.textContent = !st.encryption ? 'This system cannot encrypt a key, so Forge will not store one' : st.stored ? 'A key is stored' : 'No key stored'
+          status.style.color = st.stored ? 'var(--ok)' : ''
+          remove.disabled = !st.stored
+          save.disabled = !st.encryption
+        },
+        (err: unknown) => deps.report(err instanceof Error ? err.message : String(err), true)
+      )
+    }
+    save.onclick = () => {
+      const key = input.value.trim()
+      if (!key) return deps.report('Paste an API key first', true)
+      window.forge.aiKeySet(key).then(
+        () => {
+          input.value = ''
+          showStatus()
+          deps.report('API key saved')
+        },
+        (err: unknown) => deps.report(err instanceof Error ? err.message : String(err), true)
+      )
+    }
+    remove.onclick = () => {
+      window.forge.aiKeyClear().then(showStatus, (err: unknown) => deps.report(err instanceof Error ? err.message : String(err), true))
+    }
+
+    const testRow = el('div', 'srow')
+    const test = el('button', 'btn', 'Test connection')
+    test.id = 'ai-test'
+    const result = el('div', 'desc')
+    result.id = 'ai-test-result'
+    testRow.append(el('div', 'desc', 'Sends one tiny message to the server with the URL, model and key above.'), test)
+    g.append(testRow, result)
+    test.onclick = () => {
+      result.style.color = ''
+      result.textContent = 'Connecting…'
+      test.disabled = true
+      window.forge
+        .aiTest(settings.get<string>('aiBaseUrl'), settings.get<string>('aiModel'))
+        .then(
+          (r) => {
+            result.style.color = 'var(--ok)'
+            result.textContent = `Connected in ${r.ms} ms. The model replied: ${r.reply || '(nothing)'}`
+          },
+          (err: unknown) => {
+            result.style.color = 'var(--err)'
+            result.textContent = err instanceof Error ? err.message.replace(/^Error invoking remote method '[^']*': (Error: )?/, '') : String(err)
+          }
+        )
+        .finally(() => (test.disabled = false))
+    }
+    body.append(g)
+    showStatus()
+  }
+
   function about(): void {
     const box = el('div', 'about')
     box.append(el('div', 'big', 'Forge'))
@@ -463,6 +544,7 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
       body.append(group(g, inGroup, n))
       n += inGroup.length
     }
+    if (category === 'AI') aiKeyGroup()
   }
 
   function renderNav(): void {

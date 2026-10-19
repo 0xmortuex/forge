@@ -63,6 +63,7 @@
             <textarea id="commit-msg" placeholder="Commit message" spellcheck="false"></textarea>
             <label class="amend"><input type="checkbox" id="commit-amend" /> Amend previous commit</label>
             <div class="commit-actions">
+              <button class="btn" id="commit-ai-btn" title="Write the commit message from the ticked changes with AI">Generate message</button>
               <button id="commit-btn">Commit</button>
               <button class="btn" id="commit-push-btn" title="Commit, then push">Commit &amp; Push</button>
             </div>
@@ -132,6 +133,7 @@
           <div id="view-breakpoints" class="view" hidden></div>
           <div id="view-problems" class="view" hidden></div>
           <div id="view-hierarchy" class="view" hidden></div>
+          <div id="view-ai" class="view" hidden></div>
           <div id="view-todo" class="view" hidden></div>
           <div id="view-terminal" class="view" hidden>
             <div id="term-tabs"></div>
