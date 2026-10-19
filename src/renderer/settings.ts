@@ -82,6 +82,7 @@ export const DEFS: SettingDef[] = [
   { key: 'keymapPreset', category: 'Keymap', group: 'Preset', label: 'Keymap preset', default: 'forge',
     control: { type: 'select', options: opts(['forge', 'Forge (default)'], ['intellij', 'IntelliJ IDEA']) } },
   { key: 'showStripe', category: 'Appearance', group: 'Layout', label: 'Show tool window buttons', default: true, control: onOff },
+  { key: 'treeShowHidden', category: 'Appearance', group: 'Layout', label: 'Show hidden files in the Project tree', default: true, control: onOff, description: 'Files and folders whose names start with a dot (.git, .env ...).' },
   { key: 'treeFollow', category: 'Appearance', group: 'Layout', label: 'Select the open file in the Project tree', default: false, control: onOff, description: 'Switching tabs expands the tree to that file.' },
 
   // ---- Editor ----

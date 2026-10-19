@@ -13,7 +13,7 @@ export interface BuiltinDeps {
   openSearchScope: (scope: 'all' | 'files' | 'symbols' | 'actions', classesOnly?: boolean) => void
   showFind: () => void
   toggleSide: (side: 'project' | 'commit') => void
-  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo') => void
+  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview') => void
   findReplace: () => void
   newTerminal: () => void
   toggleZen: () => void
@@ -154,6 +154,7 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   toggle('Appearance', 'Status Bar', 'showStatusBar')
   toggle('Appearance', 'Tool Window Buttons', 'showStripe')
   toggle('Appearance', 'Select Open File in Project Tree', 'treeFollow')
+  toggle('Appearance', 'Hidden Files in Project Tree', 'treeShowHidden')
   choose('Background', 'background', 'aurora', 'Animated Aurora')
   choose('Background', 'background', 'gradient', 'Soft Gradient')
   choose('Background', 'background', 'solid', 'Solid Color')
@@ -231,6 +232,7 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'code.compareFile', category: 'Code', title: 'Compare with File…', run: d.compareWithFile })
   register({ id: 'code.compareClipboard', category: 'Code', title: 'Compare with Clipboard', run: d.compareWithClipboard })
   register({ id: 'view.notifications', category: 'View', title: 'Show Notifications', run: d.showNotifications })
+  register({ id: 'view.preview', category: 'View', title: 'Toggle Markdown Preview', run: () => d.toggleView('preview') })
   register({ id: 'view.todo', category: 'View', title: 'Toggle TODO Window', run: () => d.toggleView('todo') })
   register({ id: 'nav.replaceInFiles', category: 'Navigate', title: 'Replace in Files', keys: 'Ctrl+Shift+R', run: d.findReplace })
   register({ id: 'view.git', category: 'View', title: 'Toggle Git Window', keys: 'Alt+9', run: () => d.toggleView('git') })

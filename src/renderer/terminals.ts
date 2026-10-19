@@ -20,7 +20,7 @@ const byId = <T extends HTMLElement>(id: string): T => {
 }
 
 /** The Terminal tool window: any number of independent shells, one visible at a time. */
-export function initTerminals(deps: TerminalsDeps): { show: () => void; newTerminal: () => void } {
+export function initTerminals(deps: TerminalsDeps): { show: () => void; newTerminal: (cwd?: string) => void } {
   const tabsEl = byId('term-tabs')
   const host = byId('term')
   const panes: Pane[] = []
@@ -73,8 +73,8 @@ export function initTerminals(deps: TerminalsDeps): { show: () => void; newTermi
     else render()
   }
 
-  function newTerminal(): void {
-    const cwd = deps.getCwd()
+  function newTerminal(startIn?: string): void {
+    const cwd = startIn ?? deps.getCwd()
     const el = document.createElement('div')
     el.className = 'term-pane'
     host.append(el)

@@ -45,6 +45,7 @@ import { initGitLog } from './gitlog'
 import { initConflicts } from './conflicts'
 import { initGutter } from './gutter'
 import { initTodo } from './todo'
+import { initPreview } from './preview'
 import { initAnnotate } from './annotate'
 import type { ChangeKind, GitChange } from '../main/git'
 
@@ -64,6 +65,8 @@ interface OpenFile {
   savedVersion: number
   /** The text last known to be on disk (read or written by Forge); a file tab only. Tells our own writes from outside changes. */
   savedText?: string
+  /** An image file: shown in the image viewer instead of the text editor. */
+  image?: { url: string; bytes: number }
   // Present on diff tabs: the HEAD side, and the file tab whose model the right side edits (none for deleted files).
   diff?: { original: monaco.editor.ITextModel; shared?: OpenFile }
 }
@@ -201,9 +204,10 @@ tw.register({ id: 'git', title: 'Git', icon: icons.git, root: $('view-git'), doc
 tw.register({ id: 'problems', title: 'Problems', icon: icons.problems, root: $('view-problems'), dock: 'bottom', shortcut: 'Alt+6' })
 tw.register({ id: 'hierarchy', title: 'Hierarchy', icon: icons.hierarchy, root: $('view-hierarchy'), dock: 'bottom' })
 tw.register({ id: 'structure', title: 'Structure', icon: icons.structure, root: $('view-structure'), dock: 'right', shortcut: 'Alt+7' })
+tw.register({ id: 'preview', title: 'Preview', icon: icons.preview, root: $('view-preview'), dock: 'right' })
 tw.register({ id: 'bookmarks', title: 'Bookmarks', icon: icons.bookmark, root: $('view-bookmarks'), dock: 'right' })
 
-type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo'
+type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview'
 type Side = 'project' | 'commit'
 const showSide = (side: Side): void => tw.show(side)
 const toggleSide = (side: Side): void => tw.toggle(side)
@@ -356,8 +360,9 @@ function renderTabs(): void {
 
 function activate(f: OpenFile | null): void {
   active = f
-  $('editor').hidden = !!f?.diff
+  $('editor').hidden = !!f?.diff || !!f?.image
   $('diff').hidden = !f?.diff
+  showImage(f?.image ? f : null)
   if (f?.diff) {
     diffEditor.setModel({ original: f.diff.original, modified: f.model })
     // Only a diff against a real file is editable; a deleted file has nothing to save into.
@@ -373,6 +378,23 @@ function activate(f: OpenFile | null): void {
   breadcrumbs.refresh()
   if (f && !f.diff) nav.visit()
   if (f && !f.diff && settings.get<boolean>('treeFollow')) void locateInTree(f.path).catch((err: unknown) => report(`Locate in tree: ${String(err)}`, true))
+}
+
+/** Fills the image viewer (click toggles between fit-to-window and actual size). */
+function showImage(f: OpenFile | null): void {
+  const view = $('image-view')
+  view.hidden = !f
+  view.classList.remove('actual')
+  if (!f?.image) return view.replaceChildren()
+  const img = document.createElement('img')
+  img.src = f.image.url
+  const info = document.createElement('div')
+  info.className = 'info'
+  const kb = f.image.bytes / 1024
+  info.textContent = `${basename(f.path)} · ${kb < 1024 ? `${kb.toFixed(1)} KB` : `${(kb / 1024).toFixed(1)} MB`}`
+  img.onload = () => (info.textContent = `${basename(f.path)} · ${img.naturalWidth} × ${img.naturalHeight} · ${kb < 1024 ? `${kb.toFixed(1)} KB` : `${(kb / 1024).toFixed(1)} MB`}`)
+  img.onclick = () => view.classList.toggle('actual')
+  view.replaceChildren(img, info)
 }
 
 /** User-initiated close: asks first if that would throw away unsaved edits. */
@@ -406,10 +428,21 @@ function closeFile(f: OpenFile): void {
 // Windows paths are case-insensitive, and servers/Monaco may hand back a different drive-letter case.
 const samePath = (a: string, b: string): boolean => norm(a).toLowerCase() === norm(b).toLowerCase()
 
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|ico|bmp|avif)$/i
+
 async function openFile(path: string, line?: number, column = 1): Promise<void> {
   const existing = [...openFiles.values()].find((f) => !f.diff && samePath(f.path, path))
   if (existing) activate(existing)
-  else {
+  else if (IMAGE_EXT.test(path)) {
+    await guarded(`Open ${basename(path)}`, async () => {
+      const image = await window.forge.readDataUrl(path)
+      // An image has no text, but the tab machinery wants a model: an empty one that can never be edited.
+      const model = monaco.editor.createModel('', 'plaintext', monaco.Uri.from({ scheme: 'forge-image', path: '/' + norm(path) }))
+      const f: OpenFile = { path, model, savedVersion: model.getAlternativeVersionId(), image }
+      openFiles.set(path, f)
+      activate(f)
+    })
+  } else {
     await guarded(`Open ${basename(path)}`, async () => {
       const text = await window.forge.readFile(path)
       history.record(path, text) // the version as it was when opened
@@ -433,7 +466,7 @@ async function openFile(path: string, line?: number, column = 1): Promise<void> 
 async function saveActive(opts: { format?: boolean } = {}): Promise<void> {
   // From a diff tab, Save writes the file the diff is editing.
   const f = active?.diff ? active.diff.shared : active
-  if (!f) return
+  if (!f || f.image) return // an image has no text to save
   await guarded(`Save ${basename(f.path)}`, async () => {
     // Format first when asked to (not for auto-save, which would move the text under the cursor), and only
     // when the editor is showing this file. A language without a formatter is skipped quietly.
@@ -463,7 +496,8 @@ const parentOf = (p: string): string => p.replace(/[\\/][^\\/]*$/, '')
 const dirs = new Map<string, { kids: HTMLElement; depth: number; setOpen?: (open: boolean) => Promise<void> }>()
 
 async function renderDir(dir: string, into: HTMLElement, depth = 0): Promise<void> {
-  const entries = await window.forge.readDir(dir)
+  const showHidden = settings.get<boolean>('treeShowHidden')
+  const entries = (await window.forge.readDir(dir)).filter((e) => showHidden || !e.name.startsWith('.'))
   for (const e of entries) {
     const row = document.createElement('div')
     row.className = 'node'
@@ -481,6 +515,24 @@ async function renderDir(dir: string, into: HTMLElement, depth = 0): Promise<voi
       ev.preventDefault()
       ev.stopPropagation()
       showMenu(ev.clientX, ev.clientY, entryMenu(e.path, e.isDir))
+    }
+    row.draggable = true
+    row.ondragstart = (ev) => ev.dataTransfer?.setData('text/forge-path', e.path)
+    if (e.isDir) {
+      row.ondragover = (ev) => {
+        if (!ev.dataTransfer?.types.includes('text/forge-path')) return
+        ev.preventDefault()
+        ev.stopPropagation()
+        row.classList.add('drop')
+      }
+      row.ondragleave = () => row.classList.remove('drop')
+      row.ondrop = (ev) => {
+        ev.preventDefault()
+        ev.stopPropagation()
+        row.classList.remove('drop')
+        const from = ev.dataTransfer?.getData('text/forge-path')
+        if (from) void moveEntry(from, e.path)
+      }
     }
     if (e.isDir) {
       const kids = document.createElement('div')
@@ -540,7 +592,8 @@ async function refreshDir(dir: string): Promise<void> {
   // Nothing to do if the folder's listing is what is already shown (watching reports folders that were merely read).
   if (d.kids.childElementCount > 0) {
     const shown = new Set([...d.kids.children].filter((c) => c.classList.contains('node')).map((c) => norm((c as HTMLElement).dataset['path'] ?? '')))
-    const entries = await window.forge.readDir(dir)
+    const showHidden = settings.get<boolean>('treeShowHidden')
+    const entries = (await window.forge.readDir(dir)).filter((e) => showHidden || !e.name.startsWith('.'))
     if (entries.length === shown.size && entries.every((e) => shown.has(norm(e.path)))) return
   }
   // Shallowest first, so each parent is open again before its children are.
@@ -585,7 +638,7 @@ async function applyExternalChanges(paths: Set<string>, gitChanged: boolean, all
     for (const dir of folders) if (dirs.has(norm(dir))) await refreshDir(dir)
     // 2. open files: reload the ones that changed on disk, unless they have unsaved edits
     for (const p of paths) {
-      const f = [...openFiles.values()].find((x) => !x.diff && samePath(x.path, p))
+      const f = [...openFiles.values()].find((x) => !x.diff && !x.image && samePath(x.path, p))
       if (!f) continue
       let text: string
       try {
@@ -684,19 +737,122 @@ async function deleteEntry(path: string): Promise<void> {
   })
 }
 
+// ---- Cut / copy / paste, duplicate, move ----
+let treeClip: { paths: string[]; cut: boolean } | null = null
+
+/** "name.ext" -> "name copy.ext", "name copy 2.ext" ... the first that does not exist yet in `dir`. */
+async function freeName(dir: string, name: string): Promise<string> {
+  const dot = name.lastIndexOf('.')
+  const stem = dot > 0 ? name.slice(0, dot) : name
+  const ext = dot > 0 ? name.slice(dot) : ''
+  const taken = new Set((await window.forge.readDir(dir)).map((e) => e.name.toLowerCase()))
+  if (!taken.has(name.toLowerCase())) return name
+  for (let n = 1; ; n++) {
+    const candidate = `${stem} copy${n > 1 ? ` ${n}` : ''}${ext}`
+    if (!taken.has(candidate.toLowerCase())) return candidate
+  }
+}
+
+async function copyEntry(from: string, toDir: string, name = basename(from)): Promise<string> {
+  const dest = joinPath(toDir, await freeName(toDir, name))
+  if (norm(dest).toLowerCase().startsWith(norm(from).toLowerCase() + '/')) throw new Error(`Can't copy ${basename(from)} into itself`)
+  await window.forge.copy(from, dest)
+  return dest
+}
+
+async function moveEntry(from: string, toDir: string): Promise<void> {
+  if (samePath(parentOf(from), toDir)) return
+  if (norm(toDir).toLowerCase() === norm(from).toLowerCase() || norm(toDir).toLowerCase().startsWith(norm(from).toLowerCase() + '/')) {
+    report(`Can't move ${basename(from)} into itself`, true)
+    return
+  }
+  await guarded(`Move ${basename(from)}`, async () => {
+    const dest = joinPath(toDir, basename(from))
+    closeFilesUnder(from)
+    await window.forge.rename(from, dest)
+    await refreshDir(parentOf(from))
+    await refreshDir(toDir)
+    refreshGit()
+    report(`Moved ${basename(from)} to ${basename(toDir)}`)
+  }).catch(() => undefined) // reported by guarded
+}
+
+async function pasteInto(dir: string): Promise<void> {
+  const clip = treeClip
+  if (!clip) return
+  await guarded('Paste', async () => {
+    for (const p of clip.paths) {
+      if (clip.cut) await moveEntryChecked(p, dir)
+      else await copyEntry(p, dir)
+    }
+    if (clip.cut) treeClip = null
+    await refreshDir(dir)
+    refreshGit()
+    report(`Pasted ${clip.paths.length} item${clip.paths.length === 1 ? '' : 's'} into ${basename(dir)}`)
+  }).catch(() => undefined) // reported by guarded
+}
+
+/** Like moveEntry but throws (for Paste, which reports once for the whole batch). */
+async function moveEntryChecked(from: string, toDir: string): Promise<void> {
+  const dest = joinPath(toDir, basename(from))
+  closeFilesUnder(from)
+  await window.forge.rename(from, dest)
+  await refreshDir(parentOf(from))
+}
+
+async function duplicateEntry(path: string): Promise<void> {
+  const dir = parentOf(path)
+  const suggested = await freeName(dir, basename(path))
+  const name = await askText('Duplicate as', suggested)
+  if (!name) return
+  await guarded(`Duplicate ${basename(path)}`, async () => {
+    checkName(name)
+    await window.forge.copy(path, joinPath(dir, name))
+    await refreshDir(dir)
+    refreshGit()
+    report(`Created ${name}`)
+  }).catch(() => undefined) // reported by guarded
+}
+
 function entryMenu(path: string, isDir: boolean): (MenuItem | 'sep')[] {
   const target = isDir ? path : parentOf(path)
   return [
     { label: 'New File…', run: () => void createEntry(target, 'file') },
     { label: 'New Folder…', run: () => void createEntry(target, 'folder') },
     'sep',
+    { label: 'Cut', run: () => (treeClip = { paths: [path], cut: true }) },
+    { label: 'Copy', run: () => (treeClip = { paths: [path], cut: false }) },
+    ...(treeClip ? [{ label: `Paste into ${basename(target)}`, run: () => void pasteInto(target) }] : []),
+    { label: 'Duplicate…', run: () => void duplicateEntry(path) },
+    'sep',
     { label: 'Rename…', run: () => void renameEntry(path) },
     { label: 'Delete', danger: true, run: () => void deleteEntry(path) },
+    'sep',
+    { label: 'Find in Files…', run: () => findIn(target) },
+    { label: 'Open in Terminal', run: () => { showView('terminal'); terminals.newTerminal(target) } },
     'sep',
     { label: 'Copy Path', run: () => void window.forge.copyText(path) },
     { label: 'Copy Relative Path', run: () => void window.forge.copyText(relPath(path)) },
     { label: 'Reveal in File Explorer', run: () => void window.forge.reveal(path) }
   ]
+}
+
+// Dropping on empty tree space moves into the project root.
+treeEl.ondragover = (ev) => {
+  if (rootDir && ev.dataTransfer?.types.includes('text/forge-path')) ev.preventDefault()
+}
+treeEl.ondrop = (ev) => {
+  ev.preventDefault()
+  const from = ev.dataTransfer?.getData('text/forge-path')
+  if (from && rootDir) void moveEntry(from, rootDir)
+}
+
+/** Find in Files, limited to a folder. */
+function findIn(dir: string): void {
+  showView('find')
+  const rel = relPath(dir)
+  ;($('find-mask') as HTMLInputElement).value = rel && rel !== dir ? `${rel.split('\\').join('/')}/**` : ''
+  findInput.focus()
 }
 
 // Right-click on empty tree space acts on the project root.
@@ -1075,6 +1231,28 @@ editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.K
   showView('find')
   $('find-replace').focus()
 })
+const preview = initPreview({
+  root: $('view-preview'),
+  current: () => {
+    const m = active && !active.diff && !active.image && editor.getModel()
+    return m && active && m.getLanguageId() === 'markdown' ? { path: active.path, text: m.getValue() } : null
+  },
+  openFile: (p) => openFile(p),
+  isVisible: () => tw.isOpen('preview'),
+  report
+})
+tw.setOnShow('preview', () => void preview.refresh().catch((e: unknown) => report(`Preview: ${String(e)}`, true)))
+{
+  let timer: number | undefined
+  const later = (): void => {
+    window.clearTimeout(timer)
+    timer = window.setTimeout(() => {
+      if (tw.isOpen('preview')) void preview.refresh().catch((e: unknown) => report(`Preview: ${String(e)}`, true))
+    }, 200)
+  }
+  editor.onDidChangeModelContent(later)
+  editor.onDidChangeModel(later)
+}
 const todo = initTodo({
   root: $('view-todo'),
   getRoot: () => rootDir,
@@ -1234,6 +1412,7 @@ const gutter = initGutter({
 })
 settings.onChange((key) => {
   if (key === 'gitGutter') gutter.refresh()
+  if (key === 'treeShowHidden' && rootDir) void refreshDir(rootDir).catch((err: unknown) => report(`Refresh tree: ${String(err)}`, true))
 })
 const annotate = initAnnotate({
   editor,

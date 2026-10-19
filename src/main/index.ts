@@ -1,7 +1,7 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
 import { realpathSync } from 'node:fs'
-import { access, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { access, cp, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { basename, extname, join } from 'node:path'
 import { registerDebug } from './debug'
 import { registerExtensions, registerExtensionScheme } from './extensions'
 import { registerGit } from './git'
@@ -96,6 +96,29 @@ const assertMissing = async (path: string): Promise<void> => {
 }
 
 ipcMain.handle('fs:exists', (_e, path: string) => access(path).then(() => true, () => false))
+const MIME: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+  ico: 'image/x-icon', bmp: 'image/bmp', avif: 'image/avif'
+}
+const MAX_IMAGE_BYTES = 25 * 1024 * 1024
+
+/** An image file as a data: URL (the page may not load files directly). */
+ipcMain.handle('fs:readDataUrl', async (_e, path: string): Promise<{ url: string; bytes: number }> => {
+  const mime = MIME[extname(path).slice(1).toLowerCase()]
+  if (!mime) throw new Error(`Not an image type Forge can show: ${extname(path) || path}`)
+  const buf = await readFile(path)
+  if (buf.length > MAX_IMAGE_BYTES) throw new Error(`${basename(path)} is too large to show (${Math.round(buf.length / 1048576)} MB)`)
+  return { url: `data:${mime};base64,${buf.toString('base64')}`, bytes: buf.length }
+})
+
+/** Opens a web or mail link in the user's browser. Anything else is refused. */
+ipcMain.handle('shell:openExternal', (_e, url: string) => {
+  if (!/^(https?:|mailto:)/i.test(url)) throw new Error(`Refusing to open ${url}`)
+  return shell.openExternal(url)
+})
+
+/** Copies a file or a folder (and everything in it). Never overwrites. */
+ipcMain.handle('fs:copy', (_e, from: string, to: string) => cp(from, to, { recursive: true, errorOnExist: true, force: false }))
 ipcMain.handle('fs:createFile', (_e, path: string) => writeFile(path, '', { flag: 'wx' }))
 ipcMain.handle('fs:createDir', (_e, path: string) => mkdir(path))
 ipcMain.handle('fs:rename', async (_e, from: string, to: string) => {
