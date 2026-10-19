@@ -25,6 +25,9 @@ export interface SessionState {
   /** Most recently opened files first (Recent Files). */
   recentFiles?: string[]
   bookmarks?: { path: string; line: number }[]
+  /** Debugger breakpoints (with their conditions) and watch expressions. */
+  breakpoints?: { path: string; line: number; condition?: string; logMessage?: string; disabled?: boolean }[]
+  watches?: string[]
   layout: Layout
 }
 
@@ -49,6 +52,23 @@ function bookmarkList(v: unknown): { path: string; line: number }[] {
   return out
 }
 
+function breakpointList(v: unknown): NonNullable<SessionState['breakpoints']> {
+  if (!Array.isArray(v)) return []
+  const out: NonNullable<SessionState['breakpoints']> = []
+  for (const b of v) {
+    const o = b as Record<string, unknown>
+    if (typeof o?.['path'] !== 'string' || typeof o['line'] !== 'number' || o['line'] < 1) continue
+    out.push({
+      path: o['path'],
+      line: o['line'],
+      condition: typeof o['condition'] === 'string' ? o['condition'] : undefined,
+      logMessage: typeof o['logMessage'] === 'string' ? o['logMessage'] : undefined,
+      disabled: o['disabled'] === true ? true : undefined
+    })
+  }
+  return out
+}
+
 function load(raw: Record<string, unknown>): SessionState {
   const layout = (typeof raw['layout'] === 'object' && raw['layout'] !== null ? raw['layout'] : {}) as Record<string, unknown>
   const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined)
@@ -59,6 +79,8 @@ function load(raw: Record<string, unknown>): SessionState {
     activeFile: typeof raw['activeFile'] === 'string' ? raw['activeFile'] : undefined,
     recentFiles: strings(raw['recentFiles']),
     bookmarks: bookmarkList(raw['bookmarks']),
+    breakpoints: breakpointList(raw['breakpoints']),
+    watches: strings(raw['watches']),
     layout: {
       projectWidth: num(layout['projectWidth']),
       bottomHeight: num(layout['bottomHeight']),

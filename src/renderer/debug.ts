@@ -1,6 +1,8 @@
 import * as monaco from 'monaco-editor'
 import type { DebugEvent, DebugFrame, DebugVar } from '../main/debug'
 import { icons } from './icons'
+import { showMenu, askText, type MenuItem } from './menu'
+import { session } from './session'
 import type { ResolvedRun } from './run'
 import type { TerminalView } from './terminal'
 
@@ -28,13 +30,32 @@ const byId = <T extends HTMLElement>(id: string): T => {
   return el as T
 }
 
+/** A breakpoint: its line, and optionally a condition, a log message, or being switched off. */
+export interface Bp {
+  line: number
+  condition?: string
+  logMessage?: string
+  disabled?: boolean
+}
+
 const keyOf = (p: string): string => p.replace(/\\/g, '/').toLowerCase()
 const basename = (p: string): string => p.split(/[\\/]/).pop() ?? p
+
+export interface BreakpointApi {
+  all: () => (Bp & { path: string })[]
+  setEnabled: (path: string, line: number, enabled: boolean) => void
+  editCondition: (path: string, line: number) => Promise<void>
+  editLog: (path: string, line: number) => Promise<void>
+  remove: (path: string, line: number) => void
+  removeAll: () => void
+  onChange: (fn: () => void) => void
+}
 
 export function initDebug(deps: DebugDeps): {
   start: () => Promise<void>
   control: (cmd: Control) => Promise<void>
   toggleAtCursor: () => void
+  breakpoints: BreakpointApi
   onModelOpened: (model: monaco.editor.ITextModel, path: string) => void
   onModelClosing: (model: monaco.editor.ITextModel, path: string) => void
 } {
@@ -46,63 +67,206 @@ export function initDebug(deps: DebugDeps): {
   const bar = byId('dbg-bar')
 
   // ---- Breakpoints ----
-  // `saved` is the truth for files with no open model; for open files the editor decorations are
-  // (they follow the text as lines move), so lines are always read back from them.
-  const saved = new Map<string, { path: string; lines: number[] }>()
-  const decos = new Map<monaco.editor.ITextModel, string[]>()
+  // A breakpoint can have a condition (pause only when true), a log message (print instead of pausing) or be disabled.
+  // `saved` is the truth for files with no open model; for open files the editor decorations are (they follow the text
+  // as lines move), so lines are always read back from them.
+  const saved = new Map<string, { path: string; bps: Bp[] }>()
+  const decos = new Map<monaco.editor.ITextModel, { id: string; bp: Omit<Bp, 'line'> }[]>()
+  const listeners: (() => void)[] = []
 
-  function linesOf(path: string): number[] {
+  for (const b of session.get().breakpoints ?? []) {
+    const entry = saved.get(keyOf(b.path)) ?? { path: b.path, bps: [] }
+    entry.bps.push({ line: b.line, condition: b.condition, logMessage: b.logMessage, disabled: b.disabled })
+    saved.set(keyOf(b.path), entry)
+  }
+
+  function bpsOf(path: string): Bp[] {
     const model = deps.getModel(path)
-    const ids = model ? decos.get(model) : undefined
-    if (model && ids) {
-      return [...new Set(ids.map((id) => model.getDecorationRange(id)?.startLineNumber ?? 0).filter((l) => l > 0))].sort((a, b) => a - b)
+    const list = model ? decos.get(model) : undefined
+    if (model && list) {
+      const seen = new Set<number>()
+      const out: Bp[] = []
+      for (const d of list) {
+        const line = model.getDecorationRange(d.id)?.startLineNumber ?? 0
+        if (line > 0 && !seen.has(line)) {
+          seen.add(line)
+          out.push({ line, ...d.bp })
+        }
+      }
+      return out.sort((x, y) => x.line - y.line)
     }
-    return saved.get(keyOf(path))?.lines ?? []
+    return [...(saved.get(keyOf(path))?.bps ?? [])]
   }
 
-  function applyDecorations(model: monaco.editor.ITextModel, lines: number[]): void {
-    decos.set(
-      model,
-      model.deltaDecorations(
-        decos.get(model) ?? [],
-        lines.map((line) => ({
-          range: new monaco.Range(line, 1, line, 1),
-          options: {
-            glyphMarginClassName: 'bp-glyph',
-            stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
-          }
-        }))
-      )
+  const kindOf = (bp: Omit<Bp, 'line'>): string => (bp.disabled ? 'bp-off' : bp.logMessage ? 'bp-log' : bp.condition ? 'bp-cond' : '')
+  const describe = (bp: Omit<Bp, 'line'>): string =>
+    [bp.disabled ? 'Disabled' : '', bp.condition ? `Condition: ${bp.condition}` : '', bp.logMessage ? `Logs: ${bp.logMessage}` : ''].filter(Boolean).join(' · ') || 'Breakpoint'
+
+  function applyDecorations(model: monaco.editor.ITextModel, bps: Bp[]): void {
+    const old = decos.get(model)?.map((d) => d.id) ?? []
+    const ids = model.deltaDecorations(
+      old,
+      bps.map((bp) => ({
+        range: new monaco.Range(bp.line, 1, bp.line, 1),
+        options: {
+          glyphMarginClassName: `bp-glyph ${kindOf(bp)}`.trim(),
+          glyphMarginHoverMessage: { value: describe(bp) },
+          stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+        }
+      }))
     )
+    decos.set(model, ids.map((id, i) => ({ id, bp: { condition: bps[i]?.condition, logMessage: bps[i]?.logMessage, disabled: bps[i]?.disabled } })))
   }
 
-  function toggle(path: string, model: monaco.editor.ITextModel, line: number): void {
-    const lines = linesOf(path)
-    const next = lines.includes(line) ? lines.filter((l) => l !== line) : [...lines, line].sort((a, b) => a - b)
-    saved.set(keyOf(path), { path, lines: next })
-    applyDecorations(model, next)
-    void deps.guard('Breakpoints', () => window.forge.debugSetBreakpoints(path, next)).catch(() => undefined) // reported
+  function persist(): void {
+    const all: NonNullable<ReturnType<typeof session.get>['breakpoints']> = []
+    const paths = new Map<string, string>()
+    for (const { path } of saved.values()) paths.set(keyOf(path), path)
+    for (const path of paths.values()) for (const bp of bpsOf(path)) all.push({ path, ...bp })
+    session.update({ breakpoints: all })
+    listeners.forEach((fn) => fn())
+  }
+
+  /** Makes `bps` the breakpoints of a file: remembers them, draws them, tells the debugger. */
+  function commit(path: string, bps: Bp[]): void {
+    const sorted = [...bps].sort((x, y) => x.line - y.line)
+    saved.set(keyOf(path), { path, bps: sorted })
+    const model = deps.getModel(path)
+    if (model) applyDecorations(model, sorted)
+    persist()
+    void deps.guard('Breakpoints', () => window.forge.debugSetBreakpoints(path, sendable(sorted))).catch(() => undefined) // reported
+  }
+  const sendable = (bps: Bp[]): { line: number; condition?: string; logMessage?: string }[] =>
+    bps.filter((b) => !b.disabled).map(({ line, condition, logMessage }) => ({ line, condition, logMessage }))
+
+  function toggle(path: string, line: number): void {
+    const bps = bpsOf(path)
+    commit(path, bps.some((b) => b.line === line) ? bps.filter((b) => b.line !== line) : [...bps, { line }])
+  }
+
+  function update(path: string, line: number, change: Partial<Bp> | null): void {
+    const bps = bpsOf(path)
+    const found = bps.find((b) => b.line === line)
+    if (change === null) return commit(path, bps.filter((b) => b.line !== line))
+    commit(path, found ? bps.map((b) => (b.line === line ? { ...b, ...change } : b)) : [...bps, { line, ...change }])
+  }
+
+  async function editCondition(path: string, line: number): Promise<void> {
+    const cur = bpsOf(path).find((b) => b.line === line)
+    const value = await askText('Pause only when this expression is true (empty: always)', cur?.condition ?? '')
+    if (value === null) return
+    update(path, line, { condition: value.trim() || undefined, logMessage: undefined })
+  }
+
+  async function editLog(path: string, line: number): Promise<void> {
+    const cur = bpsOf(path).find((b) => b.line === line)
+    const value = await askText('Log this message instead of pausing — use {expression} for values', cur?.logMessage ?? '')
+    if (value === null) return
+    update(path, line, { logMessage: value.trim() || undefined, condition: undefined })
+  }
+
+  function bpMenu(path: string, line: number): (MenuItem | 'sep')[] {
+    const cur = bpsOf(path).find((b) => b.line === line)
+    if (!cur) {
+      return [
+        { label: 'Add Breakpoint', run: () => toggle(path, line) },
+        { label: 'Add Conditional Breakpoint…', run: () => void editCondition(path, line) },
+        { label: 'Add Logpoint…', run: () => void editLog(path, line) }
+      ]
+    }
+    return [
+      { label: cur.disabled ? 'Enable' : 'Disable', run: () => update(path, line, { disabled: cur.disabled ? undefined : true }) },
+      { label: 'Edit Condition…', run: () => void editCondition(path, line) },
+      { label: 'Edit Log Message…', run: () => void editLog(path, line) },
+      'sep',
+      { label: 'Remove Breakpoint', danger: true, run: () => update(path, line, null) }
+    ]
   }
 
   deps.editor.onMouseDown((e) => {
     if (e.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN || !e.target.position) return
+    if (e.event.rightButton) return // the context menu handles it
     const path = deps.getActivePath()
-    const model = path ? deps.getModel(path) : undefined
-    if (path && model) toggle(path, model, e.target.position.lineNumber)
+    if (path) toggle(path, e.target.position.lineNumber)
+  })
+  deps.editor.onContextMenu((e) => {
+    if (e.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN || !e.target.position) return
+    const path = deps.getActivePath()
+    if (!path) return
+    e.event.preventDefault()
+    showMenu(e.event.posx, e.event.posy, bpMenu(path, e.target.position.lineNumber))
   })
 
   function toggleAtCursor(): void {
     const path = deps.getActivePath()
-    const model = path ? deps.getModel(path) : undefined
     const line = deps.editor.getPosition()?.lineNumber
-    if (path && model && line) toggle(path, model, line)
+    if (path && line) toggle(path, line)
   }
 
-  /** Sends every file's current breakpoint lines, including empty lists, before a launch. */
+  /** Sends every file's current breakpoints, including empty lists, before a launch. */
   async function syncBreakpoints(): Promise<void> {
     const paths = new Map<string, string>()
     for (const { path } of saved.values()) paths.set(keyOf(path), path)
-    for (const path of paths.values()) await window.forge.debugSetBreakpoints(path, linesOf(path))
+    for (const path of paths.values()) await window.forge.debugSetBreakpoints(path, sendable(bpsOf(path)))
+  }
+
+  const allBreakpoints = (): (Bp & { path: string })[] => {
+    const paths = new Map<string, string>()
+    for (const { path } of saved.values()) paths.set(keyOf(path), path)
+    return [...paths.values()].flatMap((path) => bpsOf(path).map((b) => ({ ...b, path }))).sort((x, y) => x.path.localeCompare(y.path) || x.line - y.line)
+  }
+
+  // ---- Watches: expressions evaluated again every time the program pauses ----
+  const watchList = byId('dbg-watch-list')
+  const watchInput = byId<HTMLInputElement>('dbg-watch-input')
+  let watches = [...(session.get().watches ?? [])]
+
+  async function renderWatches(): Promise<void> {
+    watchList.replaceChildren()
+    const frame = selected >= 0 ? frames[selected]?.id : undefined
+    for (const expr of watches) {
+      const row = document.createElement('div')
+      row.className = 'watch'
+      const name = document.createElement('span')
+      name.className = 'vname'
+      name.textContent = expr
+      const val = document.createElement('span')
+      val.className = 'vval undefined'
+      val.textContent = frame === undefined ? '—' : '…'
+      const remove = document.createElement('button')
+      remove.className = 'icon-btn small'
+      remove.title = 'Remove watch'
+      remove.textContent = '✕'
+      remove.onclick = () => {
+        watches = watches.filter((w) => w !== expr)
+        session.update({ watches })
+        void renderWatches()
+      }
+      row.append(name, document.createTextNode(' = '), val, remove)
+      watchList.append(row)
+      if (frame !== undefined) {
+        void window.forge.debugEvaluate(frame, expr).then(
+          (r) => {
+            val.className = `vval ${r.isError ? 'err' : r.type}`
+            val.textContent = r.value
+          },
+          (err: unknown) => {
+            val.className = 'vval err'
+            val.textContent = err instanceof Error ? err.message : String(err)
+          }
+        )
+      }
+    }
+  }
+  watchInput.onkeydown = (e) => {
+    if (e.key !== 'Enter' || !watchInput.value.trim()) return
+    const expr = watchInput.value.trim()
+    watchInput.value = ''
+    if (!watches.includes(expr)) {
+      watches.push(expr)
+      session.update({ watches })
+    }
+    void renderWatches()
   }
 
   // ---- Paused state ----
@@ -130,6 +294,7 @@ export function initDebug(deps: DebugDeps): {
     framesEl.replaceChildren()
     varsEl.replaceChildren()
     setButtons(false)
+    void renderWatches()
   }
 
   function varRow(
@@ -197,6 +362,7 @@ export function initDebug(deps: DebugDeps): {
       }
     }
     await loadVariables(frame.id)
+    void renderWatches()
   }
 
   function renderFrames(): void {
@@ -304,12 +470,23 @@ export function initDebug(deps: DebugDeps): {
     start,
     control,
     toggleAtCursor,
+    breakpoints: {
+      all: allBreakpoints,
+      setEnabled: (path, line, enabled) => update(path, line, { disabled: enabled ? undefined : true }),
+      editCondition,
+      editLog,
+      remove: (path, line) => update(path, line, null),
+      removeAll: () => {
+        for (const { path } of [...saved.values()]) commit(path, [])
+      },
+      onChange: (fn) => void listeners.push(fn)
+    },
     onModelOpened: (model, path) => {
-      const lines = saved.get(keyOf(path))?.lines
-      if (lines?.length) applyDecorations(model, lines)
+      const bps = saved.get(keyOf(path))?.bps
+      if (bps?.length) applyDecorations(model, bps)
     },
     onModelClosing: (model, path) => {
-      saved.set(keyOf(path), { path, lines: linesOf(path) })
+      saved.set(keyOf(path), { path, bps: bpsOf(path) })
       decos.delete(model)
     }
   }

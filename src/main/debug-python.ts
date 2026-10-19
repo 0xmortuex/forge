@@ -1,5 +1,6 @@
 import { DapClient } from './dap'
 import type {
+  Breakpoint,
   Control,
   DebugEval,
   DebugEvent,
@@ -144,13 +145,16 @@ export class PythonSession implements DebugSession {
     this.deps.onEnded()
   }
 
-  private async setBreakpoints(path: string, lines: number[]): Promise<void> {
-    // DAP replaces the whole set for a file, so an empty list clears it.
-    await this.need().request('setBreakpoints', { source: { path }, breakpoints: lines.map((line) => ({ line })) })
+  private async setBreakpoints(path: string, bps: Breakpoint[]): Promise<void> {
+    // DAP replaces the whole set for a file, so an empty list clears it. Conditions and logpoints are built in.
+    await this.need().request('setBreakpoints', {
+      source: { path },
+      breakpoints: bps.map((b) => ({ line: b.line, condition: b.condition?.trim() || undefined, logMessage: b.logMessage || undefined }))
+    })
   }
 
-  applyBreakpoints(path: string, lines: number[]): Promise<void> {
-    return this.setBreakpoints(path, lines)
+  applyBreakpoints(path: string, bps: Breakpoint[]): Promise<void> {
+    return this.setBreakpoints(path, bps)
   }
 
   control(cmd: Control): Promise<unknown> {

@@ -46,6 +46,7 @@ import { initConflicts } from './conflicts'
 import { initGutter } from './gutter'
 import { initTodo } from './todo'
 import { initPreview } from './preview'
+import { initBreakpointsWindow } from './breakpoints'
 import { initAnnotate } from './annotate'
 import type { ChangeKind, GitChange } from '../main/git'
 
@@ -199,6 +200,7 @@ tw.register({ id: 'terminal', title: 'Terminal', icon: icons.terminal, root: $('
 tw.register({ id: 'find', title: 'Find', icon: icons.search, root: $('view-find'), dock: 'bottom', shortcut: 'Ctrl+Shift+F' })
 tw.register({ id: 'run', title: 'Run', icon: icons.play, root: $('view-run'), dock: 'bottom', shortcut: 'Shift+F10', passive: false })
 tw.register({ id: 'debug', title: 'Debug', icon: icons.bug, root: $('view-debug'), dock: 'bottom', passive: false })
+tw.register({ id: 'breakpoints', title: 'Breakpoints', icon: icons.breakpoint, root: $('view-breakpoints'), dock: 'bottom', shortcut: 'Ctrl+Shift+F8' })
 tw.register({ id: 'todo', title: 'TODO', icon: icons.todo, root: $('view-todo'), dock: 'bottom' })
 tw.register({ id: 'git', title: 'Git', icon: icons.git, root: $('view-git'), dock: 'bottom', shortcut: 'Alt+9' })
 tw.register({ id: 'problems', title: 'Problems', icon: icons.problems, root: $('view-problems'), dock: 'bottom', shortcut: 'Alt+6' })
@@ -207,7 +209,7 @@ tw.register({ id: 'structure', title: 'Structure', icon: icons.structure, root: 
 tw.register({ id: 'preview', title: 'Preview', icon: icons.preview, root: $('view-preview'), dock: 'right' })
 tw.register({ id: 'bookmarks', title: 'Bookmarks', icon: icons.bookmark, root: $('view-bookmarks'), dock: 'right' })
 
-type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview'
+type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints'
 type Side = 'project' | 'commit'
 const showSide = (side: Side): void => tw.show(side)
 const toggleSide = (side: Side): void => tw.toggle(side)
@@ -1494,6 +1496,13 @@ const dbg = initDebug({
   setBusy: runUi.setBusy
 })
 $('debug-btn').onclick = () => void dbg.start().catch(() => undefined) // reported by guard
+initBreakpointsWindow({
+  root: $('view-breakpoints'),
+  api: dbg.breakpoints,
+  relPath,
+  openAt: openFile,
+  onCount: (n) => tw.setBadge('breakpoints', n ? String(n) : '', 'info')
+})
 
 // Capture phase: Monaco claims several F-keys (e.g. F8) before they would bubble to the window.
 window.addEventListener(

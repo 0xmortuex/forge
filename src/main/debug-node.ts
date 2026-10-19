@@ -1,6 +1,7 @@
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import WebSocket from 'ws'
 import type {
+  Breakpoint,
   Control,
   DebugEval,
   DebugEvent,
@@ -61,6 +62,19 @@ function format(o: RemoteObject): string {
   }
 }
 
+const signature = (b: Breakpoint): string => JSON.stringify([b.condition ?? '', b.logMessage ?? ''])
+
+/**
+ * The inspector has no logpoints, but a breakpoint's condition runs in the debuggee: a condition that logs and then
+ * evaluates to false prints the message without ever pausing. "x is {x}" becomes (console.log("x is " + (x)), false).
+ */
+export function conditionFor(b: Breakpoint): string | undefined {
+  if (!b.logMessage) return b.condition?.trim() || undefined
+  const parts = b.logMessage.split(/\{([^}]*)\}/).map((p, i) => (i % 2 ? `(${p})` : JSON.stringify(p)))
+  const log = `(console.log(${parts.join(' + ')}), false)`
+  return b.condition?.trim() ? `(${b.condition}) && ${log}` : log
+}
+
 export class NodeSession implements DebugSession {
   private ws: WebSocket | null = null
   private nextMsg = 1
@@ -69,7 +83,7 @@ export class NodeSession implements DebugSession {
   private frames: CallFrame[] = []
   private refs = new Map<number, string>() // our ref -> inspector objectId (valid while paused)
   private nextRef = 1
-  private breakpointIds = new Map<string, Map<number, string>>() // path -> line -> inspector id
+  private breakpointIds = new Map<string, Map<number, { id: string; sig: string }>>() // path -> line -> inspector id and what it was set with
   private buffer = ''
   private connecting = false
   private ended = false
@@ -181,22 +195,25 @@ export class NodeSession implements DebugSession {
     this.emit({ type: 'stopped', reason: params.hitBreakpoints?.length ? 'breakpoint' : params.reason, frames })
   }
 
-  async applyBreakpoints(path: string, lines: number[]): Promise<void> {
-    const have = this.breakpointIds.get(path) ?? new Map<number, string>()
-    const want = new Set(lines)
-    for (const [line, id] of have) {
-      if (!want.has(line)) {
-        await this.send('Debugger.removeBreakpoint', { breakpointId: id })
+  async applyBreakpoints(path: string, bps: Breakpoint[]): Promise<void> {
+    const have = this.breakpointIds.get(path) ?? new Map<number, { id: string; sig: string }>()
+    const want = new Map(bps.map((b) => [b.line, b]))
+    // The inspector cannot change a breakpoint's condition, so one that changed is removed and set again.
+    for (const [line, h] of have) {
+      const w = want.get(line)
+      if (!w || signature(w) !== h.sig) {
+        await this.send('Debugger.removeBreakpoint', { breakpointId: h.id })
         have.delete(line)
       }
     }
-    for (const line of want) {
+    for (const [line, b] of want) {
       if (have.has(line)) continue
       const res = await this.send<{ breakpointId: string }>('Debugger.setBreakpointByUrl', {
         lineNumber: line - 1,
-        url: pathToFileURL(path).href
+        url: pathToFileURL(path).href,
+        condition: conditionFor(b)
       })
-      have.set(line, res.breakpointId)
+      have.set(line, { id: res.breakpointId, sig: signature(b) })
     }
     this.breakpointIds.set(path, have)
   }

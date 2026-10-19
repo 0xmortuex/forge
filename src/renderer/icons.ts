@@ -36,6 +36,7 @@ export const icons = {
   git: svg('<circle cx="4" cy="3.5" r="1.6"/><circle cx="4" cy="12.5" r="1.6"/><circle cx="12" cy="8" r="1.6"/><path d="M4 5.1v5.8M4 8h4.5a3.5 3.5 0 003.5-0"/>', 18),
   todo: svg('<path d="M3 4.5l1.5 1.5L7 3.5M3 10l1.5 1.5L7 9M9 5h4.5M9 10.5h4.5"/>', 18),
   preview: svg('<rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M2 6h12M5 9h6M5 11.2h4"/>', 18),
+  breakpoint: svg('<circle cx="8" cy="8" r="4.2" fill="currentColor" fill-opacity=".3"/>', 18),
   back: svg('<path d="M9.5 3.5L5 8l4.5 4.5M5.5 8H13"/>', 14),
   forward: svg('<path d="M6.5 3.5L11 8l-4.5 4.5M10.5 8H3"/>', 14),
   bookmark: svg('<path d="M4.5 2.5h7v11L8 10.6 4.5 13.5z"/>', 18),

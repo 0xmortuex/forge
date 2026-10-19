@@ -114,6 +114,7 @@
           </div>
           <div id="view-output" class="view"><div id="log"></div></div>
           <div id="view-git" class="view" hidden></div>
+          <div id="view-breakpoints" class="view" hidden></div>
           <div id="view-problems" class="view" hidden></div>
           <div id="view-hierarchy" class="view" hidden></div>
           <div id="view-todo" class="view" hidden></div>
@@ -133,7 +134,14 @@
             </div>
             <div id="dbg-body">
               <div id="dbg-frames" class="dbg-pane"></div>
-              <div id="dbg-vars" class="dbg-pane"></div>
+              <div id="dbg-mid">
+                <div id="dbg-vars" class="dbg-pane"></div>
+                <div id="dbg-watch" class="dbg-pane">
+                  <div class="wh">Watches</div>
+                  <div id="dbg-watch-list"></div>
+                  <input id="dbg-watch-input" placeholder="Add a watch (Enter)" spellcheck="false" autocomplete="off" />
+                </div>
+              </div>
               <div id="dbg-eval" class="dbg-pane">
                 <div id="dbg-log"></div>
                 <input id="dbg-input" placeholder="Evaluate expression (Enter)" spellcheck="false" autocomplete="off" />

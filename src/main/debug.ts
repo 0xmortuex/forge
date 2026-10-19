@@ -2,15 +2,15 @@ import net from 'node:net'
 import { ipcMain } from 'electron'
 import { NodeSession } from './debug-node'
 import { PythonSession } from './debug-python'
-import type { Control, DebugKind, DebugSession, SessionDeps } from './debug-types'
+import type { Breakpoint, Control, DebugKind, DebugSession, SessionDeps } from './debug-types'
 import { startPty, type PtySpec } from './terminal'
 
 export type { DebugEval, DebugEvent, DebugFrame, DebugKind, DebugScope, DebugVar } from './debug-types'
 
 const METHODS: Control[] = ['resume', 'stepOver', 'stepInto', 'stepOut', 'pause']
 
-/** Breakpoints the user has set (path -> 1-based lines), kept even with no session so they apply to the next launch. */
-const desired = new Map<string, number[]>()
+/** Breakpoints the user has set (path -> breakpoints), kept even with no session so they apply to the next launch. */
+const desired = new Map<string, Breakpoint[]>()
 
 let current: DebugSession | null = null
 
@@ -79,10 +79,10 @@ export function registerDebug(): void {
     }
   )
 
-  ipcMain.handle('debug:setBreakpoints', async (_e, path: string, lines: number[]) => {
-    if (lines.length) desired.set(path, lines)
+  ipcMain.handle('debug:setBreakpoints', async (_e, path: string, bps: Breakpoint[]) => {
+    if (bps.length) desired.set(path, bps)
     else desired.delete(path)
-    if (current?.connected) await current.applyBreakpoints(path, lines)
+    if (current?.connected) await current.applyBreakpoints(path, bps)
   })
 
   ipcMain.handle('debug:control', (_e, cmd: Control) => {

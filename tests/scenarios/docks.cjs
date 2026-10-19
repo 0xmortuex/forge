@@ -35,7 +35,7 @@ run(
     check('the left stripe has Project and Commit on top', (await stripeIds('stripe-left-top')) === 'project,commit', await stripeIds('stripe-left-top'))
     check(
       'the bottom windows are below, nearest the edge first',
-      (await stripeIds('stripe-left-bottom')) === 'hierarchy,problems,git,todo,debug,run,find,terminal,output',
+      (await stripeIds('stripe-left-bottom')) === 'hierarchy,problems,git,todo,breakpoints,debug,run,find,terminal,output',
       await stripeIds('stripe-left-bottom')
     )
 

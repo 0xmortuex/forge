@@ -708,3 +708,27 @@ body.no-breadcrumbs #breadcrumbs { display: none; }
 #image-view img { max-width: 100%; max-height: calc(100% - 40px); object-fit: contain; box-shadow: var(--shadow); background: transparent; image-rendering: auto; }
 #image-view.actual img { max-width: none; max-height: none; }
 #image-view .info { color: var(--text-hi); background: color-mix(in srgb, var(--island) 85%, transparent); padding: 3px 12px; border-radius: 12px; font-size: 12px; }
+
+/* ---- Breakpoints: kinds, window, watches ---- */
+.bp-glyph.bp-cond { border-radius: 2px; transform: rotate(45deg) scale(0.85); }
+.bp-glyph.bp-log { background: var(--info); box-shadow: 0 0 8px color-mix(in srgb, var(--info) 70%, transparent); }
+.bp-glyph.bp-off { background: transparent; border: 2px solid var(--text-dim); box-shadow: none; }
+.bprow { display: flex; align-items: center; gap: 8px; height: var(--row-lg); padding: 0 6px 0 8px; border-radius: 6px; white-space: nowrap; user-select: none; transition: background var(--t-fast); }
+.bprow:hover { background: var(--hover); }
+.bprow.off { opacity: 0.55; }
+.bprow input { accent-color: var(--accent); margin: 0; }
+.bpdot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--err); }
+.bpdot.cond { border-radius: 2px; transform: rotate(45deg); }
+.bpdot.log { background: var(--info); }
+.bpwhere { color: var(--text-hi); }
+.bpwhat { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-dim); font-size: 12px; }
+.bprow .icon-btn { opacity: 0; } .bprow:hover .icon-btn { opacity: 1; }
+#dbg-mid { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+#dbg-mid > .dbg-pane { flex: 1; min-height: 0; }
+#dbg-watch { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+#dbg-watch .wh { padding: 4px 10px; color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+#dbg-watch-list { flex: 1; min-height: 0; overflow: auto; padding: 0 6px; }
+.watch { display: flex; align-items: center; gap: 4px; height: 22px; font: 12px "Cascadia Mono", Consolas, monospace; white-space: nowrap; }
+.watch .vval { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.watch .icon-btn { opacity: 0; } .watch:hover .icon-btn { opacity: 1; }
+#dbg-watch-input { margin: 4px; padding: 4px 9px; background: var(--island); border-radius: 7px; font: 12px "Cascadia Mono", Consolas, monospace; }
