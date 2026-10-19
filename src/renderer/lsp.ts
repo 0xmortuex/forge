@@ -36,7 +36,9 @@ import type {
 } from 'vscode-languageserver-protocol'
 
 /** Monaco language ids that Forge can talk to a language server for (see BY_EXT in main/lsp.ts). */
-const LANGUAGES = ['typescript', 'javascript', 'python', 'c', 'cpp', 'mort']
+// Every language: which files have a server is decided by the main process (docs it declines stay unsupported and the providers
+// below answer nothing for them), so adding a language server needs no change here.
+const LANGUAGES = '*'
 
 /** One match of a project-wide symbol search. */
 export interface SymbolHit {

@@ -49,7 +49,10 @@ import { initAiChat } from './aichat'
 import { showSelectionHistory } from './selhistory'
 import { initDatabase } from './database'
 import { initDuplicates } from './duplicates'
+import { initNpm } from './npm'
+import { initTestExplorer } from './testexplorer'
 import { initEmmet } from './emmet'
+import { registerExtraLanguages } from './languages'
 import { addToDictionary, initSpell, wordAtCursor } from './spell'
 import { initAiInline } from './aiinline'
 import type { Action } from './ai'
@@ -222,11 +225,13 @@ tw.register({ id: 'hierarchy', title: 'Hierarchy', icon: icons.hierarchy, root: 
 tw.register({ id: 'structure', title: 'Structure', icon: icons.structure, root: $('view-structure'), dock: 'right', shortcut: 'Alt+7' })
 tw.register({ id: 'preview', title: 'Preview', icon: icons.preview, root: $('view-preview'), dock: 'right' })
 tw.register({ id: 'bookmarks', title: 'Bookmarks', icon: icons.bookmark, root: $('view-bookmarks'), dock: 'right' })
+tw.register({ id: 'tests', title: 'Tests', icon: icons.tests, root: $('view-tests'), dock: 'bottom' })
+tw.register({ id: 'npm', title: 'npm', icon: icons.npm, root: $('view-npm'), dock: 'bottom' })
 tw.register({ id: 'duplicates', title: 'Duplicates', icon: icons.duplicates, root: $('view-dup'), dock: 'bottom' })
 tw.register({ id: 'database', title: 'Database', icon: icons.database, root: $('view-db'), dock: 'bottom' })
 tw.register({ id: 'ai', title: 'AI Assistant', icon: icons.ai, root: $('view-ai'), dock: 'right', shortcut: 'Alt+8' })
 
-type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai' | 'database' | 'duplicates'
+type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai' | 'database' | 'duplicates' | 'npm' | 'tests'
 type Side = 'project' | 'commit'
 const showSide = (side: Side): void => tw.show(side)
 const toggleSide = (side: Side): void => tw.toggle(side)
@@ -1432,6 +1437,34 @@ editor.addAction({
   run: () => void showSelectionHistoryOf().catch((err: unknown) => report(`History for selection: ${err instanceof Error ? err.message : String(err)}`, true))
 })
 
+// ---- Test Explorer ----
+const testsView = initTestExplorer({
+  root: $('view-tests'),
+  getRoot: () => rootDir,
+  relPath,
+  activeFile: () => (active && !active.diff && !active.image ? active.path : null),
+  openAt: (path, line) => openFile(path, line),
+  readFile: (path) => window.forge.readFile(path),
+  reveal: () => tw.show('tests'),
+  onFailures: (n) => tw.setBadge('tests', n ? String(n) : '', 'err'),
+  report
+})
+tw.setOnShow('tests', () => void testsView.refresh().catch((err: unknown) => report(`Tests: ${err instanceof Error ? err.message : String(err)}`, true)))
+
+// ---- npm ----
+const npmView = initNpm({
+  root: $('view-npm'),
+  getRoot: () => rootDir,
+  runCommand: (cwd, command, title) => {
+    showView('terminal')
+    terminals.newTerminal(cwd, { name: title, command })
+  },
+  openFile: (path) => openFile(path),
+  reveal: () => tw.show('npm'),
+  report
+})
+tw.setOnShow('npm', () => void npmView.refresh().catch((err: unknown) => report(`npm: ${err instanceof Error ? err.message : String(err)}`, true)))
+
 // ---- Duplicated code ----
 const dupView = initDuplicates({
   root: $('view-dup'),
@@ -1501,6 +1534,19 @@ tw.setOnShow('ai', () => {
 })
 initAiInline({ report })
 initEmmet(editor)
+registerExtraLanguages()
+{
+  // The user's own language servers (settings.json "languageServers"): sent now and whenever the list changes.
+  const sendServers = (): void => {
+    window.forge.lspConfigure(settings.getJson<unknown>('languageServers', [])).catch((err: unknown) => {
+      report(`languageServers in settings.json: ${(err instanceof Error ? err.message : String(err)).replace(/^Error invoking remote method '[^']*': (Error: )?/, '')}`, true)
+    })
+  }
+  sendServers()
+  settings.onChange((key) => {
+    if (key === 'languageServers') sendServers()
+  })
+}
 initSpell()
 {
   // Extensions hear about edits a moment after typing stops, not on every keystroke.
@@ -1884,6 +1930,10 @@ registerBuiltinCommands({
     if (!word) return report('Put the cursor in a word first', true)
     addToDictionary(word)
     report(`Added "${word.toLowerCase()}" to the dictionary`)
+  },
+  runAllTests: () => {
+    tw.show('tests')
+    void testsView.refresh().then(() => testsView.runAll()).catch((err: unknown) => report(`Tests: ${err instanceof Error ? err.message.split('\n')[0] : String(err)}`, true))
   },
   gitBranches: () => showBranches(),
   nextTab: (delta) => cycleTab(delta),

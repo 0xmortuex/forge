@@ -31,6 +31,8 @@ export const icons = {
   collapseAll: svg('<path d="M4.5 3.5L8 7l3.5-3.5M4.5 12.5L8 9l3.5 3.5"/>', 14),
   locate: svg('<circle cx="8" cy="8" r="3.2"/><circle cx="8" cy="8" r=".6" fill="currentColor"/><path d="M8 1.5v2.2M8 12.3v2.2M1.5 8h2.2M12.3 8h2.2"/>', 14),
   newFile: svg('<path d="M4 2h5l3 3v8.5a.5.5 0 01-.5.5h-7.5a.5.5 0 01-.5-.5v-11a.5.5 0 01.5-.5zM8 7.5v4M6 9.5h4"/>', 14),
+  tests: svg('<path d="M6 2h4M7 2v4.5L3 13a1 1 0 00.9 1.5h8.2A1 1 0 0013 13L9 6.5V2"/><path d="M4.8 10.5h6.4"/>', 18),
+  npm: svg('<path d="M8 1.5l5.5 3v7L8 14.5l-5.5-3v-7z"/><path d="M2.5 4.5L8 7.5l5.5-3M8 7.5v7"/>', 18),
   duplicates: svg('<rect x="2" y="2" width="8" height="8" rx="1.5"/><rect x="6" y="6" width="8" height="8" rx="1.5"/>', 18),
   database: svg('<ellipse cx="8" cy="4" rx="5" ry="2"/><path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>', 18),
   ai: svg('<path d="M7 2l1.4 3.6L12 7 8.4 8.4 7 12 5.6 8.4 2 7l3.6-1.4z"/><path d="M12.5 9.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/>', 18),

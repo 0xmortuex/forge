@@ -16,6 +16,8 @@ import { registerAi } from './ai'
 import { closeAllDatabases, registerDatabase } from './database'
 import { registerDuplicates } from './duplicates'
 import { registerSpell } from './spell'
+import { registerNpm } from './npm'
+import { registerTestRun } from './testrun'
 import { registerWatch, stopWatching } from './watch'
 import { registerScratch } from './scratch'
 import { killAllTerminals, registerTerminal } from './terminal'
@@ -179,6 +181,8 @@ registerAi()
 registerDatabase()
 registerDuplicates()
 registerSpell()
+registerNpm()
+registerTestRun()
 registerWatch()
 registerScratch()
 let terminalsEnded = false

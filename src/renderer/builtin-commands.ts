@@ -13,7 +13,8 @@ export interface BuiltinDeps {
   openSearchScope: (scope: 'all' | 'files' | 'symbols' | 'actions', classesOnly?: boolean) => void
   showFind: () => void
   toggleSide: (side: 'project' | 'commit') => void
-  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai' | 'database' | 'duplicates') => void
+  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai' | 'database' | 'duplicates' | 'npm' | 'tests') => void
+  runAllTests: () => void
   findDuplicates: () => void
   addWordToDictionary: () => void
   runHttp: () => void
@@ -272,6 +273,9 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'nav.goToTest', category: 'Navigate', title: 'Go to Test / Source', keys: 'Ctrl+Shift+T', run: d.goToTest })
   register({ id: 'spell.addWord', category: 'Code', title: 'Add Word at Cursor to Dictionary', run: d.addWordToDictionary })
   register({ id: 'code.duplicates', category: 'Code', title: 'Find Duplicated Code', run: d.findDuplicates })
+  register({ id: 'test.runAll', category: 'Run', title: 'Run All Tests', run: d.runAllTests })
+  register({ id: 'view.tests', category: 'View', title: 'Toggle Test Explorer', run: () => d.toggleView('tests') })
+  register({ id: 'view.npm', category: 'View', title: 'Toggle npm Window', run: () => d.toggleView('npm') })
   register({ id: 'view.database', category: 'View', title: 'Toggle Database Window', run: () => d.toggleView('database') })
   register({ id: 'ai.toggle', category: 'AI', title: 'Toggle AI Assistant', keys: 'Alt+8', run: () => d.toggleView('ai') })
   register({ id: 'ai.newChat', category: 'AI', title: 'New AI Chat', run: d.aiNewChat })

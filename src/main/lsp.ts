@@ -5,6 +5,7 @@ import { basename, dirname, extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { ipcMain, type WebContents } from 'electron'
 import { findOnPath } from './terminal'
+import { BUILTIN_DEFS, customDefs, type ServerDef } from './langservers'
 import {
   createMessageConnection,
   ResponseError,
@@ -21,6 +22,12 @@ interface Launch {
 
 interface ServerSpec {
   id: string
+  /** What the user knows it as ("Go"), for messages. */
+  name?: string
+  /** True for a server that is only used when installed: a missing one is noted once, not reported as an error. */
+  optional?: boolean
+  /** How to get an optional server, shown when it is missing. */
+  install?: string
   launch: () => Launch
   /** Sent as initializationOptions (server-specific settings). */
   initOptions?: unknown
@@ -53,14 +60,14 @@ function requestApplyEdit(wc: WebContents, edit: unknown): Promise<{ applied: bo
 }
 
 /** Runs an npm package's bin script with Electron's own Node, so users need no separate Node install. */
-function npmBin(pkg: string, binName: string): Launch {
+function npmBin(pkg: string, binName: string, args: string[] = ['--stdio']): Launch {
   const pkgJsonPath = nodeRequire.resolve(`${pkg}/package.json`)
   const { bin } = JSON.parse(readFileSync(pkgJsonPath, 'utf8')) as { bin: string | Record<string, string> }
   const rel = typeof bin === 'string' ? bin : bin[binName]
   if (!rel) throw new Error(`${pkg} has no bin "${binName}"`)
   return {
     command: process.execPath,
-    args: [join(dirname(pkgJsonPath), rel), '--stdio'],
+    args: [join(dirname(pkgJsonPath), rel), ...args],
     env: { ELECTRON_RUN_AS_NODE: '1' }
   }
 }
@@ -102,7 +109,18 @@ const SERVERS: Record<string, ServerSpec> = {
     }
   },
   // Not bundled: must be installed and on PATH.
-  clangd: { id: 'clangd', launch: () => ({ command: 'clangd', args: [] }) }
+  clangd: {
+    id: 'clangd',
+    name: 'C/C++',
+    optional: true,
+    launch: () => {
+      try {
+        return { command: findOnPath('clangd'), args: [] }
+      } catch {
+        throw new Error('clangd not found on PATH. C/C++ support needs it: install LLVM from https://clangd.llvm.org/installation')
+      }
+    }
+  }
 }
 
 // File extension -> [LSP languageId, server id].
@@ -116,6 +134,48 @@ const BY_EXT: Record<string, [string, string]> = {
   '.c': ['c', 'clangd'], '.h': ['c', 'clangd'],
   '.cpp': ['cpp', 'clangd'], '.cc': ['cpp', 'clangd'], '.cxx': ['cpp', 'clangd'], '.hpp': ['cpp', 'clangd']
 }
+
+// ---- The servers beyond the core four: bundled npm packages, programs found on PATH, and the user's own ----
+/** File names without an extension (Dockerfile) -> [LSP languageId, server id]. */
+const BY_NAME: Record<string, [string, string]> = {}
+const customIds = new Set<string>()
+const CORE_IDS = Object.keys(SERVERS)
+
+/** How to start a server from its definition: the bundled package, or the first of its programs that is on PATH. */
+function launchDef(def: ServerDef): Launch {
+  if (def.bundled) return npmBin(def.bundled.pkg, def.bundled.bin, def.bundled.args)
+  for (const c of def.commands ?? []) {
+    let found: string
+    try {
+      found = findOnPath(c.command)
+    } catch {
+      continue // try the next candidate
+    }
+    // On Windows a .cmd or .bat shim cannot be started directly: it needs cmd.exe.
+    if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(found)) return { command: process.env['ComSpec'] ?? 'cmd.exe', args: ['/c', found, ...c.args] }
+    return { command: found, args: c.args }
+  }
+  const names = (def.commands ?? []).map((c) => c.command).join(' or ')
+  throw new Error(`${def.name} support needs ${names} on your PATH.${def.install ? ` ${def.install}` : ''}`)
+}
+
+function registerDef(def: ServerDef): void {
+  SERVERS[def.id] = { id: def.id, name: def.name, optional: !def.bundled, install: def.install, launch: () => launchDef(def) }
+  for (const [ext, languageId] of Object.entries(def.extensions)) BY_EXT[ext] = [languageId, def.id]
+  for (const [name, languageId] of Object.entries(def.names ?? {})) BY_NAME[name] = [languageId, def.id]
+}
+
+function unregisterDef(id: string): void {
+  delete SERVERS[id]
+  for (const [ext, [, server]] of Object.entries(BY_EXT)) if (server === id) delete BY_EXT[ext]
+  for (const [name, [, server]] of Object.entries(BY_NAME)) if (server === id) delete BY_NAME[name]
+}
+
+for (const def of BUILTIN_DEFS) registerDef(def)
+
+/** Optional servers that turned out to be missing: id -> when we noticed. Looked at again after a while (it may have been installed). */
+const missing = new Map<string, number>()
+const RECHECK_MS = 30000
 
 // LSP error codes that mean "the document changed / request was superseded"; not real failures.
 const CONTENT_MODIFIED = -32801
@@ -316,11 +376,24 @@ export function registerLsp(): void {
   ipcMain.handle(
     'lsp:open',
     async (e, root: string, uri: string, path: string, version: number, text: string): Promise<boolean> => {
-      const entry = BY_EXT[extname(path).toLowerCase()]
+      const entry = BY_EXT[extname(path).toLowerCase()] ?? BY_NAME[basename(path).toLowerCase()]
       if (!entry) return false
       const [languageId, serverId] = entry
       const spec = SERVERS[serverId]
       if (!spec) throw new Error(`No server spec for ${serverId}`)
+      if (spec.optional) {
+        // A server that is not installed is no error: say so once (with how to get it) and leave the file without it.
+        const since = missing.get(serverId)
+        if (since !== undefined && Date.now() - since < RECHECK_MS) return false
+        try {
+          spec.launch()
+          missing.delete(serverId)
+        } catch (err) {
+          if (since === undefined) e.sender.send('lsp:log', spec.name ?? serverId, 2, err instanceof Error ? err.message : String(err))
+          missing.set(serverId, Date.now())
+          return false
+        }
+      }
 
       const key = `${serverId}\0${root}`
       let client = clients.get(key)
@@ -351,6 +424,19 @@ export function registerLsp(): void {
       return true
     }
   )
+
+  /** The user's own language servers (the languageServers list of settings.json). Throws a message for a wrong entry. */
+  ipcMain.handle('lsp:configure', (_e, raw: unknown) => {
+    const defs = customDefs(raw, [...CORE_IDS, ...BUILTIN_DEFS.map((d) => d.id)])
+    for (const id of customIds) unregisterDef(id)
+    customIds.clear()
+    for (const def of defs) {
+      registerDef(def)
+      customIds.add(def.id)
+    }
+    missing.clear()
+    return defs.map((d) => ({ id: d.id, name: d.name, extensions: Object.keys(d.extensions) }))
+  })
 
   ipcMain.handle('lsp:change', async (_e, uri: string, version: number, text: string) => {
     const d = getDoc(uri)

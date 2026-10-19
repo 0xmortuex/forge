@@ -21,7 +21,14 @@ const byId = <T extends HTMLElement>(id: string): T => {
 }
 
 /** The Terminal tool window: any number of independent shells, one visible at a time. */
-export function initTerminals(deps: TerminalsDeps): { show: () => void; newTerminal: (cwd?: string) => void } {
+export interface NewTerminalOptions {
+  /** The tab's name (default: "Local"). */
+  name?: string
+  /** A command line to run right away. */
+  command?: string
+}
+
+export function initTerminals(deps: TerminalsDeps): { show: () => void; newTerminal: (cwd?: string, opts?: NewTerminalOptions) => void } {
   const tabsEl = byId('term-tabs')
   const host = byId('term')
   const panes: Pane[] = []
@@ -82,14 +89,14 @@ export function initTerminals(deps: TerminalsDeps): { show: () => void; newTermi
     else render()
   }
 
-  function newTerminal(startIn?: string): void {
+  function newTerminal(startIn?: string, opts: NewTerminalOptions = {}): void {
     const cwd = startIn ?? deps.getCwd()
     const el = document.createElement('div')
     el.className = 'term-pane'
     host.append(el)
     counter++
     const pane: Pane = {
-      name: counter === 1 ? 'Local' : `Local (${counter})`,
+      name: opts.name ?? (counter === 1 ? 'Local' : `Local (${counter})`),
       el,
       exited: false,
       view: createTerminalView(el, deps.getCwd, deps.guard, {
@@ -107,6 +114,7 @@ export function initTerminals(deps: TerminalsDeps): { show: () => void; newTermi
       .guard('Terminal', async () => {
         if (!cwd) throw new Error('Open a folder first (Ctrl+O) — the terminal starts in the project folder')
         await pane.view.begin((cols, rows) => window.forge.termCreate(cwd, cols, rows, shellSpec()))
+        if (opts.command) pane.view.write(opts.command + '\r')
       })
       .catch(async () => {
         // The error is already reported; don't leave a dead empty tab behind.

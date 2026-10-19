@@ -921,3 +921,50 @@ body.no-breadcrumbs #breadcrumbs { display: none; }
 .dup-occ:hover { background: var(--hover); }
 .dup-path { color: var(--text-hi); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dup-range { color: var(--text-dim); margin-left: auto; flex: none; }
+
+/* ---- npm window ---- */
+.npm-pkg { max-width: 220px; }
+.npm-manager { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 8px; background: var(--island-2); color: var(--accent); }
+.npm-status { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); font-size: 12px; padding: 0 6px; }
+.npm-status.err { color: var(--err); white-space: normal; }
+.npm-body .hint.err { color: var(--err); }
+.npm-section { padding: 10px 10px 2px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-dim); }
+.npm-script { display: flex; align-items: center; gap: 8px; height: var(--row-lg); padding: 0 10px; border-radius: 6px; }
+.npm-script:hover, .npm-dep:hover { background: var(--hover); }
+.npm-run { color: var(--ok); }
+.npm-script-name { font-weight: 600; color: var(--text-hi); flex: none; }
+.npm-script-cmd { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: "JetBrains Mono", Consolas, monospace; font-size: 12px; }
+.npm-dep { display: flex; align-items: center; gap: 12px; height: var(--row-lg); padding: 0 10px; border-radius: 6px; }
+.npm-dep-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-hi); }
+.npm-dep-range { width: 90px; color: var(--text-dim); font-family: "JetBrains Mono", Consolas, monospace; font-size: 12px; }
+.npm-dep-installed { width: 90px; font-family: "JetBrains Mono", Consolas, monospace; font-size: 12px; }
+.npm-dep-installed.missing { color: var(--warn); font-family: inherit; }
+.npm-dep-latest { width: 90px; font-family: "JetBrains Mono", Consolas, monospace; font-size: 12px; color: var(--ok); }
+.npm-dep-latest.outdated { color: var(--warn); }
+.npm-dep-tools { width: 54px; display: flex; gap: 2px; justify-content: flex-end; opacity: 0; }
+.npm-dep:hover .npm-dep-tools { opacity: 1; }
+
+/* ---- Test Explorer ---- */
+.tests-summary { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ok); font-size: 12px; padding: 0 6px; }
+.tests-summary.err { color: var(--err); }
+.tests-framework { width: 96px; }
+.tests-body { flex: 1; min-height: 0; display: flex; }
+.tests-tree { flex: 1; min-width: 0; overflow: auto; padding: 2px 4px 8px; }
+.tests-detail { flex: none; width: 38%; min-width: 220px; overflow: auto; border-left: 1px solid var(--border); padding: 8px 12px; user-select: text; }
+.tests-folder, .tests-test { display: flex; align-items: center; gap: 6px; height: var(--row); padding-right: 10px; border-radius: 6px; cursor: pointer; user-select: none; white-space: nowrap; }
+.tests-folder:hover, .tests-test:hover { background: var(--hover); }
+.tests-test.sel { background: var(--sel); }
+.tests-chev { width: 12px; color: var(--text-dim); font-size: 11px; }
+.tests-icon { width: 14px; text-align: center; font-weight: 700; }
+.tests-folder.ok .tests-icon, .tests-test.passed .tests-icon { color: var(--ok); }
+.tests-folder.failed .tests-icon, .tests-test.failed .tests-icon { color: var(--err); }
+.tests-test.skipped .tests-icon { color: var(--text-dim); }
+.tests-test.skipped .tests-name { color: var(--text-dim); }
+.tests-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tests-count, .tests-time { color: var(--text-dim); font-size: 11px; }
+.tests-title { font-weight: 700; color: var(--text-hi); margin-bottom: 4px; }
+.tests-title.failed { color: var(--err); }
+.tests-title.passed { color: var(--ok); }
+.tests-meta { color: var(--text-dim); font-size: 12px; margin-bottom: 8px; }
+.tests-message { margin: 0 0 10px; padding: 8px 10px; border-radius: 8px; background: var(--island-2); color: var(--err); font: 12px/1.5 "JetBrains Mono", Consolas, monospace; white-space: pre-wrap; overflow: auto; max-height: 55vh; }
+.tests-detail .hint.err { color: var(--err); white-space: pre-wrap; }

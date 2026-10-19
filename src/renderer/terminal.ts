@@ -48,6 +48,8 @@ export interface TerminalView {
   /** Kills the running process, if any. */
   kill: () => Promise<void>
   isRunning: () => boolean
+  /** Types text into the running process, as if the user had typed it (end a command with a carriage return). */
+  write: (data: string) => void
   /** Kills the process, removes listeners and disposes the xterm. The view is unusable afterwards. */
   dispose: () => Promise<void>
 }
@@ -162,6 +164,9 @@ export function createTerminalView(
     begin,
     kill,
     isRunning: () => id !== null,
+    write: (data) => {
+      if (id !== null) void window.forge.termWrite(id, data)
+    },
     dispose: async () => {
       await kill()
       offData()

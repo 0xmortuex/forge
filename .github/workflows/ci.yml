@@ -24,6 +24,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      - run: pnpm test:unit # plain Node tests of the pure logic (patches, rebase plans, parsers...); no window needed
       - run: pnpm build
 
   # The end-to-end scenarios drive the real app. They are developed and run on Windows (they assume

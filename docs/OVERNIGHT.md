@@ -14,6 +14,23 @@ suite passed. "Not done" and "known gaps" are listed honestly at the end of this
 ## Code quality
 - **Find Duplicated Code**: copy-paste detection across the project; groups with every place, click to jump.
 
+## Languages
+- **Language breadth**: bundled YAML, Shell and Dockerfile servers; Go, Rust, C#, PHP, Ruby, Lua, Zig, Dart, Kotlin,
+  Haskell, Terraform, TOML, XML, CMake, Swift, OCaml and SQL servers when installed (a missing one is mentioned once, calmly);
+  your own servers through `languageServers` in `settings.json`; basic highlighting for Zig, TOML, Haskell, OCaml, CMake.
+  See `docs/LANGUAGES.md`.
+
+## Project tooling
+- **npm window**: every package.json (monorepos too), its scripts (▶ runs them in a terminal tab), its dependencies with
+  installed and latest versions, update / remove with the project's own package manager (pnpm, npm, yarn, bun).
+- **Test Explorer**: runs node:test, Vitest, Jest and pytest; a tree of files, suites and tests with pass/fail, failure
+  messages, jump to test, Run All / Run File / Run Failed.
+- Terminals can now run a command in a new tab (used by the npm window).
+
+## Quality
+- **Unit tests** (`pnpm test:unit`, 45 tests, under a second): patches, rebase plans, duplicate detection, language-server
+  validation and test-output parsers, run in CI on all three platforms. Writing them caught a real parser bug.
+
 ## Editing
 - **Emmet** for HTML, XML, handlebars, razor, CSS, SCSS and Less: completion and Tab expansion.
 - **Spell checker** (English): typos in comments, strings, Markdown and text files; Quick Fix corrects, adds to the
