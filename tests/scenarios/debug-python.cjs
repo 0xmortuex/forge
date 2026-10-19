@@ -89,7 +89,7 @@ run(
 
     key('F9')
     check('F9 resumes and the program finishes', !!(await waitFor(async () => (await status()) === 'Finished', 20000)), await status())
-    await js("document.querySelector('.btab[data-view=run]').click()") // xterm only renders while visible
+    await js("document.querySelector('.btab[data-win=run]').click()") // xterm only renders while visible
     check(
       'program output reached the Run tab',
       !!(await waitFor(async () => (await runText()).includes('total=21') && (await runText()).includes('done'), 5000))

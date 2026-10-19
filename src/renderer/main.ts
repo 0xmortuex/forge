@@ -29,6 +29,7 @@ import { initGit } from './git'
 import { registerMort } from './mort'
 import { initDebug } from './debug'
 import { initRun } from './run'
+import { createToolWindows, type DockName } from './docks'
 import type { ChangeKind, GitChange } from '../main/git'
 
 self.MonacoEnvironment = {
@@ -110,13 +111,6 @@ void Promise.all([document.fonts.load('13px "JetBrains Mono"'), document.fonts.l
 const setIcon = (sel: string, html: string): void => {
   document.querySelectorAll(sel).forEach((el) => (el.innerHTML = html))
 }
-setIcon('.tw-btn[data-side="project"]', icons.project)
-setIcon('.tw-btn[data-side="commit"]', icons.commit)
-setIcon('.tw-btn[data-view="output"]', icons.output)
-setIcon('.tw-btn[data-view="terminal"]', icons.terminal)
-setIcon('.tw-btn[data-view="find"]', icons.search)
-setIcon('.tw-btn[data-view="run"]', icons.play)
-setIcon('.tw-btn[data-view="debug"]', icons.bug)
 setIcon('#debug-btn', icons.bug)
 setIcon('#search-btn', icons.search)
 setIcon('#palette-btn', icons.command)
@@ -159,109 +153,37 @@ function report(msg: string, isError = false): void {
 }
 
 // ---- Tool windows ----
-// Project is a side window; Output, Terminal and Find are views of one bottom window.
-const toolWindows: Record<string, HTMLElement> = { project: $('project'), bottom: $('bottom') }
-// Each tool window's splitter is hidden together with it.
-const splitters: Record<string, HTMLElement> = { project: $('split-project'), bottom: $('split-bottom') }
-
-type View = 'output' | 'terminal' | 'find' | 'run' | 'debug'
-let currentView: View = 'output'
-const onViewShown: Partial<Record<View, () => void>> = {}
-
-// The left window has two views: the Project tree and the Commit window.
-type Side = 'project' | 'commit'
-let currentSide: Side = 'project'
-const onSideShown: Partial<Record<Side, () => void>> = {}
-
-function syncStripe(): void {
-  const bottomOpen = !toolWindows['bottom']!.hidden
-  const sideOpen = !toolWindows['project']!.hidden
-  document.querySelectorAll<HTMLElement>('[data-side]').forEach((el) => {
-    el.classList.toggle('active', sideOpen && el.dataset['side'] === currentSide)
-  })
-  document.querySelectorAll<HTMLElement>('[data-view]').forEach((el) => {
-    el.classList.toggle('active', bottomOpen && el.dataset['view'] === currentView)
-  })
-}
-
-function showSide(side: Side): void {
-  currentSide = side
-  treeEl.hidden = side !== 'project'
-  $('commit-view').hidden = side !== 'commit'
-  setWindowHidden('project', false)
-  onSideShown[side]?.()
-}
-
-function toggleSide(side: Side): void {
-  if (!toolWindows['project']!.hidden && currentSide === side) setWindowHidden('project', true)
-  else showSide(side)
-}
-
-function setWindowHidden(name: string, hidden: boolean): void {
-  const win = toolWindows[name]
-  const split = splitters[name]
-  if (!win || !split) throw new Error(`Unknown tool window: ${name}`)
-  const wasHidden = win.hidden
-  win.hidden = hidden
-  split.hidden = hidden
-  if (wasHidden && !hidden) playEnter(win)
-  syncStripe()
-  saveSession()
-}
-
-function toggleToolWindow(name: string): void {
-  setWindowHidden(name, !toolWindows[name]?.hidden)
-}
-
-function showView(view: View): void {
-  currentView = view
-  const changed = view !== currentView || toolWindows['bottom']!.hidden
-  for (const v of ['output', 'terminal', 'find', 'run', 'debug'] as const) $(`view-${v}`).hidden = v !== view
-  setWindowHidden('bottom', false)
-  if (changed) playEnter($(`view-${view}`))
-  onViewShown[view]?.()
-}
-
-function toggleView(view: View): void {
-  if (!toolWindows['bottom']!.hidden && currentView === view) setWindowHidden('bottom', true)
-  else showView(view)
-}
-
-document.querySelectorAll<HTMLButtonElement>('.tw-btn[data-side]').forEach((b) => {
-  b.onclick = () => toggleSide(b.dataset['side'] as Side)
-})
-document.querySelectorAll<HTMLButtonElement>('.btab[data-side]').forEach((b) => {
-  b.onclick = () => showSide(b.dataset['side'] as Side)
-})
-document.querySelectorAll<HTMLButtonElement>('.tw-btn[data-view]').forEach((b) => {
-  b.onclick = () => toggleView(b.dataset['view'] as View)
-})
-document.querySelectorAll<HTMLButtonElement>('.btab[data-view]').forEach((b) => {
-  b.onclick = () => showView(b.dataset['view'] as View)
-})
-
-function makeSplitter(split: HTMLElement, target: HTMLElement, axis: 'x' | 'y'): void {
-  split.onmousedown = (down) => {
-    down.preventDefault()
-    const start = axis === 'x' ? down.clientX : down.clientY
-    const startSize = axis === 'x' ? target.offsetWidth : target.offsetHeight
-    const move = (e: MouseEvent): void => {
-      // Project grows rightwards; Output grows upwards.
-      const delta = axis === 'x' ? e.clientX - start : start - e.clientY
-      const size = Math.max(80, startSize + delta)
-      target.style[axis === 'x' ? 'width' : 'height'] = `${size}px`
-    }
-    const up = (): void => {
-      window.removeEventListener('mousemove', move)
-      window.removeEventListener('mouseup', up)
-      saveSession()
-    }
-    window.addEventListener('mousemove', move)
-    window.addEventListener('mouseup', up)
+// Each one lives in the left, right or bottom dock (see docks.ts) and can be moved between them. Project and Commit
+// start on the left; Output, Terminal, Find, Run, Debug and Problems at the bottom; Structure on the right.
+const tw = createToolWindows({
+  enter: playEnter,
+  changed: () => saveSession(),
+  els: {
+    left: { panel: $('project'), splitter: $('split-project'), tabs: $('side-tabs') },
+    right: { panel: $('right'), splitter: $('split-right'), tabs: $('right-tabs') },
+    bottom: { panel: $('bottom'), splitter: $('split-bottom'), tabs: $('bottom-tabs') },
+    stripeLeftTop: $('stripe-left-top'),
+    stripeLeftBottom: $('stripe-left-bottom'),
+    stripeLeft: $('stripe'),
+    stripeRight: $('stripe-right')
   }
-}
-makeSplitter($('split-project'), $('project'), 'x')
-makeSplitter($('split-bottom'), $('bottom'), 'y')
+})
+tw.register({ id: 'project', title: 'Project', icon: icons.project, root: treeEl, dock: 'left', shortcut: 'Alt+1' })
+tw.register({ id: 'commit', title: 'Commit', icon: icons.commit, root: $('commit-view'), dock: 'left', shortcut: 'Alt+0' })
+tw.register({ id: 'output', title: 'Output', icon: icons.output, root: $('view-output'), dock: 'bottom', shortcut: 'Alt+2' })
+tw.register({ id: 'terminal', title: 'Terminal', icon: icons.terminal, root: $('view-terminal'), dock: 'bottom', shortcut: 'Alt+3', passive: false })
+tw.register({ id: 'find', title: 'Find', icon: icons.search, root: $('view-find'), dock: 'bottom', shortcut: 'Ctrl+Shift+F' })
+tw.register({ id: 'run', title: 'Run', icon: icons.play, root: $('view-run'), dock: 'bottom', shortcut: 'Shift+F10', passive: false })
+tw.register({ id: 'debug', title: 'Debug', icon: icons.bug, root: $('view-debug'), dock: 'bottom', passive: false })
+tw.register({ id: 'problems', title: 'Problems', icon: icons.problems, root: $('view-problems'), dock: 'bottom', shortcut: 'Alt+6' })
+tw.register({ id: 'structure', title: 'Structure', icon: icons.structure, root: $('view-structure'), dock: 'right', shortcut: 'Alt+7' })
+
+type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure'
+type Side = 'project' | 'commit'
+const showSide = (side: Side): void => tw.show(side)
+const toggleSide = (side: Side): void => tw.toggle(side)
+const showView = (view: View): void => tw.show(view)
+const toggleView = (view: View): void => tw.toggle(view)
 
 // ---- Search Everywhere ----
 const searchEl = $('search')
@@ -741,7 +663,7 @@ editor.onDidChangeModelContent(refreshBlame)
 $('project-widget').onclick = () => void openFolder()
 $('search-btn').onclick = () => void openSearch()
 document.querySelectorAll<HTMLButtonElement>('[data-hide]').forEach((b) => {
-  b.onclick = () => toggleToolWindow(b.dataset['hide'] ?? '')
+  b.onclick = () => tw.hideDock(b.dataset['hide'] as DockName)
 })
 
 const isMac = navigator.platform.startsWith('Mac')
@@ -749,12 +671,10 @@ if (isMac) document.body.classList.add('mac') // window buttons are on the left 
 
 window.addEventListener('keydown', (e) => {
   // Physical keys (e.code): on macOS, Alt+1 types a symbol, so e.key would never be "1".
-  const digit = e.altKey && !e.ctrlKey && !e.metaKey ? /^Digit([0-3])$/.exec(e.code)?.[1] : undefined
+  const digit = e.altKey && !e.ctrlKey && !e.metaKey ? /^Digit([012367])$/.exec(e.code)?.[1] : undefined
   if (digit !== undefined) {
     e.preventDefault()
-    if (digit === '0') toggleSide('commit')
-    else if (digit === '1') toggleSide('project')
-    else toggleView(digit === '2' ? 'output' : 'terminal')
+    tw.toggle({ '0': 'commit', '1': 'project', '2': 'output', '3': 'terminal', '6': 'problems', '7': 'structure' }[digit]!)
     return
   }
   if (e.key === 'F11') {
@@ -795,7 +715,7 @@ const lsp = initLsp({
 })
 
 const terminals = initTerminals({ getCwd: () => rootDir, guard: guarded })
-onViewShown.terminal = () => terminals.show()
+tw.setOnShow('terminal', () => terminals.show())
 
 const findInput = $<HTMLInputElement>('find-input')
 const finder = initFind({
@@ -807,7 +727,7 @@ const finder = initFind({
   openAt: openFile,
   guard: guarded
 })
-onViewShown.find = () => findInput.focus()
+tw.setOnShow('find', () => findInput.focus())
 
 // ---- Git ----
 const gitKinds = new Map<string, ChangeKind>() // normalized path -> change kind
@@ -895,7 +815,7 @@ const gitUi = initGit({
 function refreshGit(): void {
   void gitUi.refresh().catch(() => undefined)
 }
-onSideShown.commit = refreshGit
+tw.setOnShow('commit', refreshGit)
 window.addEventListener('focus', () => {
   if (settings.get<boolean>('gitRefreshOnFocus')) refreshGit() // changes made outside Forge
 })
@@ -930,7 +850,7 @@ const runUi = initRun({
   view: runView,
   showRunView: () => showView('run')
 })
-onViewShown.run = () => runView.show()
+tw.setOnShow('run', () => runView.show())
 
 const dbg = initDebug({
   editor,
@@ -947,7 +867,6 @@ const dbg = initDebug({
   setBusy: runUi.setBusy
 })
 $('debug-btn').onclick = () => void dbg.start().catch(() => undefined) // reported by guard
-onViewShown.debug = () => undefined
 
 // Capture phase: Monaco claims several F-keys (e.g. F8) before they would bubble to the window.
 window.addEventListener(
@@ -1085,16 +1004,22 @@ function saveSession(): void {
   const layout = session.get().layout
   const width = $('project').offsetWidth
   const height = $('bottom').offsetHeight
+  const rightWidth = $('right').offsetWidth
+  const docks = tw.layout()
   session.update({
     openFiles: [...openFiles.values()].filter((f) => !f.diff).map((f) => f.path),
     activeFile: (active?.diff ? active.diff.shared : active)?.path,
     layout: {
       projectWidth: width > 0 ? width : layout.projectWidth, // a hidden window measures 0: keep the last real size
       bottomHeight: height > 0 ? height : layout.bottomHeight,
-      projectHidden: toolWindows['project']!.hidden,
-      bottomHidden: toolWindows['bottom']!.hidden,
-      side: currentSide,
-      view: currentView
+      rightWidth: rightWidth > 0 ? rightWidth : layout.rightWidth,
+      projectHidden: docks.hidden.left,
+      bottomHidden: docks.hidden.bottom,
+      rightHidden: docks.hidden.right,
+      side: docks.active.left,
+      view: docks.active.bottom,
+      docks: docks.docks,
+      active: docks.active
     }
   })
 }
@@ -1131,11 +1056,13 @@ async function restoreSession(): Promise<void> {
     const l = s.layout
     if (l.projectWidth) $('project').style.width = `${l.projectWidth}px`
     if (l.bottomHeight) $('bottom').style.height = `${l.bottomHeight}px`
-    showSide(l.side ?? 'project')
-    // Only the passive views come back by themselves; a terminal, run or debug session shouldn't start unasked.
-    showView(l.view === 'find' ? 'find' : 'output')
-    if (l.projectHidden) setWindowHidden('project', true)
-    if (l.bottomHidden) setWindowHidden('bottom', true)
+    if (l.rightWidth) $('right').style.width = `${l.rightWidth}px`
+    // Only the passive windows come back as the shown tab; a terminal, run or debug session shouldn't start unasked.
+    tw.restore({
+      docks: l.docks,
+      active: { left: l.active?.left ?? l.side, bottom: l.active?.bottom ?? l.view, right: l.active?.right },
+      hidden: { left: l.projectHidden, bottom: l.bottomHidden, right: l.rightHidden }
+    })
     try {
       await openFolderAt(s.lastFolder)
     } catch {
@@ -1157,6 +1084,5 @@ async function restoreSession(): Promise<void> {
   }
 }
 
-syncStripe()
 renderTabs()
 void restoreSession()

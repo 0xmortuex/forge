@@ -12,7 +12,7 @@ export interface BuiltinDeps {
   openSearch: () => void
   showFind: () => void
   toggleSide: (side: 'project' | 'commit') => void
-  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find') => void
+  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure') => void
   newTerminal: () => void
   toggleZen: () => void
   toggleFullscreen: () => Promise<void>
@@ -61,6 +61,8 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'view.commit', category: 'View', title: 'Toggle Commit Window', keys: 'Alt+0', run: () => d.toggleSide('commit') })
   register({ id: 'view.output', category: 'View', title: 'Toggle Output', keys: 'Alt+2', run: () => d.toggleView('output') })
   register({ id: 'view.terminal', category: 'View', title: 'Toggle Terminal', keys: 'Alt+3', run: () => d.toggleView('terminal') })
+  register({ id: 'view.problems', category: 'View', title: 'Toggle Problems', keys: 'Alt+6', run: () => d.toggleView('problems') })
+  register({ id: 'view.structure', category: 'View', title: 'Toggle Structure', keys: 'Alt+7', run: () => d.toggleView('structure') })
   register({ id: 'view.run', category: 'View', title: 'Toggle Run Window', run: () => d.toggleView('run') })
   register({ id: 'view.debug', category: 'View', title: 'Toggle Debug Window', run: () => d.toggleView('debug') })
   register({ id: 'view.newTerminal', category: 'View', title: 'New Terminal', keys: 'Ctrl+Shift+`', run: d.newTerminal })

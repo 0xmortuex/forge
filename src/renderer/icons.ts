@@ -24,6 +24,8 @@ export const icons = {
   gear: svg('<circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.7M8 12.5v1.7M1.8 8h1.7M12.5 8h1.7M3.6 3.6l1.2 1.2M11.2 11.2l1.2 1.2M12.4 3.6l-1.2 1.2M4.8 11.2l-1.2 1.2"/>', 18),
   command: svg('<path d="M5.5 5.5V4a1.5 1.5 0 10-1.5 1.5zM5.5 5.5h5M10.5 5.5V4A1.5 1.5 0 1112 5.5zM10.5 5.5v5M10.5 10.5H12a1.5 1.5 0 11-1.5 1.5zM10.5 10.5h-5M5.5 10.5V12A1.5 1.5 0 114 10.5zM5.5 10.5v-5"/>', 18),
   minus: svg('<path d="M3.5 8h9"/>', 14),
+  structure: svg('<path d="M3 3h5M5 6.5h5M5 10h5M7 13.5h6"/><path d="M3 3v7a1 1 0 001 1h1M5 6.5V10"/>', 18),
+  problems: svg('<path d="M8 2.2l6 10.6a.5.5 0 01-.45.7H2.45a.5.5 0 01-.45-.7z"/><path d="M8 6.4v3.2M8 11.4v.1"/>', 18),
   close: svg('<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>', 12),
   folder: svg('<path d="M2 4.5A1.5 1.5 0 013.5 3h2.8l1.4 1.5h4.8A1.5 1.5 0 0114 6v5.5a1.5 1.5 0 01-1.5 1.5h-9A1.5 1.5 0 012 11.5z" fill="currentColor" fill-opacity=".18"/>'),
   file: svg('<path d="M4 2h5l3 3v8.5a.5.5 0 01-.5.5h-7.5a.5.5 0 01-.5-.5v-11a.5.5 0 01.5-.5z"/><path d="M9 2v3h3"/>')

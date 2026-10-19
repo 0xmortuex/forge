@@ -8,8 +8,13 @@ export interface Layout {
   bottomHeight?: number
   projectHidden?: boolean
   bottomHidden?: boolean
-  side?: 'project' | 'commit'
-  view?: string
+  rightWidth?: number
+  rightHidden?: boolean
+  side?: string // the window the left dock was showing
+  view?: string // the window the bottom dock was showing
+  /** Which dock each tool window is in, and which window each dock was showing. */
+  docks?: Record<string, string>
+  active?: { left?: string; right?: string; bottom?: string }
 }
 
 export interface SessionState {
@@ -21,7 +26,15 @@ export interface SessionState {
 }
 
 const MAX_RECENTS = 8
+const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined)
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+
+function record(v: unknown): Record<string, string> | undefined {
+  if (typeof v !== 'object' || v === null) return undefined
+  const out: Record<string, string> = {}
+  for (const [k, val] of Object.entries(v)) if (typeof val === 'string') out[k] = val
+  return out
+}
 
 function load(raw: Record<string, unknown>): SessionState {
   const layout = (typeof raw['layout'] === 'object' && raw['layout'] !== null ? raw['layout'] : {}) as Record<string, unknown>
@@ -36,8 +49,15 @@ function load(raw: Record<string, unknown>): SessionState {
       bottomHeight: num(layout['bottomHeight']),
       projectHidden: layout['projectHidden'] === true,
       bottomHidden: layout['bottomHidden'] === true,
-      side: layout['side'] === 'commit' ? 'commit' : 'project',
-      view: typeof layout['view'] === 'string' ? layout['view'] : undefined
+      rightWidth: num(layout['rightWidth']),
+      rightHidden: layout['rightHidden'] !== false, // the right dock starts closed
+      side: str(layout['side']),
+      view: str(layout['view']),
+      docks: record(layout['docks']),
+      active: (() => {
+        const a = (typeof layout['active'] === 'object' && layout['active'] !== null ? layout['active'] : {}) as Record<string, unknown>
+        return { left: str(a['left']), right: str(a['right']), bottom: str(a['bottom']) }
+      })()
     }
   }
 }

@@ -58,6 +58,20 @@ export interface TerminalOptions {
   onExit?: (code: number) => void
 }
 
+/**
+ * Keys that belong to the IDE rather than the shell: tool windows (Alt+digit), the palette, settings, find, zen mode
+ * and the F-keys. xterm would swallow them while the terminal has focus, so it is told to leave them alone.
+ */
+function isAppShortcut(e: KeyboardEvent): boolean {
+  if (e.type !== 'keydown') return false
+  if (e.altKey && !e.ctrlKey && !e.metaKey && /^Digit\d$/.test(e.code)) return true
+  if (/^F\d+$/.test(e.key)) return true
+  if (!e.ctrlKey && !e.metaKey) return false
+  if (e.code === 'Comma' || e.code === 'Backquote') return true
+  if (e.altKey) return e.code === 'KeyZ' || e.code === 'KeyS'
+  return e.shiftKey && (e.code === 'KeyP' || e.code === 'KeyF')
+}
+
 /** One pty-backed xterm shown in `container`. */
 export function createTerminalView(
   container: HTMLElement,
@@ -96,6 +110,7 @@ export function createTerminalView(
     term.loadAddon(fit)
     live.set(term, fit)
     term.open(container)
+    term.attachCustomKeyEventHandler((e) => !isAppShortcut(e)) // false = xterm ignores it and it reaches the app
     term.onData((data) => {
       if (id !== null) void window.forge.termWrite(id, data)
     })

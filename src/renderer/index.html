@@ -29,23 +29,11 @@
       <button class="icon-btn" id="settings-btn" title="Settings (Ctrl+,)"></button>
     </header>
     <div id="app">
-      <nav id="stripe">
-        <button class="tw-btn active" data-side="project" title="Project (Alt+1)"></button>
-        <button class="tw-btn" data-side="commit" title="Commit (Alt+0)"></button>
-        <span class="spacer"></span>
-        <button class="tw-btn" data-view="debug" title="Debug"></button>
-        <button class="tw-btn" data-view="run" title="Run (Shift+F10)"></button>
-        <button class="tw-btn" data-view="find" title="Find in Project (Ctrl+Shift+F)"></button>
-        <button class="tw-btn" data-view="terminal" title="Terminal (Alt+3)"></button>
-        <button class="tw-btn active" data-view="output" title="Output (Alt+2)"></button>
-      </nav>
+      <nav id="stripe"><div class="stripe-top" id="stripe-left-top"></div><span class="spacer"></span><div class="stripe-bot" id="stripe-left-bottom"></div></nav>
       <aside id="project" class="island">
         <div class="tw-header">
-          <div id="side-tabs">
-            <button class="btab" data-side="project">Project</button>
-            <button class="btab" data-side="commit">Commit</button>
-          </div>
-          <button class="icon-btn small" data-hide="project" title="Hide"></button>
+          <div class="dock-tabs" id="side-tabs"></div>
+          <button class="icon-btn small" data-hide="left" title="Hide"></button>
         </div>
         <div id="tree">
           <div class="empty-tree" id="empty-tree"><p>No folder is open</p><button class="btn-primary" id="open-folder-btn">Open Folder…</button></div>
@@ -89,16 +77,11 @@
         <div class="splitter h" id="split-bottom"></div>
         <section id="bottom" class="island">
           <div class="tw-header">
-            <div id="bottom-tabs">
-              <button class="btab" data-view="output">Output</button>
-              <button class="btab" data-view="terminal">Terminal</button>
-              <button class="btab" data-view="find">Find</button>
-              <button class="btab" data-view="run">Run</button>
-              <button class="btab" data-view="debug">Debug</button>
-            </div>
+            <div class="dock-tabs" id="bottom-tabs"></div>
             <button class="icon-btn small" data-hide="bottom" title="Hide"></button>
           </div>
           <div id="view-output" class="view"><div id="log"></div></div>
+          <div id="view-problems" class="view" hidden><div id="problems-list"></div></div>
           <div id="view-terminal" class="view" hidden>
             <div id="term-tabs"></div>
             <div id="term"></div>
@@ -131,6 +114,15 @@
           </div>
         </section>
       </section>
+      <div class="splitter v" id="split-right" hidden></div>
+      <aside id="right" class="island" hidden>
+        <div class="tw-header">
+          <div class="dock-tabs" id="right-tabs"></div>
+          <button class="icon-btn small" data-hide="right" title="Hide"></button>
+        </div>
+        <div id="view-structure" class="view" hidden><div id="structure-list"></div></div>
+      </aside>
+      <nav id="stripe-right" hidden></nav>
     </div>
     <footer id="status">
       <span id="status-msg"></span>

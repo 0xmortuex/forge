@@ -46,7 +46,7 @@ run(
     check('recent projects are listed', (await text('recents')).includes(path.basename(root)) && (await text('recents')).includes('elsewhere'), await text('recents'))
 
     // Saved as you go
-    await js("document.querySelector('.btab[data-side=\"project\"]').click()")
+    await js("document.querySelector('.btab[data-win=\"project\"]').click()")
     await js("[...document.querySelectorAll('.node')].find(n => n.textContent === 'c.txt').click()")
     check(
       'opening another file is saved to state.json',

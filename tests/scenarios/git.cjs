@@ -81,7 +81,7 @@ run('git', { 'a.txt': 'one\ntwo\n', 'src/b.ts': 'export const b = 1\n' }, async 
   )
 
   // Blame: committed line, then an uncommitted line
-  await js("document.querySelector('.btab[data-side=\"project\"]').click()")
+  await js("document.querySelector('.btab[data-win=\"project\"]').click()")
   await js(`${node('src')}.click()`) // expand the folder; its children render lazily
   await waitFor(() => js(`!!${node('b.ts')}`), 5000)
   await js(`${node('b.ts')}.click()`)
