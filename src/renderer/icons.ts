@@ -37,21 +37,46 @@ export const icons = {
 }
 
 const EXT_COLORS: Record<string, string> = {
-  ts: '#4fc3f7', tsx: '#4fc3f7', js: '#ffd54f', jsx: '#ffd54f', mjs: '#ffd54f', json: '#ffb74d',
+  ts: '#4fc3f7', tsx: '#4fc3f7', js: '#ffd54f', jsx: '#ffd54f', mjs: '#ffd54f', cjs: '#ffd54f', json: '#ffb74d',
   css: '#7e8bff', scss: '#f06292', html: '#ff8a65', md: '#90caf9', py: '#81c784', c: '#64b5f6',
   h: '#9575cd', cpp: '#64b5f6', rs: '#ff8a65', mx: '#c792ea', yaml: '#ef9a9a', yml: '#ef9a9a',
-  toml: '#ef9a9a', lock: '#78909c', gitignore: '#78909c'
+  toml: '#ef9a9a', lock: '#78909c', gitignore: '#78909c', sh: '#a5d6a7', txt: '#90a4ae', svg: '#ffb74d', png: '#ce93d8'
 }
+
+// The letters drawn on a file's badge.
+const EXT_LABEL: Record<string, string> = {
+  ts: 'TS', tsx: 'TSX', js: 'JS', jsx: 'JSX', mjs: 'JS', cjs: 'JS', json: '{}', css: 'CSS', scss: 'SC', html: '<>', md: 'MD',
+  py: 'PY', c: 'C', h: 'H', cpp: 'C+', rs: 'RS', mx: 'MX', yaml: 'YM', yml: 'YM', toml: 'TM', lock: 'LK',
+  gitignore: 'GI', sh: 'SH', txt: 'TXT', svg: 'SVG', png: 'IMG'
+}
+
+const extOf = (name: string): string => (name.includes('.') ? (name.split('.').pop() ?? '').toLowerCase() : '')
 
 /** The accent color for a file type, if it has one. */
 export function fileColor(name: string): string | undefined {
-  const ext = name.includes('.') ? (name.split('.').pop() ?? '').toLowerCase() : ''
-  return EXT_COLORS[ext]
+  return EXT_COLORS[extOf(name)]
 }
 
+/** A small colored badge with the file type's letters; an outlined page for types it doesn't know. */
 export function fileIcon(name: string): string {
-  const color = fileColor(name) ?? '#78909c'
-  return `<span class="ficon" style="color:${color}">${icons.file}</span>`
+  const ext = extOf(name)
+  const label = EXT_LABEL[ext]
+  if (!label) return `<span class="ficon" style="color:#78909c">${icons.file}</span>`
+  const color = EXT_COLORS[ext] ?? '#78909c'
+  const size = label.length > 2 ? ' tiny' : ''
+  // The letters are drawn by CSS (data-l), so they are not part of the row's text.
+  return `<span class="ficon fbadge${size}" data-l="${label.replace('<', '&lt;').replace('>', '&gt;')}" style="--c:${color}"></span>`
 }
 
-export const folderIcon = `<span class="ficon" style="color:var(--folder)">${icons.folder}</span>`
+const FOLDER_COLORS: Record<string, string> = {
+  src: 'var(--accent)', lib: 'var(--accent)', app: 'var(--accent)', test: '#81c784', tests: '#81c784', __tests__: '#81c784',
+  docs: '#64b5f6', doc: '#64b5f6', node_modules: '#78909c', '.git': '#f4511e', '.github': '#90a4ae', dist: '#ffb74d',
+  out: '#ffb74d', build: '#ffb74d', public: '#ba68c8', assets: '#ba68c8', examples: '#4dd0e1'
+}
+const FOLDER_OPEN = '<path d="M2 5A1.5 1.5 0 013.5 3.5h2.8L7.7 5h4.8A1.5 1.5 0 0114 6.5V7M2.6 13h9.7a1.2 1.2 0 001.15-.85l1.1-3.6A.6.6 0 0014 7.8H4.7a1.2 1.2 0 00-1.15.85L2.2 13" fill="currentColor" fill-opacity=".18"/>'
+
+/** A folder; special names (src, tests, node_modules ...) get their own color, and an open folder is drawn open. */
+export function folderIcon(name = '', open = false): string {
+  const color = FOLDER_COLORS[name] ?? 'var(--folder)'
+  return `<span class="ficon" style="color:${color}">${open ? svg(FOLDER_OPEN) : icons.folder}</span>`
+}

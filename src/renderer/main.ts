@@ -33,6 +33,7 @@ import { createToolWindows, type DockName } from './docks'
 import { initStructure } from './structure'
 import { initProblems } from './problems'
 import { initBreadcrumbs } from './breadcrumbs'
+import { initTooltips } from './tooltips'
 import type { ChangeKind, GitChange } from '../main/git'
 
 self.MonacoEnvironment = {
@@ -115,10 +116,11 @@ const setIcon = (sel: string, html: string): void => {
   document.querySelectorAll(sel).forEach((el) => (el.innerHTML = html))
 }
 setIcon('#debug-btn', icons.bug)
-setIcon('#search-btn', icons.search)
+setIcon('#search-ico', icons.search)
 setIcon('#palette-btn', icons.command)
 setIcon('#settings-btn', icons.gear)
 initRipples()
+initTooltips()
 setIcon('#project-chev', icons.chevronDown)
 setIcon('[data-hide]', icons.minus)
 
@@ -533,11 +535,12 @@ async function renderDir(dir: string, into: HTMLElement, depth = 0): Promise<voi
     row.className = 'node'
     row.dataset['path'] = e.path
     row.style.paddingLeft = `${depth * 14 + 6}px`
+    row.style.setProperty('--depth', String(depth))
     const twisty = document.createElement('span')
     twisty.className = 'twisty'
     if (e.isDir) twisty.innerHTML = icons.chevronRight
     row.append(twisty)
-    row.insertAdjacentHTML('beforeend', e.isDir ? folderIcon : fileIcon(e.name))
+    row.insertAdjacentHTML('beforeend', e.isDir ? folderIcon(e.name) : fileIcon(e.name))
     row.append(e.name)
     into.append(row)
     row.oncontextmenu = (ev) => {
@@ -552,6 +555,7 @@ async function renderDir(dir: string, into: HTMLElement, depth = 0): Promise<voi
       const setOpen = async (open: boolean): Promise<void> => {
         kids.hidden = !open
         twisty.innerHTML = open ? icons.chevronDown : icons.chevronRight
+        row.querySelector('.ficon')?.replaceWith(...new DOMParser().parseFromString(folderIcon(e.name, open), 'text/html').body.children)
         if (open && kids.childElementCount === 0) await renderDir(e.path, kids, depth + 1)
         if (open) {
           kids.classList.remove('kids-enter')
@@ -720,14 +724,62 @@ function updateStatus(): void {
   stPos.textContent = model && pos ? `${pos.lineNumber}:${pos.column}` : ''
   stEol.textContent = model ? (model.getEOL() === '\r\n' ? 'CRLF' : 'LF') : ''
   stLang.textContent = model ? model.getLanguageId() : ''
-  stIndent.textContent = model ? `${model.getOptions().tabSize} spaces` : ''
+  stIndent.textContent = model ? (model.getOptions().insertSpaces ? `${model.getOptions().tabSize} spaces` : `Tab size ${model.getOptions().tabSize}`) : ''
   refreshBlame()
 }
+editor.onDidChangeModelOptions(updateStatus)
 editor.onDidChangeCursorPosition(updateStatus)
 editor.onDidChangeModel(updateStatus)
 editor.onDidChangeModelContent(refreshBlame)
 
+// Clickable status bar widgets, like the JetBrains ones.
+const LANGUAGES: [string, string][] = [
+  ['plaintext', 'Plain Text'], ['typescript', 'TypeScript'], ['javascript', 'JavaScript'], ['json', 'JSON'], ['html', 'HTML'],
+  ['css', 'CSS'], ['markdown', 'Markdown'], ['python', 'Python'], ['c', 'C'], ['cpp', 'C++'], ['mort', 'Mort'],
+  ['shell', 'Shell Script'], ['yaml', 'YAML'], ['xml', 'XML'], ['sql', 'SQL'], ['rust', 'Rust'], ['go', 'Go'], ['java', 'Java']
+]
+const editorModel = (): monaco.editor.ITextModel | null => (active && !active.diff ? editor.getModel() : null)
+const widgetMenu = (el: HTMLElement, items: (MenuItem | 'sep')[]): void => {
+  const box = el.getBoundingClientRect()
+  showMenu(box.left, box.top - 4 - items.length * 30, items)
+}
+stPos.onclick = () => {
+  if (editorModel()) void editor.getAction('editor.action.gotoLine')?.run()
+}
+stEol.onclick = () => {
+  const model = editorModel()
+  if (!model) return
+  widgetMenu(stEol, [
+    { label: 'LF (Unix, macOS)', run: () => { model.pushEOL(monaco.editor.EndOfLineSequence.LF); updateStatus() } },
+    { label: 'CRLF (Windows)', run: () => { model.pushEOL(monaco.editor.EndOfLineSequence.CRLF); updateStatus() } }
+  ])
+}
+stIndent.onclick = () => {
+  const model = editorModel()
+  if (!model) return
+  const spaces = (n: number): MenuItem => ({ label: `${n} spaces`, run: () => model.updateOptions({ tabSize: n, insertSpaces: true }) })
+  widgetMenu(stIndent, [
+    spaces(2), spaces(4), spaces(8),
+    { label: 'Tabs', run: () => model.updateOptions({ insertSpaces: false }) },
+    'sep',
+    { label: 'Convert indentation to spaces', run: () => void editor.getAction('editor.action.indentationToSpaces')?.run() },
+    { label: 'Convert indentation to tabs', run: () => void editor.getAction('editor.action.indentationToTabs')?.run() }
+  ])
+}
+stLang.onclick = () => {
+  const model = editorModel()
+  if (!model) return
+  const items = LANGUAGES.map(([id, label]): MenuItem => ({ label, run: () => { monaco.editor.setModelLanguage(model, id); updateStatus() } }))
+  showMenu(stLang.getBoundingClientRect().left - 60, 80, items)
+}
+
 $('project-widget').onclick = () => void openFolder()
+// Welcome screen actions
+for (const el of document.querySelectorAll<HTMLElement>('#welcome .wi')) el.innerHTML = icons[el.dataset['ico'] as 'folder' | 'search' | 'command' | 'gear']
+$('w-open').onclick = () => void openFolder()
+$('w-search').onclick = () => void openSearch()
+$('w-palette').onclick = () => palette.open()
+$('w-settings').onclick = () => settingsUi.open()
 {
   const bar = $('tree-bar')
   const btn = (title: string, html: string, run: () => void): void => {
@@ -1142,13 +1194,23 @@ function renderRecents(): void {
     const b = document.createElement('button')
     b.className = 'recent'
     b.style.setProperty('--i', String(i))
+    const avatar = document.createElement('span')
+    avatar.className = 'avatar'
+    avatar.textContent = basename(dir).slice(0, 2).toUpperCase()
+    // A stable hue per project, so each recent project keeps its own color.
+    let hue = 0
+    for (const ch of dir) hue = (hue * 31 + ch.charCodeAt(0)) % 360
+    avatar.style.setProperty('--h', String(hue))
+    const label = document.createElement('span')
+    label.className = 'rlabel'
     const name = document.createElement('span')
     name.className = 'rn'
     name.textContent = basename(dir)
     const where = document.createElement('span')
     where.className = 'rp'
     where.textContent = dir
-    b.append(name, where)
+    label.append(name, where)
+    b.append(avatar, label)
     b.onclick = () => void openFolderAt(dir).catch(() => undefined) // reported by guarded()
     box.append(b)
   })

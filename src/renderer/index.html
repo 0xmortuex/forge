@@ -20,11 +20,14 @@
         <span id="branch-icon"></span><span id="branch-name"></span>
       </button>
       <span class="grow"></span>
-      <button class="widget" id="run-config" title="Run configuration"><span id="run-config-name">Current File</span><span class="chev" id="run-config-chev"></span></button>
-      <button class="icon-btn run" id="run-btn" title="Run (Shift+F10)"></button>
-      <button class="icon-btn" id="debug-btn" title="Debug (Shift+F9)"></button>
-      <button class="icon-btn" id="stop-btn" title="Stop (Ctrl+F2)" disabled></button>
-      <button class="icon-btn" id="search-btn" title="Search Everywhere (Shift Shift)"></button>
+      <button class="search-pill" id="search-btn" title="Search Everywhere (Shift Shift)"><span class="ico" id="search-ico"></span><span class="lbl">Search everywhere</span><span class="keys"><kbd>Shift</kbd><kbd>Shift</kbd></span></button>
+      <span class="grow"></span>
+      <div class="run-group">
+        <button class="widget" id="run-config" title="Run configuration"><span id="run-config-name">Current File</span><span class="chev" id="run-config-chev"></span></button>
+        <button class="icon-btn run" id="run-btn" title="Run (Shift+F10)"></button>
+        <button class="icon-btn" id="debug-btn" title="Debug (Shift+F9)"></button>
+        <button class="icon-btn" id="stop-btn" title="Stop (Ctrl+F2)" disabled></button>
+      </div>
       <button class="icon-btn" id="palette-btn" title="Command Palette (Ctrl+Shift+P)"></button>
       <button class="icon-btn" id="settings-btn" title="Settings (Ctrl+,)"></button>
     </header>
@@ -66,16 +69,32 @@
           <div id="editor"></div>
           <div id="diff" hidden></div>
           <div id="welcome">
-            <div class="w-title">Forge</div>
-            <div class="w-row"><span>Open a folder</span><span><kbd>Ctrl</kbd><kbd>O</kbd></span></div>
-            <div class="w-row"><span>Search Everywhere</span><span><kbd>Shift</kbd><kbd>Shift</kbd></span></div>
-            <div class="w-row"><span>Toggle Project</span><span><kbd>Alt</kbd><kbd>1</kbd></span></div>
-            <div class="w-row"><span>Toggle Output</span><span><kbd>Alt</kbd><kbd>2</kbd></span></div>
-            <div class="w-row"><span>Terminal</span><span><kbd>Alt</kbd><kbd>3</kbd></span></div>
-            <div class="w-row"><span>Find in Project</span><span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span></div>
-            <div class="w-row" style="--i: 6"><span>Command Palette</span><span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>P</kbd></span></div>
-            <div class="w-row" style="--i: 7"><span>Settings &amp; themes</span><span><kbd>Ctrl</kbd><kbd>,</kbd></span></div>
-            <div id="recents"></div>
+            <div class="w-hero">
+              <div class="w-logo">F</div>
+              <div class="w-title">Forge</div>
+              <div class="w-sub">Open a folder to start coding</div>
+            </div>
+            <div class="w-cols">
+              <div class="w-col">
+                <div class="w-actions">
+                  <button class="w-action" id="w-open"><span class="wi" data-ico="folder"></span>Open Folder<span class="keys"><kbd>Ctrl</kbd><kbd>O</kbd></span></button>
+                  <button class="w-action" id="w-search"><span class="wi" data-ico="search"></span>Search Everywhere<span class="keys"><kbd>Shift</kbd><kbd>Shift</kbd></span></button>
+                  <button class="w-action" id="w-palette"><span class="wi" data-ico="command"></span>Command Palette<span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>P</kbd></span></button>
+                  <button class="w-action" id="w-settings"><span class="wi" data-ico="gear"></span>Settings &amp; Themes<span class="keys"><kbd>Ctrl</kbd><kbd>,</kbd></span></button>
+                </div>
+                <div id="recents"></div>
+              </div>
+              <div class="w-col w-tips">
+                <h4>Handy shortcuts</h4>
+                <div class="w-row"><span>Toggle Project</span><span><kbd>Alt</kbd><kbd>1</kbd></span></div>
+                <div class="w-row"><span>Toggle Output</span><span><kbd>Alt</kbd><kbd>2</kbd></span></div>
+                <div class="w-row"><span>Terminal</span><span><kbd>Alt</kbd><kbd>3</kbd></span></div>
+                <div class="w-row"><span>Problems</span><span><kbd>Alt</kbd><kbd>6</kbd></span></div>
+                <div class="w-row"><span>Structure</span><span><kbd>Alt</kbd><kbd>7</kbd></span></div>
+                <div class="w-row"><span>Find in Project</span><span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span></div>
+                <div class="w-row"><span>Run / Debug</span><span><kbd>Shift</kbd><kbd>F10</kbd> <kbd>Shift</kbd><kbd>F9</kbd></span></div>
+              </div>
+            </div>
           </div>
         </main>
         <div class="splitter h" id="split-bottom"></div>
