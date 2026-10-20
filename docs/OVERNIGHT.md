@@ -65,3 +65,10 @@ suite passed. "Not done" and "known gaps" are listed honestly at the end of this
   installed on the machine this was built on.
 - **Split Terminal** (split button in the terminal tab bar, or the command): a second shell beside the first in the same tab,
   each with its own session. Typing `exit` in a split closes just that half; closing the tab closes both.
+- **Installer**: `pnpm dist` builds a real Windows installer (`release/Forge Setup 0.1.0.exe`, 136 MB, NSIS, per-user,
+  lets you pick the folder, Desktop + Start Menu shortcuts); AppImage and dmg are configured but untried.
+  `pnpm test:packaged` starts the packaged app and checks the page, a real shell (node-pty), the spell dictionary and the
+  YAML and TypeScript language servers from the packaged files. Doing that found a real bug: `typescript` was only a dev
+  dependency, so the packaged TypeScript server could not start; it is now a runtime dependency. The installer is not
+  code-signed (SmartScreen will warn) and I did not run the installer itself on this machine.
+  `.github/workflows/release.yml` builds installers per OS as workflow artifacts (manual / on v* tags); untested in CI.

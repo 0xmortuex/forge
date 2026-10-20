@@ -1,0 +1,39 @@
+name: Release build
+
+# Builds installers on each OS and keeps them as workflow artifacts (push a v* tag, or run it by hand). Nothing is
+# published automatically. Only the Windows installer has been tried on a real machine; the Linux and macOS builds are
+# untested.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  dist:
+    name: Installer (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - run: pnpm test:packaged
+        if: matrix.os == 'windows-latest'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forge-${{ matrix.os }}
+          path: |
+            release/*.exe
+            release/*.AppImage
+            release/*.dmg
+          if-no-files-found: error

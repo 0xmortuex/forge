@@ -143,7 +143,11 @@ pnpm dev        # run in development
 pnpm build      # production build into out/
 pnpm test:unit  # fast unit tests of the pure logic (no window)
 pnpm test       # build, then run the end-to-end scenarios
+pnpm dist       # an installer in release/ (NSIS on Windows, AppImage on Linux, dmg on macOS)
+pnpm dist:dir   # just the unpacked app in release/, then: pnpm test:packaged
 ```
+
+The installer is not code-signed, so Windows SmartScreen will warn the first time you run it.
 
 A run configuration file looks like this (the run widget → *Edit Configurations…* creates a template):
 
