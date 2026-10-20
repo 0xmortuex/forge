@@ -21,6 +21,7 @@ import { registerSpell } from './spell'
 import { registerNpm } from './npm'
 import { registerGithub } from './github'
 import { registerDocker } from './docker'
+import { registerDeps } from './deps'
 import { registerTestRun } from './testrun'
 import { registerWatch, stopWatching } from './watch'
 import { registerScratch } from './scratch'
@@ -239,6 +240,7 @@ registerSpell()
 registerNpm()
 registerGithub()
 registerDocker()
+registerDeps()
 registerTestRun()
 registerWatch()
 registerScratch()

@@ -14,7 +14,7 @@ export interface Reference {
 const key = (p: string): string => (process.platform === 'win32' ? p.toLowerCase() : p)
 
 /** The relative specifiers on a line, with whether the language writes them without "./" (C includes, HTML, Markdown...). */
-function specifiers(line: string): string[] {
+export function specifiers(line: string): string[] {
   const out: string[] = []
   const grab = (re: RegExp, filter?: (s: string) => boolean): void => {
     for (const m of line.matchAll(re)) {

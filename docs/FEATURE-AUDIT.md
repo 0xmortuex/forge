@@ -100,7 +100,8 @@ Counting is deliberately conservative. "Done" means the thing in the row, not th
 | HTTP client for `.http` files | Done | |
 | Docker window (containers, images, logs, shell, compose) | Done | Tested against a fake `docker`; Docker was not installed on the build machine. |
 | Viewer: CSV / TSV table, notebooks, hex | Done | Notebooks are read-only: cells do not run. |
-| Dependency / import diagram, UML | Missing | |
+| Dependency / import diagram | Done | Dependencies window: layered diagram by folder or by file, circular imports found and drawn in red, imports / importers of a node. Based on written relative imports, not a bundler's or language server's resolution. |
+| UML class diagrams | Missing | |
 | Kubernetes, cloud explorers, Azure / AWS toolkits | Not planned | |
 | Task runner integration (tasks.json, Gradle, Maven) | Missing | Run configurations cover single commands. |
 
@@ -147,5 +148,5 @@ Counting is deliberately conservative. "Done" means the thing in the row, not th
 ## What I would build next
 
 In order of value for the effort: trying the generic debug adapter client against a real adapter (lldb-dap, dlv), code coverage for Node and
-Python, a dependency diagram, a real screen-reader and contrast pass, and database
+Python, a real screen-reader and contrast pass, and database
 connections beyond SQLite.

@@ -26,7 +26,7 @@ const NAME_PROBE = `(() => {
 
 run('a11y', { 'a.ts': 'export const a = 1\n', 'data.csv': 'a,b\n1,2\n' }, async (t) => {
   const { js, key, check, sleep, waitFor } = t
-  const WINDOWS = ['project', 'commit', 'output', 'terminal', 'find', 'run', 'debug', 'problems', 'structure', 'bookmarks', 'hierarchy', 'git', 'todo', 'preview', 'breakpoints', 'http', 'ai', 'database', 'duplicates', 'npm', 'tests', 'viewer', 'github', 'docker']
+  const WINDOWS = ['project', 'commit', 'output', 'terminal', 'find', 'run', 'debug', 'problems', 'structure', 'bookmarks', 'hierarchy', 'git', 'todo', 'preview', 'breakpoints', 'http', 'ai', 'database', 'duplicates', 'npm', 'tests', 'viewer', 'github', 'docker', 'deps']
 
   const offenders = new Set()
   // The welcome screen, before any project is open.

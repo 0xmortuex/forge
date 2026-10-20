@@ -88,3 +88,7 @@ suite passed. "Not done" and "known gaps" are listed honestly at the end of this
   `{ "name": "C++ (lldb)", "type": "dap", "adapter": { "command": "lldb-dap" }, "program": "build/app", "launch": { "stopOnEntry": false } }`.
   Forge declines the adapter's reverse requests (runInTerminal...) instead of leaving it waiting, and says plainly when the
   adapter is not installed. Verified with a fake adapter; no real adapter was available to try.
+- **Dependencies window** (View → Toggle Dependencies): the project's import graph as a layered diagram (what depends on what,
+  left to right), by folder (1-4 levels) or by file with a path filter. Circular imports are found (Tarjan) and listed, and
+  drawn in red; click a file to see what it imports and what imports it, double-click to open it. Works from written relative
+  imports of JS / TS, CSS, C and Python files; packages and anything computed at run time are not seen.
