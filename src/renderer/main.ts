@@ -929,8 +929,24 @@ async function renameEntry(path: string): Promise<void> {
   })
 }
 
+/**
+ * Safe Delete: names what still points at the file or folder, and asks even when "confirm before delete" is off, because a
+ * delete that breaks an import is not something to do by accident.
+ */
+async function confirmDelete(path: string): Promise<boolean> {
+  const found = rootDir ? await window.forge.references(rootDir, path).catch(() => null) : null // a failed scan must not block deleting
+  if (found && found.hits.length) {
+    const shown = found.hits.slice(0, 8).map((h) => `  ${relPath(h.file)}:${h.line}   ${h.text}`).join('\n')
+    const more = found.truncated ? 'more than 200 references' : `${found.hits.length} reference${found.hits.length === 1 ? '' : 's'}`
+    const files = `${found.files} file${found.files === 1 ? '' : 's'}`
+    const rest = found.hits.length > 8 ? '\n  ...' : ''
+    return confirm(`"${basename(path)}" is still used: ${more} in ${files} will break.\n\n${shown}${rest}\n\nMove it to the Recycle Bin anyway?`)
+  }
+  return !settings.get<boolean>('confirmDelete') || confirm(`Move "${basename(path)}" to the Recycle Bin?`)
+}
+
 async function deleteEntry(path: string): Promise<void> {
-  if (settings.get<boolean>('confirmDelete') && !confirm(`Move "${basename(path)}" to the Recycle Bin?`)) return
+  if (!(await confirmDelete(path))) return
   await guarded(`Delete ${basename(path)}`, async () => {
     closeFilesUnder(path)
     await window.forge.trash(path)

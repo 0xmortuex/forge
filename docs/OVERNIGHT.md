@@ -72,3 +72,7 @@ suite passed. "Not done" and "known gaps" are listed honestly at the end of this
   dependency, so the packaged TypeScript server could not start; it is now a runtime dependency. The installer is not
   code-signed (SmartScreen will warn) and I did not run the installer itself on this machine.
   `.github/workflows/release.yml` builds installers per OS as workflow artifacts (manual / on v* tags); untested in CI.
+- **Safe Delete**: deleting a file or folder from the project tree first looks for what still points at it (JS/TS imports and
+  re-exports, CSS imports and url(), C includes, HTML src/href, Markdown links, Python relative imports) and lists the
+  lines. It asks even when "confirm before delete" is off. Text matching on relative references only: a reference built at
+  run time, or a bare package import, is not seen.

@@ -29,6 +29,8 @@ const api = {
   readDir: (dir: string): Promise<DirEntry[]> => ipcRenderer.invoke('fs:readDir', dir),
   listFiles: (root: string): Promise<string[]> => ipcRenderer.invoke('fs:listFiles', root),
   readFile: (path: string): Promise<string> => ipcRenderer.invoke('fs:readFile', path),
+  references: (root: string, target: string): Promise<{ hits: { file: string; line: number; text: string }[]; files: number; truncated: boolean }> =>
+    ipcRenderer.invoke('fs:references', root, target),
   readBytes: (path: string, offset: number, length: number): Promise<{ data: Uint8Array; size: number }> => ipcRenderer.invoke('fs:readBytes', path, offset, length),
   readFileEnc: (path: string, encoding?: string): Promise<{ text: string; encoding: string }> => ipcRenderer.invoke('fs:readFileEnc', path, encoding),
   writeFileEnc: (path: string, content: string, encoding: string): Promise<void> => ipcRenderer.invoke('fs:writeFileEnc', path, content, encoding),

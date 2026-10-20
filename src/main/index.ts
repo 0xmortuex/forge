@@ -1,10 +1,11 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
 import { realpathSync } from 'node:fs'
-import { access, cp, mkdir, open, readdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { basename, extname, join } from 'node:path'
+import { access, cp, mkdir, open, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
+import { basename, extname, join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { registerDebug } from './debug'
 import { assertEncoding, decode, detectEncoding, encode } from './encoding'
+import { referencesTo, type Reference } from './safedelete'
 import { registerExtensions, registerExtensionScheme } from './extensions'
 import { registerGit } from './git'
 import { registerSettings } from './settings'
@@ -156,6 +157,30 @@ ipcMain.handle('win:titleBar', (e, color: string, symbolColor: string) => {
 // The real path of a folder: aliases (symlinks, junctions, Windows 8.3 short names like RUNNER~1) resolved. Git,
 // debuggers and language servers all report real paths, so the project has to be addressed by one too.
 ipcMain.handle('fs:realpath', (_e, path: string) => realpathSync.native(path))
+/** The other files in the project that refer to `path` (a file or folder): what a delete would break. */
+ipcMain.handle('fs:references', async (_e, root: string, target: string): Promise<{ hits: (Reference & { file: string })[]; files: number; truncated: boolean }> => {
+  const isDir = (await stat(target)).isDirectory()
+  const inside = (p: string): boolean => p === target || (isDir && p.startsWith(target + sep))
+  const hits: (Reference & { file: string })[] = []
+  const files = new Set<string>()
+  let truncated = false
+  await walkFiles(root, async (file) => {
+    if (truncated || inside(file) || !SCANNED.test(file)) return
+    const info = await stat(file)
+    if (info.size > 1024 * 1024) return
+    const text = await readFile(file, 'utf8').catch(() => '')
+    for (const ref of referencesTo(target, isDir, file, text)) {
+      if (hits.length >= 200) {
+        truncated = true
+        return
+      }
+      hits.push({ ...ref, file })
+      files.add(file)
+    }
+  })
+  return { hits, files: files.size, truncated }
+})
+
 ipcMain.handle('fs:trash', (_e, path: string) => shell.trashItem(path))
 ipcMain.handle('shell:reveal', (_e, path: string) => shell.showItemInFolder(path))
 ipcMain.handle('clipboard:write', (_e, text: string) => clipboard.writeText(text))
@@ -189,6 +214,9 @@ ipcMain.handle('fs:writeFileEnc', async (_e, path: string, content: string, enco
 ipcMain.handle('fs:writeFile', (_e, path: string, content: string) =>
   writeFile(path, content, 'utf8')
 )
+
+/** Files whose text can refer to other files. */
+const SCANNED = /\.(m?[jt]sx?|cjs|cts|vue|svelte|py|css|scss|sass|less|html?|md|mdx|c|h|cc|cpp|hpp|cs|java|go|rs|rb|php|json|ya?ml|toml|xml|svg)$/i
 
 registerExtensionScheme() // has to happen before the app is ready
 
