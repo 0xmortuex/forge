@@ -58,6 +58,7 @@ export function initNpm(d: NpmDeps): NpmView {
 
   const bar = el('div', 'tool-bar npm-bar')
   const pick = el('select', 'field npm-pkg')
+  pick.setAttribute('aria-label', 'Package')
   pick.id = 'npm-pkg'
   const manager = el('span', 'npm-manager')
   manager.id = 'npm-manager'

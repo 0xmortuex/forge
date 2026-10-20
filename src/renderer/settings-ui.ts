@@ -208,7 +208,10 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
     const info = el('div', 'info')
     info.append(el('div', 'label', def.label))
     if (def.description) info.append(el('div', 'desc', def.description))
-    r.append(info, control(def, r))
+    const ctl = control(def, r)
+    // The label sits next to the control, not on it: give the control the setting's name for screen readers.
+    for (const input of ctl.querySelectorAll('input, select, textarea, button')) if (!input.getAttribute('aria-label')) input.setAttribute('aria-label', def.label)
+    r.append(info, ctl)
     return r
   }
 
@@ -310,6 +313,7 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
     info.append(el('div', 'label', 'Keymap preset'), el('div', 'desc', 'IntelliJ IDEA: Ctrl+D duplicates a line, Ctrl+Y deletes it, Ctrl+W extends the selection (Ctrl+F4 closes a tab) and more.'))
     const picker = el('select', 'field sel-input') as HTMLSelectElement
     picker.id = 'keymap-preset'
+    picker.setAttribute('aria-label', 'Keymap preset')
     for (const [id, label] of KEYMAP_PRESETS) {
       const o = el('option', '', label) as HTMLOptionElement
       o.value = id

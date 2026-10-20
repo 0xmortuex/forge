@@ -37,7 +37,7 @@
       <button class="icon-btn" id="settings-btn" title="Settings (Ctrl+,)"></button>
     </header>
     <div id="app">
-      <nav id="stripe"><div class="stripe-top" id="stripe-left-top"></div><span class="spacer"></span><div class="stripe-bot" id="stripe-left-bottom"></div></nav>
+      <nav id="stripe" aria-label="Tool windows"><div class="stripe-top" id="stripe-left-top"></div><span class="spacer"></span><div class="stripe-bot" id="stripe-left-bottom"></div></nav>
       <aside id="project" class="island">
         <div class="tw-header">
           <div class="dock-tabs" id="side-tabs"></div>
@@ -200,10 +200,10 @@
         <div id="view-bookmarks" class="view" hidden></div>
         <div id="view-preview" class="view" hidden></div>
       </aside>
-      <nav id="stripe-right" hidden></nav>
+      <nav id="stripe-right" aria-label="Tool windows (right)" hidden></nav>
     </div>
     <footer id="status">
-      <span id="status-msg"></span>
+      <span id="status-msg" role="status" aria-live="polite"></span>
       <span class="sw" id="st-blame"></span>
       <span class="sw" id="st-problems" title="Problems from the language server"></span>
       <span class="grow"></span>
@@ -215,27 +215,27 @@
       <span class="sw" id="st-bell" title="Notifications"></span>
     </footer>
     <div id="search" class="overlay" hidden>
-      <div id="search-box" class="modal">
+      <div id="search-box" class="modal" role="dialog" aria-modal="true" aria-label="Search Everywhere">
         <div id="search-scopes"></div>
         <input id="search-input" placeholder="Search files by name" spellcheck="false" autocomplete="off" />
         <div id="search-results"></div>
       </div>
     </div>
     <div id="quick" class="overlay" hidden>
-      <div id="quick-box" class="modal">
+      <div id="quick-box" class="modal" role="dialog" aria-modal="true" aria-labelledby="quick-title">
         <div id="quick-title"></div>
-        <input id="quick-input" spellcheck="false" autocomplete="off" />
+        <input id="quick-input" aria-labelledby="quick-title" spellcheck="false" autocomplete="off" />
         <div id="quick-results"></div>
       </div>
     </div>
     <div id="palette" class="overlay" hidden>
-      <div id="palette-box" class="modal">
+      <div id="palette-box" class="modal" role="dialog" aria-modal="true" aria-label="Command palette">
         <input id="palette-input" placeholder="Type a command…" spellcheck="false" autocomplete="off" />
         <div id="palette-results"></div>
       </div>
     </div>
     <div id="settings" class="overlay" hidden>
-      <div id="settings-box" class="modal">
+      <div id="settings-box" class="modal" role="dialog" aria-modal="true" aria-label="Settings">
         <nav id="settings-nav"></nav>
         <section id="settings-main">
           <div id="settings-top">
@@ -254,7 +254,7 @@
       </div>
     </div>
     <div id="runcfg" class="overlay" hidden>
-      <div id="runcfg-box" class="modal">
+      <div id="runcfg-box" class="modal" role="dialog" aria-modal="true" aria-label="Run configurations">
         <div id="runcfg-side">
           <div id="runcfg-tools">
             <button class="icon-btn small" id="runcfg-add" title="Add a configuration">＋</button>
@@ -278,7 +278,7 @@
     <div id="toasts"></div>
     <div id="ctx" hidden></div>
     <div id="ask" class="overlay" hidden>
-      <form id="ask-box" class="modal">
+      <form id="ask-box" class="modal" role="dialog" aria-modal="true" aria-labelledby="ask-title">
         <div id="ask-title"></div>
         <input id="ask-input" spellcheck="false" autocomplete="off" />
         <div id="ask-hint">Enter to confirm &middot; Esc to cancel</div>

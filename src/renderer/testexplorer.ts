@@ -54,6 +54,7 @@ export function initTestExplorer(d: TestExplorerDeps): TestExplorerView {
 
   const bar = el('div', 'tool-bar tests-bar')
   const framework = el('select', 'field tests-framework')
+  framework.setAttribute('aria-label', 'Test framework')
   framework.id = 'tests-framework'
   const runAllBtn = el('button', 'btn-primary', 'Run All')
   runAllBtn.id = 'tests-run'

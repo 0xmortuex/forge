@@ -131,6 +131,7 @@ export function initGitLog(deps: GitLogDeps): GitLog {
   // ---- Layout ----
   const bar = el('div', 'tool-bar git-bar')
   const branchSel = el('select', 'field git-branch') as HTMLSelectElement
+  branchSel.setAttribute('aria-label', 'Branch')
   const msgInput = el('input', 'field git-filter') as HTMLInputElement
   msgInput.placeholder = 'Message'
   msgInput.spellcheck = false

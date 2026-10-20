@@ -35,6 +35,7 @@ export function initDuplicates(d: DuplicatesDeps): DuplicatesView {
   const status = el('span', 'dup-status')
   status.id = 'dup-status'
   const minSel = el('select', 'field dup-min')
+  minSel.setAttribute('aria-label', 'Minimum size of a duplicate')
   minSel.id = 'dup-min'
   minSel.title = 'Shortest block that counts as a duplicate'
   for (const n of MIN_LINES) {

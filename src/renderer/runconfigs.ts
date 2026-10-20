@@ -100,6 +100,7 @@ export function openRunConfigs(deps: RunConfigsDeps): void {
     }
     formEl.append(field('Name', text(c.name, (v) => ((c.name = v), drawList()))))
     const type = document.createElement('select')
+    type.setAttribute('aria-label', 'Configuration type')
     type.className = 'field'
     type.id = 'rc-type'
     for (const t of Object.keys(TYPE_LABEL) as ConfigType[]) {

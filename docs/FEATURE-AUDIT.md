@@ -141,11 +141,11 @@ Counting is deliberately conservative. "Done" means the thing in the row, not th
 | Inspect Code (tsc, ESLint, pyright) and duplicate detection | Done | Not as deep as IntelliJ's hundreds of inspections. |
 | Automated tests | Done | 98 unit tests and 85 end-to-end scenarios; CI runs the unit tests and build on three OSes, and the scenarios on Windows (non-blocking). |
 | Keyboard access to every command | Done | Everything is in the command palette. |
-| Screen-reader support | Partial | Monaco's accessibility mode works; Forge's own windows have not been audited for roles and labels. |
+| Screen-reader support | Partial | Monaco's accessibility mode works. Forge's own windows are checked by a test (`a11y`): every visible control in every tool window, the welcome screen and every Settings page has a name, dialogs are announced, the status message is a live region and the status-bar widgets are keyboard buttons. Not checked: focus order, focus traps in dialogs, colour contrast of every theme, and nothing has been tried with an actual screen reader. |
 | Right-to-left UI, localization | Missing | The interface is English only. |
 
 ## What I would build next
 
 In order of value for the effort: a generic Debug Adapter client (unlocks C / C++, Go and more), code coverage for Node and
-Python, a dependency diagram, a screen-reader pass over Forge's own windows, and database
+Python, a dependency diagram, a real screen-reader and contrast pass, and database
 connections beyond SQLite.

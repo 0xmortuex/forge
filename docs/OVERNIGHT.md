@@ -78,3 +78,6 @@ suite passed. "Not done" and "known gaps" are listed honestly at the end of this
   run time, or a bare package import, is not seen.
 - **Layout presets** (View → Save Layout As… / Apply Layout… / Delete Saved Layout…): remember where every tool window is, which
   one each dock shows and the panel sizes, under a name. Built in: Default, Editor Only, Wide Editor, Review.
+- **Accessibility pass** over Forge's own interface, with a test that keeps it that way (`a11y`): the audit found unnamed
+  drop-downs, status-bar widgets that a keyboard could not reach, dialogs that were not announced as dialogs, and no live
+  region for status messages. All fixed. Not done: focus order, colour contrast per theme, a real screen reader.

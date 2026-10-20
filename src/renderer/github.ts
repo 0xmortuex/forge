@@ -38,6 +38,7 @@ export function initGithub(d: GithubDeps): GithubView {
   const repoEl = el('span', 'gh-repo')
   repoEl.id = 'gh-repo'
   const stateSel = el('select', 'field gh-state')
+  stateSel.setAttribute('aria-label', 'Pull request state')
   stateSel.id = 'gh-state'
   for (const [value, label] of [['open', 'Open'], ['closed', 'Closed'], ['merged', 'Merged'], ['all', 'All']] as const) {
     const o = el('option', '', label)

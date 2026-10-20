@@ -2428,5 +2428,31 @@ async function restoreSession(): Promise<void> {
   }
 }
 
+// The clickable widgets in the status bar are buttons: reachable with Tab, named, and operable with Enter or Space.
+{
+  const names: Record<string, string> = {
+    'st-problems': 'Problems',
+    'st-pos': 'Cursor position: go to line',
+    'st-eol': 'Line endings',
+    'st-enc': 'File encoding',
+    'st-indent': 'Indentation',
+    'st-lang': 'Language mode',
+    'st-bell': 'Notifications',
+    'st-blame': 'Git blame'
+  }
+  for (const sw of document.querySelectorAll<HTMLElement>('#status .sw')) {
+    if (!sw.onclick) continue
+    sw.setAttribute('role', 'button')
+    sw.tabIndex = 0
+    if (!sw.getAttribute('aria-label') && names[sw.id]) sw.setAttribute('aria-label', names[sw.id] as string)
+    sw.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()
+        sw.click()
+      }
+    })
+  }
+}
+
 renderTabs()
 void restoreSession()

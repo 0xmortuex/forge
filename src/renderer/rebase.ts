@@ -83,6 +83,7 @@ export function chooseRebase(info: RebaseInfo): Promise<RebaseStep[] | null> {
         const item = el('div', `rebase-row ${r.action}`)
         item.dataset['sha'] = r.sha
         const sel = el('select', 'field rebase-action')
+        sel.setAttribute('aria-label', `Action for ${r.sha.slice(0, 7)}`)
         for (const a of ACTIONS) {
           const o = el('option', '', a.label)
           o.value = a.value

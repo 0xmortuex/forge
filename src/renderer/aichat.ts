@@ -53,6 +53,7 @@ export function initAiChat(d: AiChatDeps): AiChatView {
 
   const composer = el('div', 'ai-composer')
   const attach = el('select', 'field ai-attach')
+  attach.setAttribute('aria-label', 'What to send with the question')
   attach.id = 'ai-attach'
   attach.title = 'What to send along with your question'
   for (const [v, label] of [['auto', 'Selection or file'], ['file', 'Whole file'], ['none', 'No context']] as const) {
