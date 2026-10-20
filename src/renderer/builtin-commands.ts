@@ -13,7 +13,7 @@ export interface BuiltinDeps {
   openSearchScope: (scope: 'all' | 'files' | 'symbols' | 'actions', classesOnly?: boolean) => void
   showFind: () => void
   toggleSide: (side: 'project' | 'commit') => void
-  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai' | 'database' | 'duplicates' | 'npm' | 'tests' | 'viewer' | 'github') => void
+  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai' | 'database' | 'duplicates' | 'npm' | 'tests' | 'viewer' | 'github' | 'docker') => void
   runAllTests: () => void
   findDuplicates: () => void
   addWordToDictionary: () => void
@@ -266,6 +266,7 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'code.compareFile', category: 'Code', title: 'Compare with File…', run: d.compareWithFile })
   register({ id: 'code.compareClipboard', category: 'Code', title: 'Compare with Clipboard', run: d.compareWithClipboard })
   register({ id: 'view.notifications', category: 'View', title: 'Show Notifications', run: d.showNotifications })
+  register({ id: 'view.docker', category: 'View', title: 'Toggle Docker', run: () => d.toggleView('docker') })
   register({ id: 'view.github', category: 'View', title: 'Toggle Pull Requests (GitHub)', run: () => d.toggleView('github') })
   register({ id: 'view.viewer', category: 'View', title: 'Toggle Viewer (Table / Notebook / Hex)', run: () => d.toggleView('viewer') })
   register({ id: 'view.preview', category: 'View', title: 'Toggle Markdown Preview', run: () => d.toggleView('preview') })

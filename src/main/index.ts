@@ -19,6 +19,7 @@ import { registerDuplicates } from './duplicates'
 import { registerSpell } from './spell'
 import { registerNpm } from './npm'
 import { registerGithub } from './github'
+import { registerDocker } from './docker'
 import { registerTestRun } from './testrun'
 import { registerWatch, stopWatching } from './watch'
 import { registerScratch } from './scratch'
@@ -209,6 +210,7 @@ registerDuplicates()
 registerSpell()
 registerNpm()
 registerGithub()
+registerDocker()
 registerTestRun()
 registerWatch()
 registerScratch()

@@ -1042,3 +1042,23 @@ body.no-breadcrumbs #breadcrumbs { display: none; }
 .gh-review { font-size: 12px; padding: 1px 0; }
 .gh-comment { margin: 6px 0; padding: 6px 10px; border-radius: 8px; background: var(--island-2); }
 .gh-comment-head { color: var(--text-dim); font-size: 11px; margin-bottom: 2px; }
+
+/* ---- Docker window ---- */
+#view-docker { flex-direction: column; }
+.dk-bar { gap: 8px; }
+.dk-version { color: var(--text-dim); font-size: 12px; }
+.dk-spacer { flex: 1; }
+.dk-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 6px; }
+.dk-row { display: flex; align-items: center; gap: 12px; padding: 3px 8px; border-radius: 8px; }
+.dk-row:hover { background: var(--hover); }
+.dk-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--text-dim); }
+.dk-dot.running { background: var(--ok); }
+.dk-dot.paused, .dk-dot.restarting { background: var(--warn); }
+.dk-dot.dead { background: var(--err); }
+.dk-name { flex: 0 0 200px; min-width: 0; color: var(--text-hi); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-image { flex: 0 0 180px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-status { flex: 0 0 190px; min-width: 0; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-ports { flex: 1; min-width: 0; color: var(--text-dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-buttons { flex: none; display: flex; gap: 4px; }
+.dk-row:not(.dk-running) .dk-name { color: var(--text); }
+.btn.small.danger { color: var(--err); }

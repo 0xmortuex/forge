@@ -58,3 +58,8 @@ suite passed. "Not done" and "known gaps" are listed honestly at the end of this
   changed (+/-), reviews and comments; **Checkout**, **View Diff** (opens in a tab), **Add Comment…**, **Open in Browser**
   and **New Pull Request…**. Says so plainly when gh is missing, not logged in or the folder isn't a GitHub repository.
   Tested against a fake `gh` (`tests/fake-gh.cjs`), not the real GitHub.
+- **Docker window** (View → Toggle Docker): containers (running / paused / stopped) and images of the local Docker with
+  Start / Stop / Restart / Pause / Resume / Remove, **Logs** (stdout + stderr in a tab), **Shell** (docker exec in a
+  terminal tab), **Run** for images, and **Compose Up / Down** when the project has a compose file. Says when Docker is not
+  installed or the daemon is not running. Tested against a fake docker (`tests/fake-docker.cjs`) only: Docker itself is not
+  installed on the machine this was built on.
