@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { copyFile, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -120,6 +120,31 @@ export function registerSettings(): void {
       settingsBroken = false
     }
     await writeAtomic(userPath(SETTINGS), text)
+  })
+
+  /** Settings backup: the renderer sends the text, the user picks where it goes. Null if they cancel. */
+  ipcMain.handle('settings:export', async (_e, text: string): Promise<string | null> => {
+    parseObject(text, 'Settings to export')
+    const res = await dialog.showSaveDialog({
+      title: 'Export Forge settings',
+      defaultPath: 'forge-settings.json',
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    })
+    if (res.canceled || !res.filePath) return null
+    await writeFile(res.filePath, text, 'utf8')
+    return res.filePath
+  })
+
+  /** Reads a settings backup the user picks (not applied here). Null if they cancel. */
+  ipcMain.handle('settings:import', async (): Promise<{ path: string; text: string } | null> => {
+    const res = await dialog.showOpenDialog({
+      title: 'Import Forge settings',
+      properties: ['openFile'],
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    })
+    const path = res.filePaths[0]
+    if (res.canceled || !path) return null
+    return { path, text: await readFile(path, 'utf8') }
   })
 
   ipcMain.handle('state:save', async (_e, text: string) => {

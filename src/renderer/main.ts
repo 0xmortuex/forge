@@ -1913,6 +1913,27 @@ function toggleZen(): void {
   document.body.classList.toggle('zen') // hides everything but the editor; the layout adapts by itself
 }
 
+/** Zen plus a much larger editor font and no minimap, for talks and screen sharing. Leaving restores the user's own settings. */
+function togglePresentation(): void {
+  const on = !document.body.classList.contains('presentation')
+  document.body.classList.toggle('presentation', on)
+  document.body.classList.toggle('zen', on)
+  editor.updateOptions(on ? { fontSize: Math.round(settings.get<number>('fontSize') * 1.7), minimap: { enabled: false } } : editorOptions())
+}
+
+async function exportSettings(): Promise<void> {
+  const path = await window.forge.settingsExport(settings.exportText())
+  if (path) report(`Settings exported to ${path}`)
+}
+
+async function importSettings(): Promise<void> {
+  const file = await window.forge.settingsImport()
+  if (!file) return
+  const { applied, skipped } = settings.importText(file.text)
+  report(`Imported ${applied} setting${applied === 1 ? '' : 's'} from ${file.path}`)
+  if (skipped.length) report(`Skipped ${skipped.length} invalid value${skipped.length === 1 ? '' : 's'}: ${skipped.join(', ')}`, true)
+}
+
 async function openCustomCss(): Promise<void> {
   await openFile(await window.forge.ensureCustomCss())
 }
@@ -1941,6 +1962,9 @@ registerBuiltinCommands({
     terminals.newTerminal()
   },
   toggleZen,
+  togglePresentation,
+  exportSettings: () => guarded('Export settings', exportSettings),
+  importSettings: () => guarded('Import settings', importSettings),
   toggleFullscreen: async () => void (await window.forge.toggleFullscreen()),
   openSettings: (category) => settingsUi.open(category),
   openSettingsFile: async () => {

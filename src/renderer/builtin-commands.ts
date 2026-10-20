@@ -37,6 +37,9 @@ export interface BuiltinDeps {
   findReplace: () => void
   newTerminal: () => void
   toggleZen: () => void
+  togglePresentation: () => void
+  exportSettings: () => Promise<void>
+  importSettings: () => Promise<void>
   toggleFullscreen: () => Promise<void>
   openSettings: (category?: string) => void
   openSettingsFile: () => Promise<void>
@@ -132,6 +135,7 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'view.debug', category: 'View', title: 'Toggle Debug Window', run: () => d.toggleView('debug') })
   register({ id: 'view.newTerminal', category: 'View', title: 'New Terminal', keys: 'Ctrl+Shift+`', run: d.newTerminal })
   register({ id: 'view.zen', category: 'View', title: 'Toggle Zen Mode', keys: 'Ctrl+Alt+Z', run: d.toggleZen })
+  register({ id: 'view.presentation', category: 'View', title: 'Toggle Presentation Mode', run: d.togglePresentation })
   register({ id: 'view.fullscreen', category: 'View', title: 'Toggle Full Screen', keys: 'F11', run: d.toggleFullscreen })
   stepNumber('View', 'Zoom In', 'zoom', 10, 60, 220)
   stepNumber('View', 'Zoom Out', 'zoom', -10, 60, 220)
@@ -148,6 +152,8 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
       location.reload()
     } })
   register({ id: 'settings.keymap', category: 'Settings', title: 'Show Keyboard Shortcuts', run: () => d.openSettings('Keymap') })
+  register({ id: 'settings.export', category: 'Settings', title: 'Export Settings…', run: d.exportSettings })
+  register({ id: 'settings.import', category: 'Settings', title: 'Import Settings…', run: d.importSettings })
   register({ id: 'settings.reset', category: 'Settings', title: 'Reset All Settings', run: () => settings.resetAll() })
 
   // ---- Appearance: themes (each previews live as you move through the list) ----

@@ -40,3 +40,7 @@ suite passed. "Not done" and "known gaps" are listed honestly at the end of this
 - **Postfix completion** (`expr.if`, `.not`, `.log`, `.return`, `.for`, ... per language): type a dot after an expression.
 - **Pinned tabs**: right-click a tab → Pin Tab. Pinned tabs move left, show a pin instead of a close button, survive
   Ctrl+W / Close All / Close Others and are remembered across restarts.
+- **Presentation Mode** (command palette): Zen plus a 1.7x editor font and no minimap, for talks and screen sharing;
+  toggling again restores your own settings.
+- **Export / Import Settings…** (command palette): back up settings.json (including keymap and extension keys) to a file,
+  or apply one. Import validates every value: invalid ones are skipped and named, unknown keys are kept.

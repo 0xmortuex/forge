@@ -196,6 +196,10 @@ export interface Store {
   getJson<T>(key: string, fallback: T): T
   setJson(key: string, value: unknown): void
   onChange(fn: Listener): () => void
+  /** Everything customized, as settings.json text (what Export writes). */
+  exportText(): string
+  /** Applies a settings backup on top of the current settings. Known keys are validated; unknown ones are kept as they are. */
+  importText(text: string): { applied: number; skipped: string[] }
   /** Problems found while reading settings.json (unknown type, out of range, ...). */
   problems: string[]
   /** Called when saving fails; the app wires this to its error reporting. */
@@ -257,6 +261,33 @@ export const settings: Store = {
     for (const k of keys) changed(k, defOf(k).default)
   },
   isChanged: (key) => overrides.has(key),
+  exportText: () => JSON.stringify({ ...extra, ...Object.fromEntries(overrides) }, null, 2),
+  importText(text) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    } catch (err) {
+      throw new Error(`Not a settings file: ${(err as Error).message}`)
+    }
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('Not a settings file: expected a JSON object')
+    let applied = 0
+    const skipped: string[] = []
+    for (const [key, raw] of Object.entries(parsed)) {
+      const def = BY_KEY.get(key)
+      if (!def) {
+        settings.setJson(key, raw)
+        applied++
+        continue
+      }
+      if (validate(def, raw) === undefined) {
+        skipped.push(`${key} (${JSON.stringify(raw)})`)
+        continue
+      }
+      settings.set(key, raw as Value)
+      applied++
+    }
+    return { applied, skipped }
+  },
   getJson<T>(key: string, fallback: T): T {
     return key in extra ? (extra[key] as T) : fallback
   },
