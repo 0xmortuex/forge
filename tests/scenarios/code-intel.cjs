@@ -147,7 +147,7 @@ run(
     await sleep(600)
     check('"All" lists files first', (await text('search-results')).startsWith('shapes.ts'), await text('search-results'))
     key('Tab')
-    check('Tab moves to the next scope', (await js("document.querySelector('.scope-chip.on').dataset.scope")) === 'files')
+    check('Tab moves to the next scope', !!(await waitFor(async () => (await js("document.querySelector('.scope-chip.on')?.dataset.scope")) === 'files', 3000)))
     key('Escape')
   }
 )
