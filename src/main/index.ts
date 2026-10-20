@@ -1,6 +1,6 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
 import { realpathSync } from 'node:fs'
-import { access, cp, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { access, cp, mkdir, open, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { registerDebug } from './debug'
@@ -166,6 +166,19 @@ ipcMain.handle('fs:readFileEnc', async (_e, path: string, encoding?: string): Pr
   const enc = encoding ?? detectEncoding(buf)
   if (encoding) assertEncoding(encoding)
   return { text: decode(buf, enc), encoding: enc }
+})
+
+/** A slice of a file's raw bytes (for the hex viewer), and the file's size. */
+ipcMain.handle('fs:readBytes', async (_e, path: string, offset: number, length: number): Promise<{ data: Uint8Array; size: number }> => {
+  const handle = await open(path, 'r')
+  try {
+    const size = (await handle.stat()).size
+    const buf = Buffer.alloc(Math.max(0, Math.min(length, size - offset)))
+    await handle.read(buf, 0, buf.length, offset)
+    return { data: new Uint8Array(buf), size }
+  } finally {
+    await handle.close()
+  }
 })
 
 /** Writes text in the given encoding; text it cannot represent is an error and nothing is written. */

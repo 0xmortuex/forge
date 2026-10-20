@@ -59,6 +59,7 @@ import { initAiInline } from './aiinline'
 import type { Action } from './ai'
 import { naming, relatedFiles } from './related'
 import { initPreview } from './preview'
+import { initViewer } from './viewer'
 import { initBreakpointsWindow } from './breakpoints'
 import { initHttpClient } from './httpclient'
 import { initTestRunner } from './testrunner'
@@ -235,10 +236,11 @@ tw.register({ id: 'bookmarks', title: 'Bookmarks', icon: icons.bookmark, root: $
 tw.register({ id: 'tests', title: 'Tests', icon: icons.tests, root: $('view-tests'), dock: 'bottom' })
 tw.register({ id: 'npm', title: 'npm', icon: icons.npm, root: $('view-npm'), dock: 'bottom' })
 tw.register({ id: 'duplicates', title: 'Duplicates', icon: icons.duplicates, root: $('view-dup'), dock: 'bottom' })
+tw.register({ id: 'viewer', title: 'Viewer', icon: icons.viewer, root: $('view-viewer'), dock: 'bottom' })
 tw.register({ id: 'database', title: 'Database', icon: icons.database, root: $('view-db'), dock: 'bottom' })
 tw.register({ id: 'ai', title: 'AI Assistant', icon: icons.ai, root: $('view-ai'), dock: 'right', shortcut: 'Alt+8' })
 
-type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai' | 'database' | 'duplicates' | 'npm' | 'tests'
+type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai' | 'database' | 'duplicates' | 'npm' | 'tests' | 'viewer'
 type Side = 'project' | 'commit'
 const showSide = (side: Side): void => tw.show(side)
 const toggleSide = (side: Side): void => tw.toggle(side)
@@ -397,8 +399,12 @@ function renderTabs(): void {
   welcomeEl.style.display = openFiles.size ? 'none' : 'flex'
 }
 
+/** Things that follow the active tab but are set up later (the Viewer window). */
+let afterActivate: () => void = () => undefined
+
 function activate(f: OpenFile | null): void {
   active = f
+  queueMicrotask(() => afterActivate())
   $('editor').hidden = !!f?.diff || !!f?.image
   $('diff').hidden = !f?.diff
   showImage(f?.image ? f : null)
@@ -1646,6 +1652,27 @@ initSpell()
       if (active && !active.diff) extensions.emit('change', { path: active.path })
     }, 300)
   })
+}
+const viewer = initViewer({
+  root: $('view-viewer'),
+  current: () => {
+    if (!active || active.diff) return null
+    if (active.image) return { path: active.path, text: null }
+    const m = editor.getModel()
+    return m ? { path: active.path, text: m.getValue() } : null
+  },
+  isVisible: () => tw.isOpen('viewer'),
+  report
+})
+tw.setOnShow('viewer', () => void viewer.refresh().catch((e: unknown) => report(`Viewer: ${String(e)}`, true)))
+{
+  let timer: number | undefined
+  const later = (): void => {
+    window.clearTimeout(timer)
+    timer = window.setTimeout(() => void viewer.refresh().catch((e: unknown) => report(`Viewer: ${String(e)}`, true)), 250)
+  }
+  editor.onDidChangeModelContent(later)
+  afterActivate = later // the tab changed (also covers images, which have no editor model of their own)
 }
 tw.setOnShow('preview', () => void preview.refresh().catch((e: unknown) => report(`Preview: ${String(e)}`, true)))
 {

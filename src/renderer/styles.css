@@ -972,3 +972,35 @@ body.no-breadcrumbs #breadcrumbs { display: none; }
 /* ---- Pinned tabs ---- */
 .tab .pin { display: inline-grid; place-items: center; width: 16px; height: 16px; margin-left: 4px; color: var(--accent); }
 .tab.pinned { padding-right: 6px; }
+
+/* ---- Viewer window (table / notebook / hex) ---- */
+#view-viewer { flex-direction: column; }
+.viewer-bar { gap: 8px; }
+.viewer-modes { display: flex; gap: 2px; }
+.viewer-mode { padding: 2px 10px; border-radius: 6px; color: var(--text-dim); background: transparent; }
+.viewer-mode.active { color: var(--text-hi); background: var(--island-2); }
+.viewer-header { color: var(--text-dim); font-size: 12px; white-space: nowrap; }
+.viewer-filter { width: 160px; }
+.viewer-info { flex: 1; text-align: right; color: var(--text-dim); font-size: 12px; padding: 0 8px; white-space: nowrap; }
+.viewer-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.viewer-scroll { flex: 1; min-height: 0; overflow: auto; user-select: text; }
+.viewer-table { border-collapse: collapse; font-size: 12.5px; min-width: 100%; }
+.viewer-table th { position: sticky; top: 0; background: var(--island-2); color: var(--text-hi); text-align: left; padding: 3px 10px; border-bottom: 1px solid var(--border); cursor: pointer; white-space: nowrap; z-index: 1; }
+.viewer-table th.sorted { color: var(--accent); }
+.viewer-table td { padding: 2px 10px; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); white-space: nowrap; max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
+.viewer-table td.num { text-align: right; font-variant-numeric: tabular-nums; color: var(--syn-number, var(--info)); }
+.viewer-table .rownum { color: var(--text-dim); text-align: right; width: 1%; background: var(--island-2); position: sticky; left: 0; }
+.viewer-table tbody tr:hover td { background: var(--hover); }
+.viewer-trunc { padding: 8px 12px; color: var(--warn); font-size: 12px; }
+.viewer-hexnav { flex: none; display: flex; gap: 6px; align-items: center; padding: 4px 8px; }
+.viewer-goto { width: 150px; }
+.viewer-hex { margin: 0; padding: 4px 12px; font: 12.5px/1.45 "JetBrains Mono", Consolas, monospace; color: var(--text); }
+.nb { padding: 6px 12px 16px; }
+.nb-cell { margin: 8px 0; }
+.nb-source { display: flex; gap: 8px; align-items: flex-start; }
+.nb-source pre { flex: 1; min-width: 0; margin: 0; padding: 6px 10px; background: var(--island-2); border-radius: 6px; overflow: auto; font: 12.5px/1.45 "JetBrains Mono", Consolas, monospace; }
+.nb-prompt { flex: none; width: 64px; text-align: right; color: var(--info); font: 11px "JetBrains Mono", Consolas, monospace; padding-top: 8px; }
+.nb-output { margin: 4px 0 0 72px; overflow: auto; }
+.nb-output pre { margin: 0; font: 12.5px/1.45 "JetBrains Mono", Consolas, monospace; white-space: pre-wrap; }
+.nb-output img { max-width: 100%; }
+.nb-error { color: var(--err); }

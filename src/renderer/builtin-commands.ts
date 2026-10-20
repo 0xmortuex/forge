@@ -13,7 +13,7 @@ export interface BuiltinDeps {
   openSearchScope: (scope: 'all' | 'files' | 'symbols' | 'actions', classesOnly?: boolean) => void
   showFind: () => void
   toggleSide: (side: 'project' | 'commit') => void
-  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai' | 'database' | 'duplicates' | 'npm' | 'tests') => void
+  toggleView: (view: 'output' | 'terminal' | 'run' | 'debug' | 'find' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai' | 'database' | 'duplicates' | 'npm' | 'tests' | 'viewer') => void
   runAllTests: () => void
   findDuplicates: () => void
   addWordToDictionary: () => void
@@ -152,8 +152,8 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
       location.reload()
     } })
   register({ id: 'settings.keymap', category: 'Settings', title: 'Show Keyboard Shortcuts', run: () => d.openSettings('Keymap') })
-  register({ id: 'settings.export', category: 'Settings', title: 'Export Settings…', run: d.exportSettings })
-  register({ id: 'settings.import', category: 'Settings', title: 'Import Settings…', run: d.importSettings })
+  register({ id: 'settings.export', category: 'Settings', title: 'Export Settingsâ€¦', run: d.exportSettings })
+  register({ id: 'settings.import', category: 'Settings', title: 'Import Settingsâ€¦', run: d.importSettings })
   register({ id: 'settings.reset', category: 'Settings', title: 'Reset All Settings', run: () => settings.resetAll() })
 
   // ---- Appearance: themes (each previews live as you move through the list) ----
@@ -266,6 +266,7 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'code.compareFile', category: 'Code', title: 'Compare with Fileâ€¦', run: d.compareWithFile })
   register({ id: 'code.compareClipboard', category: 'Code', title: 'Compare with Clipboard', run: d.compareWithClipboard })
   register({ id: 'view.notifications', category: 'View', title: 'Show Notifications', run: d.showNotifications })
+  register({ id: 'view.viewer', category: 'View', title: 'Toggle Viewer (Table / Notebook / Hex)', run: () => d.toggleView('viewer') })
   register({ id: 'view.preview', category: 'View', title: 'Toggle Markdown Preview', run: () => d.toggleView('preview') })
   register({ id: 'view.breakpoints', category: 'View', title: 'Toggle Breakpoints Window', keys: 'Ctrl+Shift+F8', run: () => d.toggleView('breakpoints') })
   register({ id: 'view.http', category: 'View', title: 'Toggle HTTP Response', run: () => d.toggleView('http') })

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, extname } from 'node:path'
 
-// Scripted edits once left raw control characters (SOH, NUL...) inside source files after a backslash was eaten.
+// Scripted edits once left raw control characters and invalid UTF-8 (SOH, NUL...) inside source files after a backslash was eaten.
 // They compile, then misbehave. Nothing but tab, newline and carriage return may appear in the sources.
 
 const ROOTS = ['src', 'tests', 'docs', 'examples']
@@ -22,7 +22,13 @@ test('no source file contains stray control characters', () => {
   const bad: string[] = []
   for (const root of ROOTS) {
     for (const file of files(root)) {
-      const text = readFileSync(file, 'utf8')
+      let text: string
+      try {
+        text = new TextDecoder('utf-8', { fatal: true }).decode(readFileSync(file)) // a patch script once wrote a lone 0x85 for an ellipsis
+      } catch {
+        bad.push(`${file}: not valid UTF-8`)
+        continue
+      }
       for (let i = 0; i < text.length; i++) {
         const c = text.charCodeAt(i)
         if (c < 32 && c !== 9 && c !== 10 && c !== 13) {

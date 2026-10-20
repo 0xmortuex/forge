@@ -49,3 +49,7 @@ suite passed. "Not done" and "known gaps" are listed honestly at the end of this
   Status bar → *Reload in Encoding…* (wrong guess) or *Save in Encoding…* (convert; 15 encodings incl. Turkish, Cyrillic,
   Central European, Shift_JIS, GBK, Big5, EUC-KR). Text an encoding cannot hold is refused, naming the character.
   (Not yet: files opened by language-server edits or search/replace still read and write UTF-8.)
+- **Viewer window** (View → Toggle Viewer): the active file as a **table** (CSV / TSV / delimiter auto-detected,
+  quoted cells, click a header to sort numerically or naturally, filter box, header-row switch), as a rendered
+  **Jupyter notebook** (.ipynb: markdown, code, text / image / HTML outputs, tracebacks) or as a **hex dump** of the bytes
+  on disk (any file, images included; 4 KB pages, previous / next, go to offset).

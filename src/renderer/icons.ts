@@ -41,6 +41,7 @@ export const icons = {
   bell: svg('<path d="M4 11V7a4 4 0 018 0v4l1 1.5H3zM6.5 14a1.5 1.5 0 003 0"/>', 14),
   git: svg('<circle cx="4" cy="3.5" r="1.6"/><circle cx="4" cy="12.5" r="1.6"/><circle cx="12" cy="8" r="1.6"/><path d="M4 5.1v5.8M4 8h4.5a3.5 3.5 0 003.5-0"/>', 18),
   todo: svg('<path d="M3 4.5l1.5 1.5L7 3.5M3 10l1.5 1.5L7 9M9 5h4.5M9 10.5h4.5"/>', 18),
+  viewer: svg('<rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M2 6h12M2 9.5h12M6 6v7.5"/>', 18),
   preview: svg('<rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M2 6h12M5 9h6M5 11.2h4"/>', 18),
   breakpoint: svg('<circle cx="8" cy="8" r="4.2" fill="currentColor" fill-opacity=".3"/>', 18),
   http: svg('<circle cx="8" cy="8" r="5.5"/><path d="M2.5 8h11M8 2.5c2 2 2 9 0 11M8 2.5c-2 2-2 9 0 11"/>', 18),
