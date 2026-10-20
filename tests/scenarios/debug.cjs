@@ -32,7 +32,12 @@ run(
     await waitFor(async () => (await text('tree')).includes('prog.js'), 5000)
     await js("[...document.querySelectorAll('.node')].find(n => n.textContent === 'prog.js').click()")
     await waitFor(async () => (await text('tabs')).includes('prog.js'), 5000)
-    await sleep(500)
+    // The code-vision line (usages of add) appears above line 1 a moment after the file opens and pushes the lines down:
+    // wait until line 2 stops moving before aiming a mouse click at it.
+    const line2 = () => js("[...document.querySelectorAll('.margin-view-overlays .line-numbers')].find(n => n.textContent === '2')?.getBoundingClientRect().top ?? -1")
+    await waitFor(() => js('document.querySelectorAll(".codelens-decoration").length > 0'), 8000)
+    let last = -2
+    await waitFor(async () => { const y = await line2(); const same = y === last; last = y; await sleep(250); return same && y > 0 }, 8000)
 
     // Breakpoint with a real mouse click in the gutter, at line 2
     const target = await js(`(() => {

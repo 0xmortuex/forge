@@ -71,6 +71,8 @@ run('git-partial', { 'a.txt': lines(), 'b.txt': 'b one\nb two\n', 'c.txt': 'c on
   check('the working file still has every change', working.includes('LINE02 changed') && working.includes('LINE18 changed') && working.includes('inserted'))
   const remaining = out('diff', 'HEAD', '--', 'a.txt')
   check('what was left out is still uncommitted', remaining.includes('+LINE18 changed') && remaining.includes('+inserted') && !remaining.includes('LINE02'), remaining)
+  // The handler commits first, then refreshes the real index and removes the temporary one: wait for both.
+  await waitFor(() => !/^MM /m.test(out('status', '--porcelain')) && !fs.readdirSync(path.join(root, '.git')).some((f) => f.startsWith('forge-index-')), 5000)
   const porcelain = out('status', '--porcelain')
   check('a.txt is still modified, b.txt is clean', /^ M a\.txt$/m.test(porcelain) && !/b\.txt/.test(porcelain), porcelain)
   check('the file staged by hand is still staged', /^M  c\.txt$/m.test(porcelain), porcelain)
