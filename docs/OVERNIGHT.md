@@ -53,3 +53,8 @@ suite passed. "Not done" and "known gaps" are listed honestly at the end of this
   quoted cells, click a header to sort numerically or naturally, filter box, header-row switch), as a rendered
   **Jupyter notebook** (.ipynb: markdown, code, text / image / HTML outputs, tracebacks) or as a **hex dump** of the bytes
   on disk (any file, images included; 4 KB pages, previous / next, go to offset).
+- **Pull Requests window** (GitHub, through the `gh` CLI and your own login; View → Toggle Pull Requests): open / closed /
+  merged / all, with check status (running / passed / failed), draft and review badges; details with description, files
+  changed (+/-), reviews and comments; **Checkout**, **View Diff** (opens in a tab), **Add Comment…**, **Open in Browser**
+  and **New Pull Request…**. Says so plainly when gh is missing, not logged in or the folder isn't a GitHub repository.
+  Tested against a fake `gh` (`tests/fake-gh.cjs`), not the real GitHub.

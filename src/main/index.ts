@@ -18,6 +18,7 @@ import { closeAllDatabases, registerDatabase } from './database'
 import { registerDuplicates } from './duplicates'
 import { registerSpell } from './spell'
 import { registerNpm } from './npm'
+import { registerGithub } from './github'
 import { registerTestRun } from './testrun'
 import { registerWatch, stopWatching } from './watch'
 import { registerScratch } from './scratch'
@@ -207,6 +208,7 @@ registerDatabase()
 registerDuplicates()
 registerSpell()
 registerNpm()
+registerGithub()
 registerTestRun()
 registerWatch()
 registerScratch()

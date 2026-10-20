@@ -1004,3 +1004,41 @@ body.no-breadcrumbs #breadcrumbs { display: none; }
 .nb-output pre { margin: 0; font: 12.5px/1.45 "JetBrains Mono", Consolas, monospace; white-space: pre-wrap; }
 .nb-output img { max-width: 100%; }
 .nb-error { color: var(--err); }
+
+/* ---- Pull Requests window ---- */
+#view-github { flex-direction: column; }
+.gh-bar { gap: 8px; }
+.gh-repo { flex: 1; min-width: 0; color: var(--text-dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 6px; }
+.gh-body { flex: 1; min-height: 0; display: flex; }
+.gh-list { flex: none; width: 360px; overflow: auto; border-right: 1px solid var(--border); padding: 4px; }
+.gh-pr { padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+.gh-pr:hover { background: var(--hover); }
+.gh-pr.selected { background: var(--sel); }
+.gh-pr-head { display: flex; align-items: center; gap: 8px; }
+.gh-pr-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-hi); }
+.gh-pr-num { color: var(--text-dim); font-size: 11px; }
+.gh-pr-meta { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; margin: 2px 0 0 16px; color: var(--text-dim); font-size: 11px; }
+.gh-checks { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--text-dim); }
+.gh-checks.pass { background: var(--ok); }
+.gh-checks.fail { background: var(--err); }
+.gh-checks.pending { background: var(--warn); }
+.gh-badge { font-size: 10px; font-weight: 700; padding: 0 6px; border-radius: 8px; background: var(--island-2); color: var(--text-dim); }
+.gh-badge.merged { background: color-mix(in srgb, var(--syn-keyword) 25%, transparent); color: var(--syn-keyword); }
+.gh-badge.closed, .gh-badge.review-changes, .gh-badge.checks-fail { background: color-mix(in srgb, var(--err) 22%, transparent); color: var(--err); }
+.gh-badge.review-approved, .gh-badge.checks-pass { background: color-mix(in srgb, var(--ok) 22%, transparent); color: var(--ok); }
+.gh-badge.review-required, .gh-badge.checks-pending { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+.gh-detail { flex: 1; min-width: 0; overflow: auto; user-select: text; }
+.gh-card { padding: 12px 18px 24px; }
+.gh-title { margin: 0 0 2px; font-size: 16px; color: var(--text-hi); }
+.gh-num { color: var(--text-dim); font-weight: 400; }
+.gh-sub { color: var(--text-dim); font-size: 12px; }
+.gh-stats { display: flex; gap: 10px; align-items: center; margin: 10px 0; font-size: 12px; }
+.gh-add { color: var(--ok); }
+.gh-del { color: var(--err); }
+.gh-actions { display: flex; gap: 6px; margin-bottom: 10px; }
+.gh-card h3 { margin: 16px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); }
+.gh-file { display: flex; gap: 10px; padding: 1px 0; font: 12px "JetBrains Mono", Consolas, monospace; }
+.gh-fname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gh-review { font-size: 12px; padding: 1px 0; }
+.gh-comment { margin: 6px 0; padding: 6px 10px; border-radius: 8px; background: var(--island-2); }
+.gh-comment-head { color: var(--text-dim); font-size: 11px; margin-bottom: 2px; }

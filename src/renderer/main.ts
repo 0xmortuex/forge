@@ -60,6 +60,7 @@ import type { Action } from './ai'
 import { naming, relatedFiles } from './related'
 import { initPreview } from './preview'
 import { initViewer } from './viewer'
+import { initGithub } from './github'
 import { initBreakpointsWindow } from './breakpoints'
 import { initHttpClient } from './httpclient'
 import { initTestRunner } from './testrunner'
@@ -236,11 +237,12 @@ tw.register({ id: 'bookmarks', title: 'Bookmarks', icon: icons.bookmark, root: $
 tw.register({ id: 'tests', title: 'Tests', icon: icons.tests, root: $('view-tests'), dock: 'bottom' })
 tw.register({ id: 'npm', title: 'npm', icon: icons.npm, root: $('view-npm'), dock: 'bottom' })
 tw.register({ id: 'duplicates', title: 'Duplicates', icon: icons.duplicates, root: $('view-dup'), dock: 'bottom' })
+tw.register({ id: 'github', title: 'Pull Requests', icon: icons.pulls, root: $('view-github'), dock: 'bottom' })
 tw.register({ id: 'viewer', title: 'Viewer', icon: icons.viewer, root: $('view-viewer'), dock: 'bottom' })
 tw.register({ id: 'database', title: 'Database', icon: icons.database, root: $('view-db'), dock: 'bottom' })
 tw.register({ id: 'ai', title: 'AI Assistant', icon: icons.ai, root: $('view-ai'), dock: 'right', shortcut: 'Alt+8' })
 
-type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai' | 'database' | 'duplicates' | 'npm' | 'tests' | 'viewer'
+type View = 'output' | 'terminal' | 'find' | 'run' | 'debug' | 'problems' | 'structure' | 'bookmarks' | 'hierarchy' | 'git' | 'todo' | 'preview' | 'breakpoints' | 'http' | 'ai' | 'database' | 'duplicates' | 'npm' | 'tests' | 'viewer' | 'github'
 type Side = 'project' | 'commit'
 const showSide = (side: Side): void => tw.show(side)
 const toggleSide = (side: Side): void => tw.toggle(side)
@@ -1653,6 +1655,21 @@ initSpell()
     }, 300)
   })
 }
+const github = initGithub({
+  root: $('view-github'),
+  getRoot: () => rootDir,
+  openText: async (ext, text) => {
+    const path = await window.forge.scratchCreate(ext)
+    await window.forge.writeFile(path, text)
+    await openFile(path)
+  },
+  branchChanged: () => {
+    void onWorktreeChanged()
+    refreshGit()
+  },
+  report
+})
+tw.setOnShow('github', () => void github.refresh().catch((e: unknown) => report(`Pull Requests: ${String(e)}`, true)))
 const viewer = initViewer({
   root: $('view-viewer'),
   current: () => {
