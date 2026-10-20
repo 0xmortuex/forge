@@ -2075,6 +2075,10 @@ registerBuiltinCommands({
     showView('terminal')
     terminals.newTerminal()
   },
+  splitTerminal: () => {
+    showView('terminal')
+    terminals.split()
+  },
   toggleZen,
   togglePresentation,
   exportSettings: () => guarded('Export settings', exportSettings),

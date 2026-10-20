@@ -63,3 +63,5 @@ suite passed. "Not done" and "known gaps" are listed honestly at the end of this
   terminal tab), **Run** for images, and **Compose Up / Down** when the project has a compose file. Says when Docker is not
   installed or the daemon is not running. Tested against a fake docker (`tests/fake-docker.cjs`) only: Docker itself is not
   installed on the machine this was built on.
+- **Split Terminal** (split button in the terminal tab bar, or the command): a second shell beside the first in the same tab,
+  each with its own session. Typing `exit` in a split closes just that half; closing the tab closes both.

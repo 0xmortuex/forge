@@ -36,6 +36,7 @@ export interface BuiltinDeps {
   runTests: () => void
   findReplace: () => void
   newTerminal: () => void
+  splitTerminal: () => void
   toggleZen: () => void
   togglePresentation: () => void
   exportSettings: () => Promise<void>
@@ -133,6 +134,7 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'view.hierarchy', category: 'View', title: 'Toggle Hierarchy', run: () => d.toggleView('hierarchy') })
   register({ id: 'view.run', category: 'View', title: 'Toggle Run Window', run: () => d.toggleView('run') })
   register({ id: 'view.debug', category: 'View', title: 'Toggle Debug Window', run: () => d.toggleView('debug') })
+  register({ id: 'view.splitTerminal', category: 'View', title: 'Split Terminal', run: d.splitTerminal })
   register({ id: 'view.newTerminal', category: 'View', title: 'New Terminal', keys: 'Ctrl+Shift+`', run: d.newTerminal })
   register({ id: 'view.zen', category: 'View', title: 'Toggle Zen Mode', keys: 'Ctrl+Alt+Z', run: d.toggleZen })
   register({ id: 'view.presentation', category: 'View', title: 'Toggle Presentation Mode', run: d.togglePresentation })
