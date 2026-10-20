@@ -4,6 +4,7 @@ import { access, cp, mkdir, readdir, readFile, rename, writeFile } from 'node:fs
 import { basename, extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { registerDebug } from './debug'
+import { assertEncoding, decode, detectEncoding, encode } from './encoding'
 import { registerExtensions, registerExtensionScheme } from './extensions'
 import { registerGit } from './git'
 import { registerSettings } from './settings'
@@ -158,6 +159,17 @@ ipcMain.handle('shell:reveal', (_e, path: string) => shell.showItemInFolder(path
 ipcMain.handle('clipboard:write', (_e, text: string) => clipboard.writeText(text))
 
 ipcMain.handle('fs:readFile', (_e, path: string) => readFile(path, 'utf8'))
+
+/** Reads a text file in the given encoding, or the one it appears to be in. */
+ipcMain.handle('fs:readFileEnc', async (_e, path: string, encoding?: string): Promise<{ text: string; encoding: string }> => {
+  const buf = await readFile(path)
+  const enc = encoding ?? detectEncoding(buf)
+  if (encoding) assertEncoding(encoding)
+  return { text: decode(buf, enc), encoding: enc }
+})
+
+/** Writes text in the given encoding; text it cannot represent is an error and nothing is written. */
+ipcMain.handle('fs:writeFileEnc', async (_e, path: string, content: string, encoding: string) => writeFile(path, encode(content, encoding)))
 
 ipcMain.handle('fs:writeFile', (_e, path: string, content: string) =>
   writeFile(path, content, 'utf8')

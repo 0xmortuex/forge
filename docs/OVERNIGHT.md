@@ -44,3 +44,8 @@ suite passed. "Not done" and "known gaps" are listed honestly at the end of this
   toggling again restores your own settings.
 - **Export / Import Settings…** (command palette): back up settings.json (including keymap and extension keys) to a file,
   or apply one. Import validates every value: invalid ones are skipped and named, unknown keys are kept.
+- **File encodings**: files are no longer assumed to be UTF-8. On open Forge detects BOMs (UTF-8, UTF-16 LE/BE), valid
+  UTF-8, otherwise Windows-1252, and writes the file back the same way, so Latin-1 / UTF-16 files are not corrupted.
+  Status bar → *Reload in Encoding…* (wrong guess) or *Save in Encoding…* (convert; 15 encodings incl. Turkish, Cyrillic,
+  Central European, Shift_JIS, GBK, Big5, EUC-KR). Text an encoding cannot hold is refused, naming the character.
+  (Not yet: files opened by language-server edits or search/replace still read and write UTF-8.)

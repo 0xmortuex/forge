@@ -25,6 +25,7 @@
     "dockerfile-language-server-nodejs": "^0.15.0",
     "dompurify": "^3.4.17",
     "emmet": "^2.4.11",
+    "iconv-lite": "^0.7.3",
     "marked": "^18.1.1",
     "monaco-editor": "^0.52.2",
     "node-pty": "^1.1.0",

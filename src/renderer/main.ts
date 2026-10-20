@@ -66,6 +66,7 @@ import { initSplit } from './split'
 import { formatForSave, initEditorConfig } from './editorconfig'
 import { initAnnotate } from './annotate'
 import type { ChangeKind, GitChange } from '../main/git'
+import { ENCODINGS, shortName } from '../main/encodinglist'
 
 self.MonacoEnvironment = {
   getWorker(_id, label) {
@@ -83,6 +84,8 @@ interface OpenFile {
   savedVersion: number
   /** The text last known to be on disk (read or written by Forge); a file tab only. Tells our own writes from outside changes. */
   savedText?: string
+  /** How the file is encoded on disk (a file tab only; default UTF-8). Text in the editor is always Unicode. */
+  encoding?: string
   /** Pinned tabs stay at the left, have no close button, and are skipped by Close All / Close Others. */
   pinned?: boolean
   /** An image file: shown in the image viewer instead of the text editor. */
@@ -107,6 +110,7 @@ const statusEl = $('status')
 const statusMsg = $('status-msg')
 const stPos = $('st-pos')
 const stEol = $('st-eol')
+const stEnc = $('st-enc')
 const stIndent = $('st-indent')
 const stLang = $('st-lang')
 
@@ -514,7 +518,7 @@ async function reloadFromDisk(): Promise<void> {
   const f = active
   if (!f || f.diff || f.image) throw new Error('Open a text file first')
   if (isDirty(f) && !confirm(`${basename(f.path)} has unsaved changes. Reload it from disk and discard them?`)) return
-  const text = await window.forge.readFile(f.path)
+  const text = (await window.forge.readFileEnc(f.path, f.encoding)).text
   f.savedText = text
   f.model.pushStackElement()
   f.model.pushEditOperations([], [{ range: f.model.getFullModelRange(), text }], () => null)
@@ -607,10 +611,10 @@ async function openFile(path: string, line?: number, column = 1): Promise<void> 
     })
   } else {
     await guarded(`Open ${basename(path)}`, async () => {
-      const text = await window.forge.readFile(path)
+      const { text, encoding } = await window.forge.readFileEnc(path)
       history.record(path, text) // the version as it was when opened
       const model = monaco.editor.createModel(text, undefined, monaco.Uri.file(path))
-      const f: OpenFile = { path, model, savedVersion: model.getAlternativeVersionId(), savedText: text }
+      const f: OpenFile = { path, model, savedVersion: model.getAlternativeVersionId(), savedText: text, encoding }
       // .editorconfig decides this file's indentation (before anything is typed).
       void editorConfig
         .resolve(path)
@@ -661,7 +665,7 @@ async function saveActive(opts: { format?: boolean } = {}, target?: OpenFile): P
     }
     const value = f.model.getValue()
     const version = f.model.getAlternativeVersionId() // what was written; anything typed during the write is still unsaved
-    await window.forge.writeFile(f.path, value)
+    await window.forge.writeFileEnc(f.path, value, f.encoding ?? 'utf8')
     f.savedText = value
     history.record(f.path, value)
     if (basename(f.path) === '.editorconfig') editorConfig.clear()
@@ -830,7 +834,7 @@ async function applyExternalChanges(paths: Set<string>, gitChanged: boolean, all
       if (!f) continue
       let text: string
       try {
-        text = await window.forge.readFile(f.path)
+        text = (await window.forge.readFileEnc(f.path, f.encoding)).text
       } catch (err) {
         if ((err as { code?: string }).code === 'ENOENT' || /ENOENT/.test(String(err))) report(`${basename(f.path)} was deleted outside Forge (it stays open)`, true)
         else report(`Reload ${basename(f.path)}: ${err instanceof Error ? err.message : String(err)}`, true)
@@ -1098,6 +1102,7 @@ function updateStatus(): void {
   const pos = editor.getPosition()
   stPos.textContent = model && pos ? `${pos.lineNumber}:${pos.column}` : ''
   stEol.textContent = model ? (model.getEOL() === '\r\n' ? 'CRLF' : 'LF') : ''
+  stEnc.textContent = model ? shortName(active?.encoding ?? 'utf8') : ''
   stLang.textContent = model ? model.getLanguageId() : ''
   stIndent.textContent = model ? (model.getOptions().insertSpaces ? `${model.getOptions().tabSize} spaces` : `Tab size ${model.getOptions().tabSize}`) : ''
   refreshBlame()
@@ -1127,6 +1132,54 @@ stEol.onclick = () => {
   widgetMenu(stEol, [
     { label: 'LF (Unix, macOS)', run: () => { model.pushEOL(monaco.editor.EndOfLineSequence.LF); updateStatus() } },
     { label: 'CRLF (Windows)', run: () => { model.pushEOL(monaco.editor.EndOfLineSequence.CRLF); updateStatus() } }
+  ])
+}
+/** Re-reads the file from disk as if it were in another encoding (for a file that was guessed wrong). */
+async function reloadWithEncoding(f: OpenFile, encoding: string): Promise<void> {
+  if (isDirty(f) && !confirm(`${basename(f.path)} has unsaved changes. Reload it as ${shortName(encoding)} and discard them?`)) return
+  const { text } = await window.forge.readFileEnc(f.path, encoding)
+  f.encoding = encoding
+  f.savedText = text
+  f.model.pushStackElement()
+  f.model.pushEditOperations([], [{ range: f.model.getFullModelRange(), text }], () => null)
+  f.model.pushStackElement()
+  f.savedVersion = f.model.getAlternativeVersionId()
+  renderTabs()
+  updateStatus()
+  report(`Reloaded ${basename(f.path)} as ${shortName(encoding)}`)
+}
+
+/** Saves the file in another encoding. If the text cannot be represented, nothing changes and the error says which character. */
+async function convertEncoding(f: OpenFile, encoding: string): Promise<void> {
+  const before = f.encoding
+  f.encoding = encoding
+  try {
+    await saveActive({ format: false }, f)
+  } catch (err) {
+    f.encoding = before // saveActive has already reported what went wrong
+    throw err
+  }
+  updateStatus()
+  report(`${basename(f.path)} saved as ${shortName(encoding)}`)
+}
+
+function pickEncoding(title: string, current: string, onChoose: (id: string) => void): void {
+  quickPick({
+    title,
+    placeholder: 'Choose an encoding',
+    items: ENCODINGS.map((e) => ({ label: e.label, detail: e.id === current ? 'current' : '', data: e.id })),
+    selected: Math.max(0, ENCODINGS.findIndex((e) => e.id === current)),
+    onChoose
+  })
+}
+
+stEnc.onclick = () => {
+  const f = active && !active.diff && !active.image ? active : null
+  if (!f) return
+  const current = f.encoding ?? 'utf8'
+  widgetMenu(stEnc, [
+    { label: 'Reload in Encoding…', run: () => pickEncoding('Reload in Encoding', current, (id) => void guarded('Reload in encoding', () => reloadWithEncoding(f, id)).catch(() => undefined)) },
+    { label: 'Save in Encoding…', run: () => pickEncoding('Save in Encoding', current, (id) => void convertEncoding(f, id).catch(() => undefined)) }
   ])
 }
 stIndent.onclick = () => {
@@ -1716,7 +1769,7 @@ async function onWorktreeChanged(): Promise<void> {
   for (const f of [...openFiles.values()]) {
     if (isDirty(f)) continue // never clobber unsaved edits
     try {
-      const text = await window.forge.readFile(f.path)
+      const text = (await window.forge.readFileEnc(f.path, f.encoding)).text
       f.savedText = text
       if (text !== f.model.getValue()) {
         f.model.setValue(text)
@@ -1815,7 +1868,7 @@ async function saveAllDirty(): Promise<void> {
     if (f.diff || !isDirty(f)) continue // a diff tab shares its file's model, which is saved via the file tab
     const value = f.model.getValue()
     const version = f.model.getAlternativeVersionId()
-    await window.forge.writeFile(f.path, value)
+    await window.forge.writeFileEnc(f.path, value, f.encoding ?? 'utf8')
     f.savedText = value
     history.record(f.path, value)
     f.savedVersion = version
