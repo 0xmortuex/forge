@@ -68,7 +68,7 @@ Counting is deliberately conservative. "Done" means the thing in the row, not th
 | --- | --- | --- |
 | Run configurations (Node, Python, shell, current file) with an editor | Done | |
 | Node debugger (V8 inspector), Python debugger (debugpy) | Done | Breakpoints with conditions, logpoints, watches, stepping, call stack, evaluate. |
-| Debuggers for other languages (C / C++, Go, Java, C#...) | Missing | A generic Debug Adapter Protocol client would cover many; not built. |
+| Debuggers for other languages (C / C++, Go, Java, C#...) | Partial | A generic Debug Adapter Protocol client: a run configuration of type `dap` names any adapter (lldb-dap, dlv, netcoredbg...), over stdio or TCP; breakpoints, stepping, variables, evaluate and program output work. Tested against a fake adapter that debugs a toy language, **not against any real adapter**, so adapter-specific launch arguments are yours to get right (`launch` in run.json). No attach picker, no exception breakpoints, no multi-thread view. |
 | Test Explorer (node:test, Vitest, Jest, pytest), run arrows, run failed | Done | |
 | Code coverage | Missing | |
 | CPU / memory profiler | Missing | |
@@ -146,6 +146,6 @@ Counting is deliberately conservative. "Done" means the thing in the row, not th
 
 ## What I would build next
 
-In order of value for the effort: a generic Debug Adapter client (unlocks C / C++, Go and more), code coverage for Node and
+In order of value for the effort: trying the generic debug adapter client against a real adapter (lldb-dap, dlv), code coverage for Node and
 Python, a dependency diagram, a real screen-reader and contrast pass, and database
 connections beyond SQLite.

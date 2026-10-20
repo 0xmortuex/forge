@@ -1,10 +1,11 @@
 import type { PtySpec } from '../main/terminal'
+import type { DapLaunch } from '../main/debug-types'
 import { icons } from './icons'
 import { showMenu, type MenuItem } from './menu'
 import type { TerminalView } from './terminal'
 import { openRunConfigs } from './runconfigs'
 
-export type ConfigType = 'current-file' | 'node' | 'python' | 'command'
+export type ConfigType = 'current-file' | 'node' | 'python' | 'command' | 'dap'
 
 export interface RunConfig {
   name: string
@@ -14,6 +15,14 @@ export interface RunConfig {
   args?: string[]
   cwd?: string // relative to the project; default is the project folder
   env?: Record<string, string>
+  /** dap: the debug adapter to start (any language with a Debug Adapter Protocol adapter). */
+  adapter?: { command: string; args?: string[]; transport?: 'stdio' | 'tcp' }
+  /** dap: "launch" (default) starts the program, "attach" connects to one that is running. */
+  request?: 'launch' | 'attach'
+  /** dap: sent to the adapter as adapterID. */
+  adapterId?: string
+  /** dap: more arguments for the launch / attach request, adapter-specific (merged over program, args, cwd and env). */
+  launch?: Record<string, unknown>
 }
 
 export interface ResolvedRun {
@@ -21,7 +30,9 @@ export interface ResolvedRun {
   spec: PtySpec
   cwd: string
   /** Set when this configuration can be debugged: which debug backend to start it with. */
-  debugKind?: 'node' | 'python'
+  debugKind?: 'node' | 'python' | 'dap'
+  /** For a dap configuration: the adapter and its arguments. */
+  dap?: DapLaunch
 }
 
 export interface RunDeps {
@@ -54,7 +65,7 @@ const TEMPLATE = `{
 const PYTHON = navigator.platform.startsWith('Win') ? 'python' : 'python3'
 
 const NODE_EXTS = ['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts']
-const TYPES: ConfigType[] = ['current-file', 'node', 'python', 'command']
+const TYPES: ConfigType[] = ['current-file', 'node', 'python', 'command', 'dap']
 
 const sepOf = (p: string): string => (p.includes('\\') ? '\\' : '/')
 const isAbs = (p: string): boolean => /^[a-zA-Z]:[\\/]/.test(p) || p.startsWith('/') || p.startsWith('\\\\')
@@ -84,6 +95,12 @@ export function parseConfigs(text: string): RunConfig[] {
     }
     if ((c.type === 'node' || c.type === 'python') && !c.program) throw new Error(`${where} ("${c.name}") needs a "program"`)
     if (c.type === 'command' && !c.command) throw new Error(`${where} ("${c.name}") needs a "command"`)
+    if (c.type === 'dap') {
+      if (!c.adapter || typeof c.adapter.command !== 'string' || !c.adapter.command) throw new Error(`${where} ("${c.name}") needs an "adapter" with a "command"`)
+      if (c.adapter.transport !== undefined && c.adapter.transport !== 'stdio' && c.adapter.transport !== 'tcp') throw new Error(`${where} ("${c.name}"): "adapter.transport" must be "stdio" or "tcp"`)
+      if (c.request !== undefined && c.request !== 'launch' && c.request !== 'attach') throw new Error(`${where} ("${c.name}"): "request" must be "launch" or "attach"`)
+      if ((c.request ?? 'launch') === 'launch' && !c.program && !c.launch) throw new Error(`${where} ("${c.name}") needs a "program" (or "launch" arguments)`)
+    }
     return c as RunConfig
   })
 }
@@ -121,7 +138,32 @@ export function resolveConfig(cfg: RunConfig, root: string, activePath: string |
       spec: { file: PYTHON, args: ['-u', joinTo(root, program ?? ''), ...args], env }
     }
   }
-  if (debug) throw new Error('Debugging command configurations is not supported — use a node or python configuration')
+  if (type === 'dap') {
+    if (!debug) throw new Error(`"${cfg.name}" is a debug configuration: use Debug (Shift+F9), not Run`)
+    const sub = (v: unknown): unknown => {
+      if (typeof v === 'string') return v.replace(/\$\{workspaceFolder\}/g, root)
+      if (Array.isArray(v)) return v.map(sub)
+      if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, sub(x)]))
+      return v
+    }
+    const adapter = cfg.adapter as NonNullable<RunConfig['adapter']>
+    const request = cfg.request ?? 'launch'
+    const base: Record<string, unknown> = { ...(program ? { program: joinTo(root, program) } : {}), args, cwd, ...(env ? { env } : {}) }
+    return {
+      label: `${cfg.name} (${adapter.command})`,
+      cwd,
+      debugKind: 'dap',
+      // The program runs under the adapter, not in a terminal of its own: this spec is not used.
+      spec: { file: adapter.command, args: [] },
+      dap: {
+        adapter: { command: adapter.command, args: (sub(adapter.args ?? []) as string[]), transport: adapter.transport ?? 'stdio' },
+        request,
+        adapterId: cfg.adapterId ?? adapter.command,
+        arguments: { ...(request === 'launch' ? (sub(base) as object) : {}), ...(sub(cfg.launch ?? {}) as object) }
+      }
+    }
+  }
+  if (debug) throw new Error('Debugging command configurations is not supported — use a node, python or dap configuration')
   const command = cfg.command ?? ''
   const shell: PtySpec =
     navigator.platform.startsWith('Win')
@@ -238,7 +280,7 @@ export function initRun(deps: RunDeps): {
       configs: existing,
       openJson: () => void deps.guard('Edit configurations', editConfigs).catch(() => undefined),
       onSave: async (list) => {
-        const text = JSON.stringify({ configurations: list.map((c) => ({ ...c, args: c.args?.length ? c.args : undefined, env: c.env && Object.keys(c.env).length ? c.env : undefined })) }, null, 2) + '\n'
+        const text = JSON.stringify({ configurations: list.map((c) => ({ ...c, args: c.args?.length ? c.args : undefined, env: c.env && Object.keys(c.env).length ? c.env : undefined, adapter: c.adapter ? { ...c.adapter, args: c.adapter.args?.length ? c.adapter.args : undefined } : undefined })) }, null, 2) + '\n'
         parseConfigs(text) // the same checks as when it is read back: a name, a script or command where needed
         const dir = joinTo(root, CONFIG_DIR)
         if (!(await window.forge.exists(dir))) await window.forge.createDir(dir)

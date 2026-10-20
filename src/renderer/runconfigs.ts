@@ -14,7 +14,8 @@ const TYPE_LABEL: Record<ConfigType, string> = {
   'current-file': 'Current file',
   node: 'Node.js script',
   python: 'Python script',
-  command: 'Shell command'
+  command: 'Shell command',
+  dap: 'Debug adapter (any language)'
 }
 
 const byId = <T extends HTMLElement>(id: string): T => {
@@ -39,7 +40,13 @@ export function openRunConfigs(deps: RunConfigsDeps): void {
   const listEl = byId('runcfg-list')
   const formEl = byId('runcfg-form')
   const errEl = byId('runcfg-error')
-  const list: RunConfig[] = deps.configs.map((c) => ({ ...c, args: c.args ? [...c.args] : undefined, env: c.env ? { ...c.env } : undefined }))
+  const copyOf = (c: RunConfig): RunConfig => ({
+    ...c,
+    args: c.args ? [...c.args] : undefined,
+    env: c.env ? { ...c.env } : undefined,
+    adapter: c.adapter ? { ...c.adapter, args: c.adapter.args ? [...c.adapter.args] : undefined } : undefined
+  })
+  const list: RunConfig[] = deps.configs.map(copyOf)
   let selected = 0
 
   const field = (label: string, input: HTMLElement, hint = ''): HTMLElement => {
@@ -118,6 +125,40 @@ export function openRunConfigs(deps: RunConfigsDeps): void {
     if (c.type === 'node' || c.type === 'python') {
       formEl.append(field('Script', text(c.program ?? '', (v) => (c.program = v), c.type === 'node' ? 'index.js' : 'main.py'), 'Relative to the project folder.'))
       formEl.append(field('Arguments', text(joinArgs(c.args), (v) => (c.args = splitArgs(v))), 'Separated by spaces; quote an argument that contains spaces.'))
+    } else if (c.type === 'dap') {
+      const adapter = (c.adapter ??= { command: '' })
+      formEl.append(field('Adapter command', text(adapter.command, (v) => (adapter.command = v), 'lldb-dap'), 'The debug adapter program, on your PATH or a full path (lldb-dap, dlv, netcoredbg...).'))
+      formEl.append(field('Adapter arguments', text(joinArgs(adapter.args), (v) => (adapter.args = splitArgs(v))), 'For a TCP adapter put ${port} where it wants its port.'))
+      const transport = document.createElement('select')
+      transport.setAttribute('aria-label', 'Adapter transport')
+      transport.className = 'field'
+      for (const [value, label] of [['stdio', 'Standard input / output'], ['tcp', 'TCP port']] as const) {
+        const o = document.createElement('option')
+        o.value = value
+        o.textContent = label
+        transport.append(o)
+      }
+      transport.value = adapter.transport ?? 'stdio'
+      transport.onchange = () => (adapter.transport = transport.value as 'stdio' | 'tcp')
+      formEl.append(field('Talks over', transport))
+      const request = document.createElement('select')
+      request.setAttribute('aria-label', 'Request')
+      request.className = 'field'
+      for (const [value, label] of [['launch', 'Launch the program'], ['attach', 'Attach to a running one']] as const) {
+        const o = document.createElement('option')
+        o.value = value
+        o.textContent = label
+        request.append(o)
+      }
+      request.value = c.request ?? 'launch'
+      request.onchange = () => (c.request = request.value as 'launch' | 'attach')
+      formEl.append(field('Request', request))
+      formEl.append(field('Program', text(c.program ?? '', (v) => (c.program = v || undefined), 'build/app'), 'Relative to the project folder.'))
+      formEl.append(field('Arguments', text(joinArgs(c.args), (v) => (c.args = splitArgs(v))), 'Separated by spaces; quote an argument that contains spaces.'))
+      const note = document.createElement('div')
+      note.className = 'rc-hint'
+      note.textContent = 'Anything else the adapter wants (stopOnEntry, mode, port, processId...) goes under "launch" in run.json (Open run.json).'
+      formEl.append(note)
     } else if (c.type === 'command') {
       formEl.append(field('Command', text(c.command ?? '', (v) => (c.command = v), 'pnpm dev'), 'Run by the system shell.'))
     } else {
@@ -161,7 +202,7 @@ export function openRunConfigs(deps: RunConfigsDeps): void {
   byId('runcfg-dup').onclick = () => {
     const c = list[selected]
     if (!c) return
-    list.splice(selected + 1, 0, { ...c, name: `${c.name} copy`, args: c.args ? [...c.args] : undefined, env: c.env ? { ...c.env } : undefined })
+    list.splice(selected + 1, 0, { ...copyOf(c), name: `${c.name} copy` })
     selected++
     draw()
   }

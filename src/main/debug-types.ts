@@ -36,7 +36,22 @@ export type DebugEvent =
   | { type: 'error'; message: string }
 
 export type Control = 'resume' | 'stepOver' | 'stepInto' | 'stepOut' | 'pause'
-export type DebugKind = 'node' | 'python'
+export type DebugKind = 'node' | 'python' | 'dap'
+
+/** A debug adapter the user configured (any language that has one): how to start it and what to ask it to debug. */
+export interface DapLaunch {
+  adapter: {
+    command: string
+    /** For the 'tcp' transport "${port}" in an argument is replaced by a free port that Forge then connects to. */
+    args: string[]
+    transport: 'stdio' | 'tcp'
+  }
+  request: 'launch' | 'attach'
+  /** Sent as adapterID in the initialize request (some adapters care). */
+  adapterId: string
+  /** The adapter-specific arguments of the launch / attach request. */
+  arguments: Record<string, unknown>
+}
 
 export interface SessionDeps {
   wc: WebContents

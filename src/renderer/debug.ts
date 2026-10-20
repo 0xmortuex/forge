@@ -456,7 +456,7 @@ export function initDebug(deps: DebugDeps): {
       deps.showView('run')
       deps.setBusy(true)
       try {
-        await deps.runView.begin((cols, rows) => window.forge.debugLaunch(resolved.cwd, cols, rows, resolved.spec, kind))
+        await deps.runView.begin((cols, rows) => window.forge.debugLaunch(resolved.cwd, cols, rows, resolved.spec, kind, resolved.dap))
       } catch (err) {
         deps.setBusy(false)
         throw err

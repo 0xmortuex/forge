@@ -5,7 +5,40 @@ import { ipcMain, type WebContents } from 'electron'
 import * as pty from 'node-pty'
 
 const terms = new Map<number, pty.IPty>()
+/** Terminals with no process behind them: something else (a debug adapter) decides what they show. */
+const virtuals = new Map<number, { kill: () => void }>()
 let nextId = 1
+
+export interface VirtualTerminal {
+  id: number
+  /** Shows text in the terminal. */
+  print(data: string): void
+  /** Ends it, as a process exiting would. */
+  exit(code?: number): void
+}
+
+/**
+ * A terminal that only displays what it is sent. The Run tab uses it to show the output of a program that a debug adapter
+ * runs. `onKill` is called when the user stops it (the Stop button).
+ */
+export function startVirtual(wc: WebContents, onKill: () => void): VirtualTerminal {
+  const id = nextId++
+  let ended = false
+  const exit = (code = 0): void => {
+    if (ended) return
+    ended = true
+    virtuals.delete(id)
+    if (!wc.isDestroyed()) wc.send('term:exit', id, code)
+  }
+  virtuals.set(id, { kill: () => (onKill(), exit()) })
+  return {
+    id,
+    print: (data) => {
+      if (!ended && !wc.isDestroyed()) wc.send('term:data', id, data)
+    },
+    exit
+  }
+}
 
 function getTerm(id: number): pty.IPty {
   const t = terms.get(id)
@@ -99,9 +132,17 @@ export function registerTerminal(): void {
   ipcMain.handle('term:create', (e, cwd: string, cols: number, rows: number, spec?: PtySpec) =>
     startPty(e.sender, cwd, cols, rows, spec)
   )
-  ipcMain.handle('term:write', (_e, id: number, data: string) => getTerm(id).write(data))
-  ipcMain.handle('term:resize', (_e, id: number, cols: number, rows: number) => getTerm(id).resize(cols, rows))
-  ipcMain.handle('term:kill', (_e, id: number) => killTree(getTerm(id)))
+  ipcMain.handle('term:write', (_e, id: number, data: string) => {
+    if (!virtuals.has(id)) getTerm(id).write(data) // a virtual terminal has nothing to type into
+  })
+  ipcMain.handle('term:resize', (_e, id: number, cols: number, rows: number) => {
+    if (!virtuals.has(id)) getTerm(id).resize(cols, rows)
+  })
+  ipcMain.handle('term:kill', (_e, id: number) => {
+    const v = virtuals.get(id)
+    if (v) v.kill()
+    else killTree(getTerm(id))
+  })
 }
 
 /**
@@ -109,6 +150,7 @@ export function registerTerminal(): void {
  * pseudo-console is still being torn down crashes natively on some Windows machines, so the app waits for this.
  */
 export function killAllTerminals(): Promise<void> {
+  for (const v of [...virtuals.values()]) v.kill()
   const all = [...terms.values()]
   if (!all.length) return Promise.resolve()
   const exited = Promise.all(all.map((t) => new Promise<void>((resolve) => t.onExit(() => resolve()))))

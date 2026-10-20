@@ -6,7 +6,7 @@ import type { GhStatus } from '../main/github'
 import type { DockerStatus } from '../main/docker'
 import type { Container, ContainerAction, DockerImage } from '../main/dockerparse'
 import type { PrDetail, PrSummary } from '../main/ghparse'
-import type { DebugEvent, DebugEval, DebugKind, DebugScope, DebugVar } from '../main/debug'
+import type { DapLaunch, DebugEvent, DebugEval, DebugKind, DebugScope, DebugVar } from '../main/debug'
 import type { Breakpoint } from '../main/debug-types'
 import type { BlameLine, BranchInfo, ChangeKind, CommitDetails, CommitFile, CommitInfo, GitStatus, LogQuery, OpResult, RebaseInfo, SelectionCommit, StashEntry } from '../main/git'
 import type { RebaseStep } from '../main/rebaseplan'
@@ -173,8 +173,8 @@ const api = {
   gitCommitPartial: (root: string, message: string, whole: string[], partial: { path: string; fingerprint: string; selected: number[][] }[]): Promise<void> =>
     ipcRenderer.invoke('git:commit-partial', root, message, whole, partial),
   gitCommit: (root: string, message: string, paths: string[], amend = false): Promise<void> => ipcRenderer.invoke('git:commit', root, message, paths, amend),
-  debugLaunch: (cwd: string, cols: number, rows: number, spec: PtySpec, kind: DebugKind): Promise<number> =>
-    ipcRenderer.invoke('debug:launch', cwd, cols, rows, spec, kind),
+  debugLaunch: (cwd: string, cols: number, rows: number, spec: PtySpec, kind: DebugKind, dap?: DapLaunch): Promise<number> =>
+    ipcRenderer.invoke('debug:launch', cwd, cols, rows, spec, kind, dap),
   debugSetBreakpoints: (path: string, lines: Breakpoint[]): Promise<void> =>
     ipcRenderer.invoke('debug:setBreakpoints', path, lines),
   debugControl: (cmd: 'resume' | 'stepOver' | 'stepInto' | 'stepOut' | 'pause'): Promise<void> =>

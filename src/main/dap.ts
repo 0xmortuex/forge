@@ -1,6 +1,16 @@
 import net from 'node:net'
+import type { ChildProcess } from 'node:child_process'
 
-/** Minimal Debug Adapter Protocol client over TCP: Content-Length framed JSON. */
+/** The two ends of a connection to a debug adapter: a socket, or the stdin / stdout of the adapter process. */
+interface Transport {
+  write(data: string): void
+  destroy(): void
+  onData(cb: (chunk: Buffer) => void): void
+  onClose(cb: () => void): void
+  onError(cb: (err: Error) => void): void
+}
+
+/** Minimal Debug Adapter Protocol client: Content-Length framed JSON over TCP or over a process's stdio. */
 export class DapClient {
   private seq = 1
   private buf = Buffer.alloc(0)
@@ -10,11 +20,33 @@ export class DapClient {
   onEvent: (event: string, body: any) => void = () => undefined
   onClose: () => void = () => undefined
 
-  private constructor(private socket: net.Socket) {
-    socket.on('data', (d) => this.onData(d))
-    socket.on('close', () => this.handleClose())
-    socket.on('error', (err) => {
+  private constructor(private io: Transport) {
+    io.onData((d) => this.onData(d))
+    io.onClose(() => this.handleClose())
+    io.onError((err) => {
       this.lastError = err // 'close' follows; pending requests are rejected there with this as the reason
+    })
+  }
+
+  /** Speaks DAP over the standard input and output of an adapter process that is already started. */
+  static fromProcess(child: ChildProcess): DapClient {
+    const { stdin, stdout } = child
+    if (!stdin || !stdout) throw new Error('The debug adapter was started without pipes')
+    return new DapClient({
+      write: (data) => void stdin.write(data),
+      destroy: () => {
+        stdin.destroy()
+        stdout.destroy()
+      },
+      onData: (cb) => void stdout.on('data', cb),
+      onClose: (cb) => {
+        stdout.on('close', cb)
+        child.on('exit', cb)
+      },
+      onError: (cb) => {
+        stdin.on('error', cb) // writing to an adapter that has exited
+        stdout.on('error', cb)
+      }
     })
   }
 
@@ -29,7 +61,13 @@ export class DapClient {
           s.once('connect', () => resolve(s))
           s.once('error', reject)
         })
-        return new DapClient(socket)
+        return new DapClient({
+          write: (data) => void socket.write(data),
+          destroy: () => socket.destroy(),
+          onData: (cb) => void socket.on('data', cb),
+          onClose: (cb) => void socket.on('close', cb),
+          onError: (cb) => void socket.on('error', cb)
+        })
       } catch (err) {
         if (Date.now() > deadline) throw new Error(`Could not connect to the debug adapter on port ${port}: ${(err as Error).message}`)
         await new Promise((r) => setTimeout(r, 150))
@@ -42,13 +80,17 @@ export class DapClient {
       if (this.closed) return reject(new Error('Debug adapter connection is closed'))
       const seq = this.seq++
       this.pending.set(seq, { resolve, reject })
-      const body = JSON.stringify({ seq, type: 'request', command, arguments: args })
-      this.socket.write(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`)
+      this.send({ seq, type: 'request', command, arguments: args })
     })
   }
 
   close(): void {
-    this.socket.destroy()
+    this.io.destroy()
+  }
+
+  private send(message: object): void {
+    const body = JSON.stringify(message)
+    this.io.write(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`)
   }
 
   private onData(chunk: Buffer): void {
@@ -66,8 +108,21 @@ export class DapClient {
     }
   }
 
-  private dispatch(msg: { type: string; request_seq?: number; success?: boolean; message?: string; body?: any; event?: string }): void {
+  private dispatch(msg: { type: string; seq?: number; command?: string; request_seq?: number; success?: boolean; message?: string; body?: any; event?: string }): void {
     if (msg.type === 'event') return this.onEvent(msg.event ?? '', msg.body ?? {})
+    if (msg.type === 'request') {
+      // A request from the adapter (runInTerminal, startDebugging...). Forge supports none of them, and an adapter that is
+      // not answered waits for ever, so say no.
+      this.send({
+        seq: this.seq++,
+        type: 'response',
+        request_seq: msg.seq ?? 0,
+        success: false,
+        command: msg.command ?? '',
+        message: `Forge does not support the "${msg.command ?? ''}" request`
+      })
+      return
+    }
     if (msg.type !== 'response' || msg.request_seq === undefined) return
     const p = this.pending.get(msg.request_seq)
     if (!p) return

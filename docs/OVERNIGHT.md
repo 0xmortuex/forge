@@ -81,3 +81,10 @@ suite passed. "Not done" and "known gaps" are listed honestly at the end of this
 - **Accessibility pass** over Forge's own interface, with a test that keeps it that way (`a11y`): the audit found unnamed
   drop-downs, status-bar widgets that a keyboard could not reach, dialogs that were not announced as dialogs, and no live
   region for status messages. All fixed. Not done: focus order, colour contrast per theme, a real screen reader.
+- **Generic debug adapters**: a run configuration of type `dap` (also in the Edit Configurations dialog) starts any Debug
+  Adapter Protocol adapter you name, over stdio or TCP (`${port}` in its arguments), and debugs your program with it:
+  breakpoints and logpoints, stepping, call stack, variables with expansion, evaluate, and the program's output in the Run
+  tab. Example:
+  `{ "name": "C++ (lldb)", "type": "dap", "adapter": { "command": "lldb-dap" }, "program": "build/app", "launch": { "stopOnEntry": false } }`.
+  Forge declines the adapter's reverse requests (runInTerminal...) instead of leaving it waiting, and says plainly when the
+  adapter is not installed. Verified with a fake adapter; no real adapter was available to try.
