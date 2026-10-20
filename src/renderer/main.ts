@@ -14,7 +14,7 @@ import { ensureSettingsFile, flushSettings, settings, userData } from './setting
 import { initRipples, notifications, shouldToast, toast } from './effects'
 import { initPalette } from './commands'
 import { initSettingsUi } from './settings-ui'
-import { session } from './session'
+import { session, type Layout } from './session'
 import { keymap } from './keymap'
 import { extensions, initExtensions } from './extensions'
 import { registerBuiltinCommands } from './builtin-commands'
@@ -2039,6 +2039,18 @@ settings.onSaveError = (err) => report(`Saving settings: ${err.message}`, true)
 session.onError = (err) => report(`Saving session: ${err.message}`, true)
 for (const problem of settings.problems) report(problem, true) // a broken settings.json or theme file is never silent
 
+/** Tool windows go back to their original docks and sizes (the CSS defaults); the open files are left alone. */
+function resetLayout(): void {
+  for (const id of ['project', 'bottom', 'right']) {
+    const el = $(id)
+    el.style.width = ''
+    el.style.height = ''
+  }
+  tw.reset()
+  tw.show('project')
+  tw.show('output')
+}
+
 function toggleZen(): void {
   document.body.classList.toggle('zen') // hides everything but the editor; the layout adapts by itself
 }
@@ -2151,17 +2163,12 @@ registerBuiltinCommands({
   },
   goToTest: () => goToTest(),
   resetLayout: () => {
-    // Tool windows go back to their original docks and sizes (the CSS defaults); the open files are left alone.
-    for (const id of ['project', 'bottom', 'right']) {
-      const el = $(id)
-      el.style.width = ''
-      el.style.height = ''
-    }
-    tw.reset()
-    tw.show('project')
-    tw.show('output')
+    resetLayout()
     saveSession()
   },
+  saveLayoutAs,
+  chooseLayout,
+  deleteLayout,
   inspectCode: () => {
     showView('problems')
     problemsView.inspect().catch((err: unknown) => report(`Inspect Code: ${err instanceof Error ? err.message : String(err)}`, true))
@@ -2259,28 +2266,96 @@ window.addEventListener('blur', () => {
 // ---- Session: reopen the last project, tabs and layout; recent projects on the welcome screen ----
 let restoring = true // the session isn't saved while it's still being restored (that would overwrite it)
 
-function saveSession(): void {
-  if (restoring) return
+/** The layout as it is on screen right now. */
+function currentLayout(): Layout {
   const layout = session.get().layout
   const width = $('project').offsetWidth
   const height = $('bottom').offsetHeight
   const rightWidth = $('right').offsetWidth
   const docks = tw.layout()
+  return {
+    projectWidth: width > 0 ? width : layout.projectWidth, // a hidden window measures 0: keep the last real size
+    bottomHeight: height > 0 ? height : layout.bottomHeight,
+    rightWidth: rightWidth > 0 ? rightWidth : layout.rightWidth,
+    projectHidden: docks.hidden.left,
+    bottomHidden: docks.hidden.bottom,
+    rightHidden: docks.hidden.right,
+    side: docks.active.left,
+    view: docks.active.bottom,
+    docks: docks.docks,
+    active: docks.active
+  }
+}
+
+/** Puts the tool windows back as a saved layout had them (the open files are left alone). */
+function applyLayout(l: Layout): void {
+  if (l.projectWidth) $('project').style.width = `${l.projectWidth}px`
+  if (l.bottomHeight) $('bottom').style.height = `${l.bottomHeight}px`
+  if (l.rightWidth) $('right').style.width = `${l.rightWidth}px`
+  // Only the passive windows come back as the shown tab; a terminal, run or debug session shouldn't start unasked.
+  tw.restore({
+    docks: l.docks,
+    active: { left: l.active?.left ?? l.side, bottom: l.active?.bottom ?? l.view, right: l.active?.right },
+    hidden: { left: l.projectHidden, bottom: l.bottomHidden, right: l.rightHidden }
+  })
+}
+
+function saveSession(): void {
+  if (restoring) return
   session.update({
     openFiles: [...openFiles.values()].filter((f) => !f.diff).map((f) => f.path),
     pinned: [...openFiles.values()].filter((f) => f.pinned && !f.diff).map((f) => f.path),
     activeFile: (active?.diff ? active.diff.shared : active)?.path,
-    layout: {
-      projectWidth: width > 0 ? width : layout.projectWidth, // a hidden window measures 0: keep the last real size
-      bottomHeight: height > 0 ? height : layout.bottomHeight,
-      rightWidth: rightWidth > 0 ? rightWidth : layout.rightWidth,
-      projectHidden: docks.hidden.left,
-      bottomHidden: docks.hidden.bottom,
-      rightHidden: docks.hidden.right,
-      side: docks.active.left,
-      view: docks.active.bottom,
-      docks: docks.docks,
-      active: docks.active
+    layout: currentLayout()
+  })
+}
+
+/** Layouts that come with Forge. */
+const BUILT_IN_LAYOUTS: { name: string; detail: string; apply: () => void }[] = [
+  { name: 'Default', detail: 'Project on the left, Output at the bottom', apply: () => resetLayout() },
+  { name: 'Editor Only', detail: 'Every tool window hidden', apply: () => tw.restore({ hidden: { left: true, bottom: true, right: true } }) },
+  { name: 'Wide Editor', detail: 'Structure on the right, nothing else', apply: () => tw.restore({ active: { right: 'structure' }, hidden: { left: true, bottom: true, right: false } }) },
+  { name: 'Review', detail: 'Commit window on the left, Git log at the bottom', apply: () => tw.restore({ active: { left: 'commit', bottom: 'git' }, hidden: { left: false, bottom: false, right: true } }) }
+]
+
+function saveLayoutAs(): void {
+  void askText('Save the current layout as').then((name) => {
+    if (!name) return
+    session.update({ layoutPresets: { ...session.get().layoutPresets, [name]: currentLayout() } })
+    report(`Saved layout "${name}"`)
+  })
+}
+
+function chooseLayout(): void {
+  const saved = Object.entries(session.get().layoutPresets ?? {})
+  const applied = (name: string, how: () => void) => (): void => {
+    how()
+    saveSession()
+    report(`Layout: ${name}`)
+  }
+  quickPick<() => void>({
+    title: 'Apply Layout',
+    placeholder: 'Choose a layout',
+    items: [
+      ...BUILT_IN_LAYOUTS.map((b) => ({ label: b.name, detail: b.detail, data: applied(b.name, b.apply) })),
+      ...saved.map(([name, l]) => ({ label: name, detail: 'saved by you', data: applied(name, () => applyLayout(l)) }))
+    ],
+    onChoose: (run) => run()
+  })
+}
+
+function deleteLayout(): void {
+  const saved = Object.keys(session.get().layoutPresets ?? {})
+  if (!saved.length) return report('You have not saved any layouts (View > Save Layout As)', true)
+  quickPick<string>({
+    title: 'Delete Saved Layout',
+    placeholder: 'Choose a layout to delete',
+    items: saved.map((name) => ({ label: name, detail: 'saved by you', data: name })),
+    onChoose: (name) => {
+      const rest = { ...session.get().layoutPresets }
+      delete rest[name]
+      session.update({ layoutPresets: rest })
+      report(`Deleted layout "${name}"`)
     }
   })
 }
@@ -2324,16 +2399,7 @@ async function restoreSession(): Promise<void> {
   renderRecents()
   try {
     if (!settings.get<boolean>('restoreSession') || !s.lastFolder) return
-    const l = s.layout
-    if (l.projectWidth) $('project').style.width = `${l.projectWidth}px`
-    if (l.bottomHeight) $('bottom').style.height = `${l.bottomHeight}px`
-    if (l.rightWidth) $('right').style.width = `${l.rightWidth}px`
-    // Only the passive windows come back as the shown tab; a terminal, run or debug session shouldn't start unasked.
-    tw.restore({
-      docks: l.docks,
-      active: { left: l.active?.left ?? l.side, bottom: l.active?.bottom ?? l.view, right: l.active?.right },
-      hidden: { left: l.projectHidden, bottom: l.bottomHidden, right: l.rightHidden }
-    })
+    applyLayout(s.layout)
     try {
       await openFolderAt(s.lastFolder)
     } catch {

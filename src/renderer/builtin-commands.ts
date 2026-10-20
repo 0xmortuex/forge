@@ -30,6 +30,9 @@ export interface BuiltinDeps {
   newFile: () => void
   goToTest: () => void
   resetLayout: () => void
+  saveLayoutAs: () => void
+  chooseLayout: () => void
+  deleteLayout: () => void
   inspectCode: () => void
   openInBrowser: () => void
   splitEditor: (how: 'right' | 'down' | 'none') => void
@@ -280,6 +283,9 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'editor.splitDown', category: 'View', title: 'Split Down', run: () => d.splitEditor('down') })
   register({ id: 'editor.unsplit', category: 'View', title: 'Unsplit', run: () => d.splitEditor('none') })
   register({ id: 'code.inspect', category: 'Code', title: 'Inspect Code', run: d.inspectCode })
+  register({ id: 'view.saveLayout', category: 'View', title: 'Save Layout As…', run: d.saveLayoutAs })
+  register({ id: 'view.applyLayout', category: 'View', title: 'Apply Layout…', run: d.chooseLayout })
+  register({ id: 'view.deleteLayout', category: 'View', title: 'Delete Saved Layout…', run: d.deleteLayout })
   register({ id: 'view.resetLayout', category: 'View', title: 'Reset Layout', run: d.resetLayout })
   register({ id: 'nav.goToTest', category: 'Navigate', title: 'Go to Test / Source', keys: 'Ctrl+Shift+T', run: d.goToTest })
   register({ id: 'spell.addWord', category: 'Code', title: 'Add Word at Cursor to Dictionary', run: d.addWordToDictionary })

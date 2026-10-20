@@ -116,7 +116,7 @@ Counting is deliberately conservative. "Done" means the thing in the row, not th
 | Capability | Status | Notes |
 | --- | --- | --- |
 | Docked tool windows, drag between edges, layout reset | Done | |
-| Named layout presets | Missing | Reset and per-window placement only. |
+| Named layout presets | Done | Save the current arrangement under a name, apply it later; four built-in layouts. |
 | Themes (17), accent, fonts, density, custom CSS | Done | |
 | Keymap presets: Forge, IntelliJ, VS Code, Visual Studio | Done | Single-key combinations only; no chords (`Ctrl+K Ctrl+C`). |
 | Settings export / import | Done | |
@@ -147,5 +147,5 @@ Counting is deliberately conservative. "Done" means the thing in the row, not th
 ## What I would build next
 
 In order of value for the effort: a generic Debug Adapter client (unlocks C / C++, Go and more), code coverage for Node and
-Python, named layout presets, a dependency diagram, a screen-reader pass over Forge's own windows, and database
+Python, a dependency diagram, a screen-reader pass over Forge's own windows, and database
 connections beyond SQLite.

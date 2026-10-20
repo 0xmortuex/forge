@@ -76,3 +76,5 @@ suite passed. "Not done" and "known gaps" are listed honestly at the end of this
   re-exports, CSS imports and url(), C includes, HTML src/href, Markdown links, Python relative imports) and lists the
   lines. It asks even when "confirm before delete" is off. Text matching on relative references only: a reference built at
   run time, or a bare package import, is not seen.
+- **Layout presets** (View → Save Layout As… / Apply Layout… / Delete Saved Layout…): remember where every tool window is, which
+  one each dock shows and the panel sizes, under a name. Built in: Default, Editor Only, Wide Editor, Review.

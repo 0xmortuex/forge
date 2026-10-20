@@ -33,6 +33,8 @@ export interface SessionState {
   /** The AI server (host) the user agreed to send code to. */
   aiApprovedHost?: string
   layout: Layout
+  /** Layouts the user saved by name (View → Layouts). */
+  layoutPresets?: Record<string, Layout>
 }
 
 const MAX_RECENTS = 8
@@ -73,9 +75,34 @@ function breakpointList(v: unknown): NonNullable<SessionState['breakpoints']> {
   return out
 }
 
+const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined)
+
+function loadLayout(raw: unknown): Layout {
+  const layout = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
+  return {
+    projectWidth: num(layout['projectWidth']),
+    bottomHeight: num(layout['bottomHeight']),
+    projectHidden: layout['projectHidden'] === true,
+    bottomHidden: layout['bottomHidden'] === true,
+    rightWidth: num(layout['rightWidth']),
+    rightHidden: layout['rightHidden'] !== false, // the right dock starts closed
+    side: str(layout['side']),
+    view: str(layout['view']),
+    docks: record(layout['docks']),
+    active: (() => {
+      const a = (typeof layout['active'] === 'object' && layout['active'] !== null ? layout['active'] : {}) as Record<string, unknown>
+      return { left: str(a['left']), right: str(a['right']), bottom: str(a['bottom']) }
+    })()
+  }
+}
+
+function presetMap(v: unknown): Record<string, Layout> {
+  const out: Record<string, Layout> = {}
+  if (typeof v === 'object' && v !== null) for (const [name, l] of Object.entries(v)) if (name.trim()) out[name] = loadLayout(l)
+  return out
+}
+
 function load(raw: Record<string, unknown>): SessionState {
-  const layout = (typeof raw['layout'] === 'object' && raw['layout'] !== null ? raw['layout'] : {}) as Record<string, unknown>
-  const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined)
   return {
     lastFolder: typeof raw['lastFolder'] === 'string' ? raw['lastFolder'] : undefined,
     recents: strings(raw['recents']).slice(0, MAX_RECENTS),
@@ -87,21 +114,8 @@ function load(raw: Record<string, unknown>): SessionState {
     breakpoints: breakpointList(raw['breakpoints']),
     watches: strings(raw['watches']),
     aiApprovedHost: str(raw['aiApprovedHost']),
-    layout: {
-      projectWidth: num(layout['projectWidth']),
-      bottomHeight: num(layout['bottomHeight']),
-      projectHidden: layout['projectHidden'] === true,
-      bottomHidden: layout['bottomHidden'] === true,
-      rightWidth: num(layout['rightWidth']),
-      rightHidden: layout['rightHidden'] !== false, // the right dock starts closed
-      side: str(layout['side']),
-      view: str(layout['view']),
-      docks: record(layout['docks']),
-      active: (() => {
-        const a = (typeof layout['active'] === 'object' && layout['active'] !== null ? layout['active'] : {}) as Record<string, unknown>
-        return { left: str(a['left']), right: str(a['right']), bottom: str(a['bottom']) }
-      })()
-    }
+    layout: loadLayout(raw['layout']),
+    layoutPresets: presetMap(raw['layoutPresets'])
   }
 }
 
