@@ -78,7 +78,7 @@ async function main() {
     const pty = await evaluate(`window.forge.termCreate(${JSON.stringify(project)}, 80, 24).then((id) => { window.forge.termKill(id); return typeof id })`)
     check('a real shell starts (node-pty works from the package)', pty === 'number', JSON.stringify(pty))
 
-    const dict = await evaluate('window.forge.spellDictionary().then((d) => ({ aff: (d.aff || "").length, dic: (d.dic || "").length }))')
+    const dict = await evaluate('window.forge.rpc({ service: "spell", method: "dictionary", args: [] }).then((r) => r.value).then((d) => ({ aff: (d.aff || "").length, dic: (d.dic || "").length }))')
     check('the spell-check dictionary is found', !!dict && dict.aff > 100 && dict.dic > 1000, JSON.stringify(dict))
 
     for (const [file, text] of [['config.yaml', 'a: 1\n'], ['main.ts', 'const x: number = 1\n']]) {

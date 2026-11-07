@@ -5,6 +5,7 @@ import { RpcServer, type RpcRequest } from '../../shared/rpc'
 import { onFsChange } from '../watch'
 import { FileIndex } from './fileindex'
 import { ModuleRegistry } from './modules'
+import { SpellService } from '../spell'
 
 // The backend platform: a module registry, the typed RPC entry point the UI talks to, and the built-in modules.
 // Features are moved onto it one at a time; the older ipcMain handlers keep working beside it meanwhile.
@@ -28,6 +29,8 @@ registry.register({
     return { services: { fileindex: index }, dispose: stop }
   }
 })
+
+registry.register({ id: 'forge.spell', activation: 'lazy', provides: ['spell'], activate: () => ({ services: { spell: new SpellService() } }) })
 
 export function registerPlatform(): void {
   const server = new RpcServer((name) => registry.service(name))

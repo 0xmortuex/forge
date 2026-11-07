@@ -17,7 +17,6 @@ import { registerInspect } from './inspect'
 import { registerAi } from './ai'
 import { closeAllDatabases, registerDatabase } from './database'
 import { registerDuplicates } from './duplicates'
-import { registerSpell } from './spell'
 import { registerNpm } from './npm'
 import { registerGithub } from './github'
 import { registerDocker } from './docker'
@@ -237,7 +236,6 @@ registerInspect()
 registerAi()
 registerDatabase()
 registerDuplicates()
-registerSpell()
 registerNpm()
 registerGithub()
 registerDocker()

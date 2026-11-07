@@ -18,7 +18,6 @@ import type { HttpRequestSpec, HttpResponse } from '../main/http'
 import type { InspectResult } from '../main/inspect'
 import type { DbQueryResult, DbSchema } from '../main/database'
 import type { DupResult } from '../main/duplicates'
-import type { SpellDictionary } from '../main/spell'
 import type { NpmPackage, Outdated } from '../main/npm'
 import type { Framework, RunOptions, TestRunResult } from '../main/testrun'
 import type { FileDiff } from '../main/gitpatch'
@@ -66,7 +65,6 @@ const api = {
   npmPackages: (root: string): Promise<NpmPackage[]> => ipcRenderer.invoke('npm:packages', root),
   npmOutdated: (dir: string): Promise<Record<string, Outdated>> => ipcRenderer.invoke('npm:outdated', dir),
   lspConfigure: (servers: unknown): Promise<{ id: string; name: string; extensions: string[] }[]> => ipcRenderer.invoke('lsp:configure', servers),
-  spellDictionary: (): Promise<SpellDictionary> => ipcRenderer.invoke('spell:dictionary'),
   findDuplicates: (root: string, minLines?: number): Promise<DupResult> => ipcRenderer.invoke('duplicates:find', root, minLines),
   dbOpen: (path: string): Promise<DbSchema> => ipcRenderer.invoke('db:open', path),
   dbQuery: (path: string, sql: string, limit?: number): Promise<DbQueryResult> => ipcRenderer.invoke('db:query', path, sql, limit),
