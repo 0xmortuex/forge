@@ -24,6 +24,7 @@ import type { Framework, RunOptions, TestRunResult } from '../main/testrun'
 import type { FileDiff } from '../main/gitpatch'
 import type { AiEvent, AiRequest } from '../main/ai'
 import type { PtySpec } from '../main/terminal'
+import type { RpcRequest, RpcResponse } from '../shared/rpc'
 
 const api = {
   openFolder: (): Promise<string | null> => ipcRenderer.invoke('dialog:openFolder'),
@@ -202,6 +203,13 @@ const api = {
   extensionFetch: (id: string, spec: HttpRequestSpec): Promise<HttpResponse> => ipcRenderer.invoke('extensions:fetch', id, spec),
   extensionsList: (): Promise<ExtensionInfo[]> => ipcRenderer.invoke('extensions:list'),
   /** Starts watching the project folder for changes made outside Forge (replacing any earlier watch). */
+  /** Typed backend services (see src/shared/rpc.ts and src/renderer/rpc.ts). */
+  rpc: (req: RpcRequest): Promise<RpcResponse> => ipcRenderer.invoke('rpc:call', req),
+  onRpcEvent: (cb: (topic: string, payload: unknown) => void): (() => void) => {
+    const listener = (_e: unknown, topic: string, payload: unknown): void => cb(topic, payload)
+    ipcRenderer.on('rpc:event', listener)
+    return () => ipcRenderer.removeListener('rpc:event', listener)
+  },
   watchRoot: (root: string): Promise<void> => ipcRenderer.invoke('fs:watch', root),
   onFsChanged: (cb: (change: FsChange) => void): void => {
     ipcRenderer.on('fs:changed', (_e, change: FsChange) => cb(change))

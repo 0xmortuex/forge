@@ -23,6 +23,13 @@ const NOISE = /(^|[\\/])(node_modules|\.vite|out|dist)([\\/]|$)/
 const GIT_INTERESTING = /^\.git[\\/](HEAD|index|refs|MERGE_HEAD|REBASE_HEAD|CHERRY_PICK_HEAD|ORIG_HEAD)(?:[\\/]|$)/
 
 let watcher: FSWatcher | null = null
+const listeners = new Set<(change: FsChange) => void>()
+
+/** Backend modules (the file index) hear about changes here, in addition to the window. */
+export function onFsChange(cb: (change: FsChange) => void): () => void {
+  listeners.add(cb)
+  return () => void listeners.delete(cb)
+}
 
 function stop(): void {
   watcher?.close()
@@ -43,7 +50,9 @@ export function registerWatch(): void {
       queued = new Set()
       git = false
       all = false
-      if (!wc.isDestroyed() && (change.paths.length || change.git || change.all)) wc.send('fs:changed', change)
+      if (!change.paths.length && !change.git && !change.all) return
+      if (!wc.isDestroyed()) wc.send('fs:changed', change)
+      for (const cb of listeners) cb(change)
     }
     // recursive: Windows and macOS always, Linux with Node 20+. A failure here is reported to the caller.
     watcher = watch(root, { recursive: true, persistent: false }, (_event, filename) => {

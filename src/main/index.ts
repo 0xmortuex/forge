@@ -24,6 +24,7 @@ import { registerDocker } from './docker'
 import { registerDeps } from './deps'
 import { registerTestRun } from './testrun'
 import { registerWatch, stopWatching } from './watch'
+import { registerPlatform } from './platform'
 import { registerScratch } from './scratch'
 import { killAllTerminals, registerTerminal } from './terminal'
 import { walkFiles } from './walk'
@@ -243,6 +244,7 @@ registerDocker()
 registerDeps()
 registerTestRun()
 registerWatch()
+registerPlatform()
 registerScratch()
 let terminalsEnded = false
 app.on('before-quit', (e) => {
