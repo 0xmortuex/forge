@@ -1,7 +1,6 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import type { DapLaunch, DebugEvent, DebugEval, DebugKind, DebugScope, DebugVar } from '../main/debug'
 import type { Breakpoint } from '../main/debug-types'
-import type { FsChange } from '../main/watch'
 import type { AiEvent, AiRequest } from '../main/ai'
 import type { PtySpec } from '../main/terminal'
 import type { RpcRequest, RpcResponse } from '../shared/rpc'
@@ -75,13 +74,6 @@ const api = {
     const listener = (_e: unknown, topic: string, payload: unknown): void => cb(topic, payload)
     ipcRenderer.on('rpc:event', listener)
     return () => ipcRenderer.removeListener('rpc:event', listener)
-  },
-  watchRoot: (root: string): Promise<void> => ipcRenderer.invoke('fs:watch', root),
-  onFsChanged: (cb: (change: FsChange) => void): void => {
-    ipcRenderer.on('fs:changed', (_e, change: FsChange) => cb(change))
-  },
-  onFsWatchError: (cb: (message: string) => void): void => {
-    ipcRenderer.on('fs:watchError', (_e, message: string) => cb(message))
   },
   openExtensionsDir: (): Promise<string> => ipcRenderer.invoke('extensions:openDir'),
   /** The window is closing: write anything pending, then call flushed(). */

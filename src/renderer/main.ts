@@ -35,7 +35,7 @@ import { initProblems } from './problems'
 import { initBreadcrumbs } from './breadcrumbs'
 import { initTooltips } from './tooltips'
 import { initQuick, quickPick } from './quick'
-import { indexedFiles, inspectService, scratchService, settingsService, gitService, filesService } from './rpc'
+import { indexedFiles, inspectService, scratchService, settingsService, gitService, filesService, onFsChanged, onFsWatchError, watchService } from './rpc'
 import { initNavigation } from './navigation'
 import { initBookmarks } from './bookmarks'
 import { initSearchEverywhere, type SearchScope } from './searchall'
@@ -879,10 +879,10 @@ async function applyExternalChanges(paths: Set<string>, gitChanged: boolean, all
     if (next) void applyExternalChanges(next.paths, next.git, next.all).catch((err: unknown) => report(`Sync: ${String(err)}`, true))
   }
 }
-window.forge.onFsChanged((c) => {
+onFsChanged((c) => {
   void applyExternalChanges(new Set(c.paths), c.git, c.all).catch((err: unknown) => report(`Sync with disk: ${err instanceof Error ? err.message : String(err)}`, true))
 })
-window.forge.onFsWatchError((m) => report(`Watching the project for changes stopped: ${m}`, true))
+onFsWatchError((m) => report(`Watching the project for changes stopped: ${m}`, true))
 
 const joinPath = (dir: string, name: string): string => `${dir}${dir.includes('\\') ? '\\' : '/'}${name}`
 
@@ -1112,7 +1112,7 @@ async function openFolderAt(dir: string): Promise<void> {
     dirs.clear()
     dirs.set(norm(dir), { kids: treeEl, depth: -1 })
     rootDir = dir
-    await window.forge.watchRoot(dir)
+    await watchService.watch(dir)
     bookmarks.refresh()
     await renderDir(dir, treeEl)
     document.title = `${basename(dir)} – Forge`

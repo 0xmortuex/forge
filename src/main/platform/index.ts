@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { RpcServer, type RpcRequest } from '../../shared/rpc'
-import { onFsChange } from '../watch'
+import { onFsChange, setWatchEmitter, WatchService } from '../watch'
 import { FileIndex } from './fileindex'
 import { ModuleRegistry } from './modules'
 import { SpellService } from '../spell'
@@ -63,10 +63,12 @@ registry.register({ id: 'forge.settings', activation: 'lazy', provides: ['settin
 registry.register({ id: 'forge.extensions', activation: 'lazy', provides: ['extensions'], activate: () => ({ services: { extensions: new ExtensionsService() } }) })
 registry.register({ id: 'forge.git', activation: 'lazy', provides: ['git'], activate: () => ({ services: { git: new GitService() } }) })
 registry.register({ id: 'forge.files', activation: 'lazy', provides: ['files'], activate: () => ({ services: { files: new FilesService() } }) })
+registry.register({ id: 'forge.watch', activation: 'lazy', provides: ['watch'], activate: () => ({ services: { watch: new WatchService() } }) })
 
 export function registerPlatform(): void {
   // Set now, not when the module activates: the debugger starts terminals without ever calling the service.
   setTerminalEmitter((topic, payload) => registry.bus.publish(topic, payload))
+  setWatchEmitter((topic, payload) => registry.bus.publish(topic, payload))
   const server = new RpcServer((name) => registry.service(name))
   ipcMain.handle('rpc:call', (_e, req: RpcRequest) => server.dispatch(req))
   registry.bus.tap((topic, payload) => {

@@ -7,7 +7,7 @@ import { registerSettings } from './settings'
 import { killAllLsp, registerLsp } from './lsp'
 import { registerAi } from './ai'
 import { closeAllDatabases } from './database'
-import { registerWatch, stopWatching } from './watch'
+import { stopWatching } from './watch'
 import { registerPlatform } from './platform'
 import { killAllTerminals } from './terminal'
 
@@ -101,7 +101,6 @@ registerExtensions()
 registerLsp()
 registerDebug()
 registerAi()
-registerWatch()
 registerPlatform()
 let terminalsEnded = false
 app.on('before-quit', (e) => {

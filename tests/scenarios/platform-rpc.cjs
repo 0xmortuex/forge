@@ -42,6 +42,9 @@ run('platform-rpc', { 'src/alpha.ts': 'a\n', 'src/beta.ts': 'b\n', 'README.md': 
   const gone = await waitFor(async () => (await rpc('fileindex', 'query', ['alpha'])).value.length === 0, 8000)
   check('a deleted file leaves the index', !!gone)
 
+  const changedEvents = await js('window.__events.filter((e) => e[0] === "fs.changed").flatMap((e) => e[1].paths)')
+  check('watch: changes made outside Forge arrive as fs.changed bus events', changedEvents.some((/** @type {string} */ p) => p.endsWith('gamma.ts')) && changedEvents.some((/** @type {string} */ p) => p.endsWith('alpha.ts')), JSON.stringify(changedEvents))
+
   const dir = path.join(t.userData, 'index')
   const settled = await waitFor(() => {
     const f = fs.readdirSync(dir)

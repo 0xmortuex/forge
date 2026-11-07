@@ -17,6 +17,7 @@ import type { SettingsApi } from '../main/settings'
 import type { ExtensionsApi } from '../main/extensions'
 import type { GitApi } from '../main/git'
 import type { FilesApi } from '../main/files'
+import type { FsChange, WatchApi } from '../main/watch'
 
 // Typed handles to backend services (see src/main/platform). Each call is one round trip to the main process.
 
@@ -38,7 +39,18 @@ export const settingsService = client<SettingsApi>('settings', (req) => window.f
 export const extensionsService = client<ExtensionsApi>('extensions', (req) => window.forge.rpc(req))
 export const gitService = client<GitApi>('git', (req) => window.forge.rpc(req))
 export const filesService = client<FilesApi>('files', (req) => window.forge.rpc(req))
+export const watchService = client<WatchApi>('watch', (req) => window.forge.rpc(req))
 export const onBackendEvent = (cb: (topic: string, payload: unknown) => void): (() => void) => window.forge.onRpcEvent(cb)
+
+/** The project watcher reports changes made outside Forge as bus events. */
+export const onFsChanged = (cb: (change: FsChange) => void): (() => void) =>
+  window.forge.onRpcEvent((topic, payload) => {
+    if (topic === 'fs.changed') cb(payload as FsChange)
+  })
+export const onFsWatchError = (cb: (message: string) => void): (() => void) =>
+  window.forge.onRpcEvent((topic, payload) => {
+    if (topic === 'fs.watchError') cb(payload as string)
+  })
 
 /** Terminal output and exits arrive as bus events. Each subscription returns a function that removes it. */
 export const onTermData = (cb: (id: number, data: string) => void): (() => void) =>
