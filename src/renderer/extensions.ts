@@ -6,7 +6,7 @@ import type { ToolWindowDef, ToolWindows } from './docks'
 import { toast, type ToastKind } from './effects'
 import { askText } from './menu'
 import { settings } from './settings'
-import { extensionsService } from './rpc'
+import { extensionsService, filesService } from './rpc'
 
 // The extension host. Extensions are ES modules exporting `activate(forge)`. They are OFF until the user turns
 // them on in Settings → Extensions, because they run with the same power as Forge itself. API version 2 adds panels,
@@ -251,13 +251,13 @@ function makeApi(info: ExtensionInfo, cleanup: (() => void)[], data: Record<stri
       root,
       async readFile(path) {
         need(info, 'files', 'workspace.readFile')
-        return window.forge.readFile(resolveInside(needRoot(), path))
+        return filesService.readFile(resolveInside(needRoot(), path))
       },
       async listFiles() {
         need(info, 'files', 'workspace.listFiles')
         const r = needRoot()
         const base = r.replace(/\\/g, '/').replace(/\/+$/, '')
-        return (await window.forge.listFiles(r)).map((p) => p.replace(/\\/g, '/').slice(base.length + 1))
+        return (await filesService.listFiles(r)).map((p) => p.replace(/\\/g, '/').slice(base.length + 1))
       }
     },
     settings: { get: (key) => settings.get(key) },

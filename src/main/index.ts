@@ -1,27 +1,15 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
-import { realpathSync } from 'node:fs'
-import { access, cp, mkdir, open, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
-import { basename, extname, join, sep } from 'node:path'
+import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { registerDebug } from './debug'
-import { assertEncoding, decode, detectEncoding, encode } from './encoding'
-import { referencesTo, type Reference } from './safedelete'
 import { registerExtensions, registerExtensionScheme } from './extensions'
 import { registerSettings } from './settings'
-import { replaceInFiles, searchProject, type SearchOptions } from './search'
 import { killAllLsp, registerLsp } from './lsp'
 import { registerAi } from './ai'
 import { closeAllDatabases } from './database'
 import { registerWatch, stopWatching } from './watch'
 import { registerPlatform } from './platform'
 import { killAllTerminals } from './terminal'
-import { walkFiles } from './walk'
-
-export interface DirEntry {
-  name: string
-  path: string
-  isDir: boolean
-}
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -77,45 +65,6 @@ ipcMain.handle('dialog:openFolder', async () => {
   return res.canceled ? null : (res.filePaths[0] ?? null)
 })
 
-ipcMain.handle('fs:readDir', async (_e, dir: string): Promise<DirEntry[]> => {
-  const entries = await readdir(dir, { withFileTypes: true })
-  return entries
-    .map((e) => ({ name: e.name, path: join(dir, e.name), isDir: e.isDirectory() }))
-    .sort((a, b) => Number(b.isDir) - Number(a.isDir) || a.name.localeCompare(b.name))
-})
-
-ipcMain.handle('fs:listFiles', async (_e, root: string): Promise<string[]> => {
-  const files: string[] = []
-  await walkFiles(root, (p) => void files.push(p))
-  return files
-})
-
-ipcMain.handle('fs:search', (_e, root: string, query: string, options: SearchOptions = {}) => searchProject(root, query, options))
-ipcMain.handle('fs:replace', (_e, query: string, options: SearchOptions, replacement: string, paths: string[]) =>
-  replaceInFiles(query, options, replacement, paths)
-)
-
-const assertMissing = async (path: string): Promise<void> => {
-  const exists = await access(path).then(() => true, () => false)
-  if (exists) throw new Error(`Already exists: ${path}`)
-}
-
-ipcMain.handle('fs:exists', (_e, path: string) => access(path).then(() => true, () => false))
-const MIME: Record<string, string> = {
-  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
-  ico: 'image/x-icon', bmp: 'image/bmp', avif: 'image/avif'
-}
-const MAX_IMAGE_BYTES = 25 * 1024 * 1024
-
-/** An image file as a data: URL (the page may not load files directly). */
-ipcMain.handle('fs:readDataUrl', async (_e, path: string): Promise<{ url: string; bytes: number }> => {
-  const mime = MIME[extname(path).slice(1).toLowerCase()]
-  if (!mime) throw new Error(`Not an image type Forge can show: ${extname(path) || path}`)
-  const buf = await readFile(path)
-  if (buf.length > MAX_IMAGE_BYTES) throw new Error(`${basename(path)} is too large to show (${Math.round(buf.length / 1048576)} MB)`)
-  return { url: `data:${mime};base64,${buf.toString('base64')}`, bytes: buf.length }
-})
-
 /** Opens an HTML or SVG file from the project in the default browser. */
 ipcMain.handle('shell:openInBrowser', (_e, path: string) => {
   if (!/\.(html?|svg|xhtml)$/i.test(path)) throw new Error('Only HTML and SVG files can be opened in the browser')
@@ -128,14 +77,6 @@ ipcMain.handle('shell:openExternal', (_e, url: string) => {
   return shell.openExternal(url)
 })
 
-/** Copies a file or a folder (and everything in it). Never overwrites. */
-ipcMain.handle('fs:copy', (_e, from: string, to: string) => cp(from, to, { recursive: true, errorOnExist: true, force: false }))
-ipcMain.handle('fs:createFile', (_e, path: string) => writeFile(path, '', { flag: 'wx' }))
-ipcMain.handle('fs:createDir', (_e, path: string) => mkdir(path))
-ipcMain.handle('fs:rename', async (_e, from: string, to: string) => {
-  await assertMissing(to) // fs.rename would silently overwrite
-  await rename(from, to)
-})
 // Recycle Bin instead of permanent delete.
 // The minimize/maximize/close buttons are drawn by the OS over our toolbar; keep their colors in step with the theme.
 const COLOR = /^#[0-9a-f]{6}$/i
@@ -144,70 +85,11 @@ ipcMain.handle('win:titleBar', (e, color: string, symbolColor: string) => {
   if (process.platform === 'darwin') return // macOS keeps its own traffic lights
   BrowserWindow.fromWebContents(e.sender)?.setTitleBarOverlay({ color, symbolColor, height: 40 })
 })
-// The real path of a folder: aliases (symlinks, junctions, Windows 8.3 short names like RUNNER~1) resolved. Git,
-// debuggers and language servers all report real paths, so the project has to be addressed by one too.
-ipcMain.handle('fs:realpath', (_e, path: string) => realpathSync.native(path))
-/** The other files in the project that refer to `path` (a file or folder): what a delete would break. */
-ipcMain.handle('fs:references', async (_e, root: string, target: string): Promise<{ hits: (Reference & { file: string })[]; files: number; truncated: boolean }> => {
-  const isDir = (await stat(target)).isDirectory()
-  const inside = (p: string): boolean => p === target || (isDir && p.startsWith(target + sep))
-  const hits: (Reference & { file: string })[] = []
-  const files = new Set<string>()
-  let truncated = false
-  await walkFiles(root, async (file) => {
-    if (truncated || inside(file) || !SCANNED.test(file)) return
-    const info = await stat(file)
-    if (info.size > 1024 * 1024) return
-    const text = await readFile(file, 'utf8').catch(() => '')
-    for (const ref of referencesTo(target, isDir, file, text)) {
-      if (hits.length >= 200) {
-        truncated = true
-        return
-      }
-      hits.push({ ...ref, file })
-      files.add(file)
-    }
-  })
-  return { hits, files: files.size, truncated }
-})
 
 ipcMain.handle('fs:trash', (_e, path: string) => shell.trashItem(path))
 ipcMain.handle('shell:reveal', (_e, path: string) => shell.showItemInFolder(path))
 ipcMain.handle('clipboard:write', (_e, text: string) => clipboard.writeText(text))
 ipcMain.handle('clipboard:read', () => clipboard.readText())
-
-ipcMain.handle('fs:readFile', (_e, path: string) => readFile(path, 'utf8'))
-
-/** Reads a text file in the given encoding, or the one it appears to be in. */
-ipcMain.handle('fs:readFileEnc', async (_e, path: string, encoding?: string): Promise<{ text: string; encoding: string }> => {
-  const buf = await readFile(path)
-  const enc = encoding ?? detectEncoding(buf)
-  if (encoding) assertEncoding(encoding)
-  return { text: decode(buf, enc), encoding: enc }
-})
-
-/** A slice of a file's raw bytes (for the hex viewer), and the file's size. */
-ipcMain.handle('fs:readBytes', async (_e, path: string, offset: number, length: number): Promise<{ data: Uint8Array; size: number }> => {
-  const handle = await open(path, 'r')
-  try {
-    const size = (await handle.stat()).size
-    const buf = Buffer.alloc(Math.max(0, Math.min(length, size - offset)))
-    await handle.read(buf, 0, buf.length, offset)
-    return { data: new Uint8Array(buf), size }
-  } finally {
-    await handle.close()
-  }
-})
-
-/** Writes text in the given encoding; text it cannot represent is an error and nothing is written. */
-ipcMain.handle('fs:writeFileEnc', async (_e, path: string, content: string, encoding: string) => writeFile(path, encode(content, encoding)))
-
-ipcMain.handle('fs:writeFile', (_e, path: string, content: string) =>
-  writeFile(path, content, 'utf8')
-)
-
-/** Files whose text can refer to other files. */
-const SCANNED = /\.(m?[jt]sx?|cjs|cts|vue|svelte|py|css|scss|sass|less|html?|md|mdx|c|h|cc|cpp|hpp|cs|java|go|rs|rb|php|json|ya?ml|toml|xml|svg)$/i
 
 registerExtensionScheme() // has to happen before the app is ready
 

@@ -35,7 +35,7 @@ import { initProblems } from './problems'
 import { initBreadcrumbs } from './breadcrumbs'
 import { initTooltips } from './tooltips'
 import { initQuick, quickPick } from './quick'
-import { indexedFiles, inspectService, scratchService, settingsService, gitService } from './rpc'
+import { indexedFiles, inspectService, scratchService, settingsService, gitService, filesService } from './rpc'
 import { initNavigation } from './navigation'
 import { initBookmarks } from './bookmarks'
 import { initSearchEverywhere, type SearchScope } from './searchall'
@@ -454,7 +454,7 @@ function showImage(f: OpenFile | null): void {
 function goToTest(): void {
   if (!rootDir || !active || active.diff) return report('Open a file in a project first', true)
   const from = active.path
-  window.forge.listFiles(rootDir).then(
+  filesService.listFiles(rootDir).then(
     (files) => {
       const found = relatedFiles(from, files)
       if (!found.length) return report(`No ${naming(from.split(/[\\/]/).pop() ?? '').isTest ? 'source' : 'test'} file found for ${relPath(from)}`, true)
@@ -531,7 +531,7 @@ async function reloadFromDisk(): Promise<void> {
   const f = active
   if (!f || f.diff || f.image) throw new Error('Open a text file first')
   if (isDirty(f) && !confirm(`${basename(f.path)} has unsaved changes. Reload it from disk and discard them?`)) return
-  const text = (await window.forge.readFileEnc(f.path, f.encoding)).text
+  const text = (await filesService.readFileEnc(f.path, f.encoding)).text
   f.savedText = text
   f.model.pushStackElement()
   f.model.pushEditOperations([], [{ range: f.model.getFullModelRange(), text }], () => null)
@@ -600,8 +600,8 @@ const split = initSplit({
 
 const editorConfig = initEditorConfig({
   getRoot: () => rootDir,
-  exists: (p) => window.forge.exists(p),
-  readFile: (p) => window.forge.readFile(p)
+  exists: (p) => filesService.exists(p),
+  readFile: (p) => filesService.readFile(p)
 })
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|ico|bmp|avif)$/i
@@ -615,7 +615,7 @@ async function openFile(path: string, line?: number, column = 1): Promise<void> 
     await guarded(`Open ${basename(path)}`, () => dbView.open(path))
   } else if (IMAGE_EXT.test(path)) {
     await guarded(`Open ${basename(path)}`, async () => {
-      const image = await window.forge.readDataUrl(path)
+      const image = await filesService.readDataUrl(path)
       // An image has no text, but the tab machinery wants a model: an empty one that can never be edited.
       const model = monaco.editor.createModel('', 'plaintext', monaco.Uri.from({ scheme: 'forge-image', path: '/' + norm(path) }))
       const f: OpenFile = { path, model, savedVersion: model.getAlternativeVersionId(), image }
@@ -624,7 +624,7 @@ async function openFile(path: string, line?: number, column = 1): Promise<void> 
     })
   } else {
     await guarded(`Open ${basename(path)}`, async () => {
-      const { text, encoding } = await window.forge.readFileEnc(path)
+      const { text, encoding } = await filesService.readFileEnc(path)
       history.record(path, text) // the version as it was when opened
       const model = monaco.editor.createModel(text, undefined, monaco.Uri.file(path))
       const f: OpenFile = { path, model, savedVersion: model.getAlternativeVersionId(), savedText: text, encoding }
@@ -678,7 +678,7 @@ async function saveActive(opts: { format?: boolean } = {}, target?: OpenFile): P
     }
     const value = f.model.getValue()
     const version = f.model.getAlternativeVersionId() // what was written; anything typed during the write is still unsaved
-    await window.forge.writeFileEnc(f.path, value, f.encoding ?? 'utf8')
+    await filesService.writeFileEnc(f.path, value, f.encoding ?? 'utf8')
     f.savedText = value
     history.record(f.path, value)
     if (basename(f.path) === '.editorconfig') editorConfig.clear()
@@ -699,7 +699,7 @@ const dirs = new Map<string, { kids: HTMLElement; depth: number; setOpen?: (open
 
 async function renderDir(dir: string, into: HTMLElement, depth = 0): Promise<void> {
   const showHidden = settings.get<boolean>('treeShowHidden')
-  const entries = (await window.forge.readDir(dir)).filter((e) => showHidden || !e.name.startsWith('.'))
+  const entries = (await filesService.readDir(dir)).filter((e) => showHidden || !e.name.startsWith('.'))
   for (const e of entries) {
     const row = document.createElement('div')
     row.className = 'node'
@@ -795,7 +795,7 @@ async function refreshDir(dir: string): Promise<void> {
   if (d.kids.childElementCount > 0) {
     const shown = new Set([...d.kids.children].filter((c) => c.classList.contains('node')).map((c) => norm((c as HTMLElement).dataset['path'] ?? '')))
     const showHidden = settings.get<boolean>('treeShowHidden')
-    const entries = (await window.forge.readDir(dir)).filter((e) => showHidden || !e.name.startsWith('.'))
+    const entries = (await filesService.readDir(dir)).filter((e) => showHidden || !e.name.startsWith('.'))
     if (entries.length === shown.size && entries.every((e) => shown.has(norm(e.path)))) return
   }
   // Shallowest first, so each parent is open again before its children are.
@@ -847,7 +847,7 @@ async function applyExternalChanges(paths: Set<string>, gitChanged: boolean, all
       if (!f) continue
       let text: string
       try {
-        text = (await window.forge.readFileEnc(f.path, f.encoding)).text
+        text = (await filesService.readFileEnc(f.path, f.encoding)).text
       } catch (err) {
         if ((err as { code?: string }).code === 'ENOENT' || /ENOENT/.test(String(err))) report(`${basename(f.path)} was deleted outside Forge (it stays open)`, true)
         else report(`Reload ${basename(f.path)}: ${err instanceof Error ? err.message : String(err)}`, true)
@@ -908,8 +908,8 @@ async function createEntry(dir: string, kind: 'file' | 'folder'): Promise<void> 
   await guarded(`Create ${name}`, async () => {
     checkName(name)
     const path = joinPath(dir, name)
-    if (kind === 'file') await window.forge.createFile(path)
-    else await window.forge.createDir(path)
+    if (kind === 'file') await filesService.createFile(path)
+    else await filesService.createDir(path)
     await refreshDir(dir)
     refreshGit()
     report(`Created ${path}`)
@@ -925,7 +925,7 @@ async function renameEntry(path: string): Promise<void> {
     closeFilesUnder(path)
     const parent = parentOf(path)
     await updateReferences(path, joinPath(parent, name))
-    await window.forge.rename(path, joinPath(parent, name))
+    await filesService.rename(path, joinPath(parent, name))
     await refreshDir(parent)
     refreshGit()
     report(`Renamed to ${name}`)
@@ -937,7 +937,7 @@ async function renameEntry(path: string): Promise<void> {
  * delete that breaks an import is not something to do by accident.
  */
 async function confirmDelete(path: string): Promise<boolean> {
-  const found = rootDir ? await window.forge.references(rootDir, path).catch(() => null) : null // a failed scan must not block deleting
+  const found = rootDir ? await filesService.references(rootDir, path).catch(() => null) : null // a failed scan must not block deleting
   if (found && found.hits.length) {
     const shown = found.hits.slice(0, 8).map((h) => `  ${relPath(h.file)}:${h.line}   ${h.text}`).join('\n')
     const more = found.truncated ? 'more than 200 references' : `${found.hits.length} reference${found.hits.length === 1 ? '' : 's'}`
@@ -967,7 +967,7 @@ async function freeName(dir: string, name: string): Promise<string> {
   const dot = name.lastIndexOf('.')
   const stem = dot > 0 ? name.slice(0, dot) : name
   const ext = dot > 0 ? name.slice(dot) : ''
-  const taken = new Set((await window.forge.readDir(dir)).map((e) => e.name.toLowerCase()))
+  const taken = new Set((await filesService.readDir(dir)).map((e) => e.name.toLowerCase()))
   if (!taken.has(name.toLowerCase())) return name
   for (let n = 1; ; n++) {
     const candidate = `${stem} copy${n > 1 ? ` ${n}` : ''}${ext}`
@@ -978,7 +978,7 @@ async function freeName(dir: string, name: string): Promise<string> {
 async function copyEntry(from: string, toDir: string, name = basename(from)): Promise<string> {
   const dest = joinPath(toDir, await freeName(toDir, name))
   if (norm(dest).toLowerCase().startsWith(norm(from).toLowerCase() + '/')) throw new Error(`Can't copy ${basename(from)} into itself`)
-  await window.forge.copy(from, dest)
+  await filesService.copy(from, dest)
   return dest
 }
 
@@ -992,7 +992,7 @@ async function moveEntry(from: string, toDir: string): Promise<void> {
     const dest = joinPath(toDir, basename(from))
     closeFilesUnder(from)
     await updateReferences(from, dest)
-    await window.forge.rename(from, dest)
+    await filesService.rename(from, dest)
     await refreshDir(parentOf(from))
     await refreshDir(toDir)
     refreshGit()
@@ -1020,7 +1020,7 @@ async function moveEntryChecked(from: string, toDir: string): Promise<void> {
   const dest = joinPath(toDir, basename(from))
   closeFilesUnder(from)
   await updateReferences(from, dest)
-  await window.forge.rename(from, dest)
+  await filesService.rename(from, dest)
   await refreshDir(parentOf(from))
 }
 
@@ -1041,7 +1041,7 @@ async function duplicateEntry(path: string): Promise<void> {
   if (!name) return
   await guarded(`Duplicate ${basename(path)}`, async () => {
     checkName(name)
-    await window.forge.copy(path, joinPath(dir, name))
+    await filesService.copy(path, joinPath(dir, name))
     await refreshDir(dir)
     refreshGit()
     report(`Created ${name}`)
@@ -1107,7 +1107,7 @@ async function openFolder(): Promise<void> {
 
 async function openFolderAt(dir: string): Promise<void> {
   await guarded('Open folder', async () => {
-    dir = await window.forge.realpath(dir) // before anything is addressed by this path (see fs:realpath)
+    dir = await filesService.realpath(dir) // before anything is addressed by this path (see fs:realpath)
     treeEl.replaceChildren()
     dirs.clear()
     dirs.set(norm(dir), { kids: treeEl, depth: -1 })
@@ -1166,7 +1166,7 @@ stEol.onclick = () => {
 /** Re-reads the file from disk as if it were in another encoding (for a file that was guessed wrong). */
 async function reloadWithEncoding(f: OpenFile, encoding: string): Promise<void> {
   if (isDirty(f) && !confirm(`${basename(f.path)} has unsaved changes. Reload it as ${shortName(encoding)} and discard them?`)) return
-  const { text } = await window.forge.readFileEnc(f.path, encoding)
+  const { text } = await filesService.readFileEnc(f.path, encoding)
   f.encoding = encoding
   f.savedText = text
   f.model.pushStackElement()
@@ -1390,13 +1390,13 @@ async function compareWithFile(): Promise<void> {
   const cur = active && !active.diff ? active : null
   const root = rootDir
   if (!cur || !root) return report('Open a file in a project to compare it', true)
-  const files = (await window.forge.listFiles(root)).filter((p) => !samePath(p, cur.path))
+  const files = (await filesService.listFiles(root)).filter((p) => !samePath(p, cur.path))
   quickPick({
     title: `Compare ${basename(cur.path)} with…`,
     placeholder: 'Type a file name',
     items: files.map((p) => ({ label: basename(p), detail: relPath(p), icon: fileIcon(basename(p)), data: p })),
     onChoose: (other) => {
-      void guarded(`Compare with ${basename(other)}`, async () => showDiffTab(cur.path, await window.forge.readFile(other))).catch(() => undefined)
+      void guarded(`Compare with ${basename(other)}`, async () => showDiffTab(cur.path, await filesService.readFile(other))).catch(() => undefined)
     }
   })
 }
@@ -1561,7 +1561,7 @@ const testsView = initTestExplorer({
   relPath,
   activeFile: () => (active && !active.diff && !active.image ? active.path : null),
   openAt: (path, line) => openFile(path, line),
-  readFile: (path) => window.forge.readFile(path),
+  readFile: (path) => filesService.readFile(path),
   reveal: () => tw.show('tests'),
   onFailures: (n) => tw.setBadge('tests', n ? String(n) : '', 'err'),
   report
@@ -1692,7 +1692,7 @@ const dockerView = initDocker({
   },
   openText: async (ext, text) => {
     const path = await scratchService.create(ext)
-    await window.forge.writeFile(path, text)
+    await filesService.writeFile(path, text)
     await openFile(path)
   },
   report
@@ -1703,7 +1703,7 @@ const github = initGithub({
   getRoot: () => rootDir,
   openText: async (ext, text) => {
     const path = await scratchService.create(ext)
-    await window.forge.writeFile(path, text)
+    await filesService.writeFile(path, text)
     await openFile(path)
   },
   branchChanged: () => {
@@ -1758,7 +1758,7 @@ const testRunner = initTestRunner({
   currentPath: () => (active && !active.diff && !active.image ? active.path : null),
   getRoot: () => rootDir,
   relPath,
-  readFile: (p) => window.forge.readFile(p),
+  readFile: (p) => filesService.readFile(p),
   runCommand: (label, cwd, cmd) => runUi.runCommandLine(label, cwd, cmd),
   report
 })
@@ -1856,7 +1856,7 @@ async function onWorktreeChanged(): Promise<void> {
   for (const f of [...openFiles.values()]) {
     if (isDirty(f)) continue // never clobber unsaved edits
     try {
-      const text = (await window.forge.readFileEnc(f.path, f.encoding)).text
+      const text = (await filesService.readFileEnc(f.path, f.encoding)).text
       f.savedText = text
       if (text !== f.model.getValue()) {
         f.model.setValue(text)
@@ -1955,7 +1955,7 @@ async function saveAllDirty(): Promise<void> {
     if (f.diff || !isDirty(f)) continue // a diff tab shares its file's model, which is saved via the file tab
     const value = f.model.getValue()
     const version = f.model.getAlternativeVersionId()
-    await window.forge.writeFileEnc(f.path, value, f.encoding ?? 'utf8')
+    await filesService.writeFileEnc(f.path, value, f.encoding ?? 'utf8')
     f.savedText = value
     history.record(f.path, value)
     f.savedVersion = version

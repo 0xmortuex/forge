@@ -3,6 +3,7 @@ import { marked } from 'marked'
 import { detectDelimiter, filterRows, parseDelimited, sortRows } from './csv'
 import { formatBytes, HEX_WIDTH, hexRows } from './hex'
 import { parseNotebook } from './notebook'
+import { filesService } from './rpc'
 
 // The Viewer window: the file in the editor as a table (CSV / TSV), as a rendered notebook (.ipynb) or as a hex dump (any
 // file, read from disk). It follows the active tab; the table and the notebook show unsaved edits too.
@@ -165,7 +166,7 @@ export function initViewer(d: ViewerDeps): Viewer {
       hexPath = path
       hexOffset = 0
     }
-    const { data, size } = await window.forge.readBytes(path, hexOffset, HEX_PAGE)
+    const { data, size } = await filesService.readBytes(path, hexOffset, HEX_PAGE)
     const pre = el('pre', 'viewer-hex')
     pre.id = 'viewer-hex'
     pre.textContent = hexRows(data, hexOffset)

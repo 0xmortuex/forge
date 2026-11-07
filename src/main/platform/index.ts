@@ -21,6 +21,7 @@ import { InspectService } from '../inspect'
 import { DuplicatesService } from '../duplicates'
 import { DepsService } from '../deps'
 import { GitService } from '../git'
+import { FilesService } from '../files'
 
 // The backend platform: a module registry, the typed RPC entry point the UI talks to, and the built-in modules.
 // Features are moved onto it one at a time; the older ipcMain handlers keep working beside it meanwhile.
@@ -61,6 +62,7 @@ registry.register({ id: 'forge.database', activation: 'lazy', provides: ['databa
 registry.register({ id: 'forge.settings', activation: 'lazy', provides: ['settings'], activate: () => ({ services: { settings: new SettingsService() } }) })
 registry.register({ id: 'forge.extensions', activation: 'lazy', provides: ['extensions'], activate: () => ({ services: { extensions: new ExtensionsService() } }) })
 registry.register({ id: 'forge.git', activation: 'lazy', provides: ['git'], activate: () => ({ services: { git: new GitService() } }) })
+registry.register({ id: 'forge.files', activation: 'lazy', provides: ['files'], activate: () => ({ services: { files: new FilesService() } }) })
 
 export function registerPlatform(): void {
   // Set now, not when the module activates: the debugger starts terminals without ever calling the service.

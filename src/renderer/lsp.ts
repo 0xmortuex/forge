@@ -3,6 +3,7 @@ import { askText } from './menu'
 import { settings } from './settings'
 import { applyWorkspaceEdit } from './lsp-edits'
 import type { HierarchyNode, HierarchyRoot } from './hierarchy'
+import { filesService } from './rpc'
 import type {
   CallHierarchyIncomingCall,
   CallHierarchyItem,
@@ -528,7 +529,7 @@ export function initLsp(deps: LspDeps): {
 
   async function lineTexts(path: string): Promise<string[]> {
     const open = deps.getModel(path)
-    const text = open ? open.getValue() : await window.forge.readFile(path)
+    const text = open ? open.getValue() : await filesService.readFile(path)
     return text.split('\n').map((l) => (l.endsWith('\r') ? l.slice(0, -1) : l))
   }
 
