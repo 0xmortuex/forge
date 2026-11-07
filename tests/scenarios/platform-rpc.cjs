@@ -87,6 +87,16 @@ run('platform-rpc', { 'src/alpha.ts': 'a\n', 'src/beta.ts': 'b\n', 'README.md': 
   const noTerm = await rpc('terminal', 'write', [987654, 'x'])
   check('terminal: writing to an unknown terminal is an error', !noTerm.ok && /No terminal with id 987654/.test(noTerm.error), JSON.stringify(noTerm))
 
+  // Validation runs before any external program (docker, gh) is started, so these need neither installed.
+  const emptyComment = await rpc('github', 'comment', [root, 1, '   '])
+  check('github: an empty comment is refused', !emptyComment.ok && /The comment is empty/.test(emptyComment.error), JSON.stringify(emptyComment))
+  const noTitle = await rpc('github', 'create', [root, { title: ' ', body: '' }])
+  check('github: a pull request without a title is refused', !noTitle.ok && /needs a title/.test(noTitle.error), JSON.stringify(noTitle))
+  const badImage = await rpc('docker', 'removeImage', [root, 'bad id; rm -rf /'])
+  check('docker: an image id with shell characters is refused', !badImage.ok && /Not an image id or name/.test(badImage.error), JSON.stringify(badImage))
+  const noDb = await rpc('database', 'query', [path.join(root, 'none.db'), 'select 1'])
+  check('database: querying a database that is not open is an error', !noDb.ok && /The database is not open/.test(noDb.error), JSON.stringify(noDb))
+
   const server = http.createServer((_req, res) => res.end('pong'))
   await new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(undefined)))
   const url = 'http://127.0.0.1:' + /** @type {import('node:net').AddressInfo} */ (server.address()).port + '/'

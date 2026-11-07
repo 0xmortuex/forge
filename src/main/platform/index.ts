@@ -9,6 +9,9 @@ import { SpellService } from '../spell'
 import { HistoryService } from '../history'
 import { ScratchService } from '../scratch'
 import { setTerminalEmitter, TerminalService } from '../terminal'
+import { DockerService } from '../docker'
+import { GithubService } from '../github'
+import { DatabaseService } from '../database'
 import { NpmService } from '../npm'
 import { TestService } from '../testrun'
 import { HttpService } from '../http'
@@ -49,6 +52,9 @@ registry.register({ id: 'forge.inspect', activation: 'lazy', provides: ['inspect
 registry.register({ id: 'forge.duplicates', activation: 'lazy', provides: ['duplicates'], activate: () => ({ services: { duplicates: new DuplicatesService() } }) })
 registry.register({ id: 'forge.deps', activation: 'lazy', provides: ['deps'], activate: () => ({ services: { deps: new DepsService() } }) })
 registry.register({ id: 'forge.terminal', activation: 'lazy', provides: ['terminal'], activate: () => ({ services: { terminal: new TerminalService() } }) })
+registry.register({ id: 'forge.docker', activation: 'lazy', provides: ['docker'], activate: () => ({ services: { docker: new DockerService() } }) })
+registry.register({ id: 'forge.github', activation: 'lazy', provides: ['github'], activate: () => ({ services: { github: new GithubService() } }) })
+registry.register({ id: 'forge.database', activation: 'lazy', provides: ['database'], activate: () => ({ services: { database: new DatabaseService() } }) })
 
 export function registerPlatform(): void {
   // Set now, not when the module activates: the debugger starts terminals without ever calling the service.

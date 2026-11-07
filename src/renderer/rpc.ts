@@ -10,6 +10,9 @@ import type { InspectApi } from '../main/inspect'
 import type { DuplicatesApi } from '../main/duplicates'
 import type { DepsApi } from '../main/deps'
 import type { TerminalApi } from '../main/terminal'
+import type { DockerApi } from '../main/docker'
+import type { GithubApi } from '../main/github'
+import type { DatabaseApi } from '../main/database'
 
 // Typed handles to backend services (see src/main/platform). Each call is one round trip to the main process.
 
@@ -24,6 +27,9 @@ export const inspectService = client<InspectApi>('inspect', (req) => window.forg
 export const duplicatesService = client<DuplicatesApi>('duplicates', (req) => window.forge.rpc(req))
 export const depsService = client<DepsApi>('deps', (req) => window.forge.rpc(req))
 export const terminalService = client<TerminalApi>('terminal', (req) => window.forge.rpc(req))
+export const dockerService = client<DockerApi>('docker', (req) => window.forge.rpc(req))
+export const githubService = client<GithubApi>('github', (req) => window.forge.rpc(req))
+export const databaseService = client<DatabaseApi>('database', (req) => window.forge.rpc(req))
 export const onBackendEvent = (cb: (topic: string, payload: unknown) => void): (() => void) => window.forge.onRpcEvent(cb)
 
 /** Terminal output and exits arrive as bus events. Each subscription returns a function that removes it. */

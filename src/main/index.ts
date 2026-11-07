@@ -12,9 +12,7 @@ import { registerSettings } from './settings'
 import { replaceInFiles, searchProject, type SearchOptions } from './search'
 import { killAllLsp, registerLsp } from './lsp'
 import { registerAi } from './ai'
-import { closeAllDatabases, registerDatabase } from './database'
-import { registerGithub } from './github'
-import { registerDocker } from './docker'
+import { closeAllDatabases } from './database'
 import { registerWatch, stopWatching } from './watch'
 import { registerPlatform } from './platform'
 import { killAllTerminals } from './terminal'
@@ -223,9 +221,6 @@ registerLsp()
 registerGit()
 registerDebug()
 registerAi()
-registerDatabase()
-registerGithub()
-registerDocker()
 registerWatch()
 registerPlatform()
 let terminalsEnded = false
