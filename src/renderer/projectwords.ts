@@ -19,7 +19,7 @@ const MAX_SUGGESTIONS = 30
 export function initProjectWords(deps: ProjectWordsDeps): void {
   let reported = false
   let warmFor: string | null = null // the project whose word index this window has seen complete
-  monaco.languages.registerCompletionItemProvider('*', {
+  const provider: monaco.languages.CompletionItemProvider = {
     async provideCompletionItems(model, position) {
       const root = deps.getRoot()
       if (!root || !settings.get<boolean>('projectWords')) return { suggestions: [] }
@@ -51,5 +51,12 @@ export function initProjectWords(deps: ProjectWordsDeps): void {
         return { suggestions: [] }
       }
     }
-  })
+  }
+
+  // Monaco asks completion providers group by group - the most specific language selector first - and stops at the first
+  // group that answers. Registered only for '*', this provider would be asked after the language server and, in a file
+  // it serves, often not at all. Registered for each language it joins the language server's group: both are asked together
+  // and their items merge. '*' stays as well for languages that are added later.
+  monaco.languages.registerCompletionItemProvider(monaco.languages.getLanguages().map((l) => l.id), provider)
+  monaco.languages.registerCompletionItemProvider('*', provider)
 }

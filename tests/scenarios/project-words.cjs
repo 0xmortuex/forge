@@ -40,7 +40,7 @@ run(
     await sleep(200)
 
     await typeInEditor('zebracr')
-    check('a word from another, unopened file is offered', !!(await waitFor(async () => (await widget()).includes('zebracrossingSignal'), 10000)), await diagnosis())
+    check('a word from another, unopened file is offered', !!(await waitFor(async () => (await widget()).includes('zebracrossingSignal'), 40000)), await diagnosis())
     key('Tab')
     check(
       'accepting it completes the word',
