@@ -10,6 +10,8 @@ export interface BuiltinDeps {
   saveActive: () => Promise<void>
   closeActiveTab: () => void
   openSearch: () => void
+  remoteStart: () => void
+  remoteStop: () => void
   openSearchScope: (scope: 'all' | 'files' | 'text' | 'symbols' | 'actions', classesOnly?: boolean) => void
   showFind: () => void
   toggleSide: (side: 'project' | 'commit') => void
@@ -116,6 +118,8 @@ export function registerBuiltinCommands(d: BuiltinDeps): void {
   register({ id: 'nav.search', category: 'Navigate', title: 'Search Everywhere', keys: 'Shift+Shift', run: d.openSearch })
   register({ id: 'nav.class', category: 'Navigate', title: 'Go to Class', keys: 'Ctrl+N', run: () => d.openSearchScope('symbols', true) })
   register({ id: 'nav.file', category: 'Navigate', title: 'Go to File', keys: 'Ctrl+Shift+N', run: () => d.openSearchScope('files') })
+  register({ id: 'remote.start', category: 'Tools', title: 'Start Remote Backend…', run: d.remoteStart })
+  register({ id: 'remote.stop', category: 'Tools', title: 'Stop Remote Backend', run: d.remoteStop })
   register({ id: 'nav.text', category: 'Navigate', title: 'Find Text in Project', run: () => d.openSearchScope('text') })
   register({ id: 'nav.symbol', category: 'Navigate', title: 'Go to Symbol', keys: 'Ctrl+Alt+Shift+N', run: () => d.openSearchScope('symbols') })
   register({ id: 'nav.action', category: 'Navigate', title: 'Find Action', keys: 'Ctrl+Shift+A', run: () => d.openSearchScope('actions') })

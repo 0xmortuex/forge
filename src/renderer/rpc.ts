@@ -17,6 +17,7 @@ import type { SettingsApi } from '../main/settings'
 import type { ExtensionsApi } from '../main/extensions'
 import type { GitApi } from '../main/git'
 import type { FilesApi } from '../main/files'
+import type { RemoteApi } from '../main/remote'
 import type { FsChange, WatchApi } from '../main/watch'
 import type { LspApi } from '../main/lsp'
 import type { DebugApi, DebugEvent } from '../main/debug'
@@ -46,6 +47,7 @@ export const watchService = client<WatchApi>('watch', (req) => window.forge.rpc(
 export const lspService = client<LspApi>('lsp', (req) => window.forge.rpc(req))
 export const debugService = client<DebugApi>('debug', (req) => window.forge.rpc(req))
 export const aiService = client<AiApi>('ai', (req) => window.forge.rpc(req))
+export const remoteService = client<RemoteApi>('remote', (req) => window.forge.rpc(req))
 export const onBackendEvent = (cb: (topic: string, payload: unknown) => void): (() => void) => window.forge.onRpcEvent(cb)
 
 /** Streamed AI answers: delta / done / error events, each carrying the id of the request that asked. */

@@ -3,6 +3,8 @@
 // keeps its index current from the file watcher, state changes arrive as events, and bad requests fail loudly.
 const fs = require('node:fs')
 const { execFileSync } = require('node:child_process')
+const { dialog } = require('electron')
+const WebSocket = require('ws')
 const http = require('node:http')
 const path = require('node:path')
 const { run } = require('../harness.cjs')
@@ -252,6 +254,40 @@ run('platform-rpc', { 'src/alpha.ts': 'a\n', 'src/beta.ts': 'b\n', 'README.md': 
   check('ai: cancel stops a request that never answers and ends it with done (not an error)', !!cancelDone, JSON.stringify(await js('window.__events.filter((e) => e[0] === "ai.event" && e[1].id === 8).map((e) => e[1])')))
   aiServer.closeAllConnections()
   aiServer.close()
+
+  // remote: the WebSocket backend starts only after the native confirmation, and works once it does.
+  const realBox = dialog.showMessageBox
+  let asked = 0
+  dialog.showMessageBox = /** @type {any} */ (async () => (asked++, { response: 1 })) // the user picks Cancel
+  const refused = await rpc('remote', 'start')
+  const idle = await rpc('remote', 'status')
+  check('remote: Cancel in the native dialog starts nothing', !refused.ok && /cancelled/.test(refused.error) && asked === 1 && idle.ok && idle.value === null, JSON.stringify([refused, idle, asked]))
+  dialog.showMessageBox = /** @type {any} */ (async () => (asked++, { response: 0 })) // the user picks Start
+  const started = await rpc('remote', 'start')
+  check('remote: starting gives a loopback address and a 256-bit token', started.ok && /^ws:\/\/127\.0\.0\.1:\d+$/.test(started.value.url) && started.value.token.length === 64, JSON.stringify(started))
+  /** @param {string} token */
+  const connect = (token) =>
+    new Promise((ok) => {
+      const ws = new WebSocket(started.value.url, { headers: { Authorization: 'Bearer ' + token } })
+      ws.once('unexpected-response', (_r, res) => ok('HTTP ' + res.statusCode))
+      ws.once('error', (e) => ok('error ' + /** @type {any} */ (e).code))
+      ws.once('open', () => {
+        ws.once('message', (raw) => {
+          ws.close()
+          ok(JSON.parse(raw.toString()))
+        })
+        ws.send(JSON.stringify({ id: 1, req: { service: 'fileindex', method: 'state', args: [] } }))
+      })
+    })
+  const viaSocket = await connect(started.value.token)
+  check('remote: a call with the token reaches the app services over the socket', JSON.stringify(viaSocket) === JSON.stringify({ id: 1, res: { ok: true, value: 'ready' } }), JSON.stringify(viaSocket))
+  check('remote: a wrong token is refused with 401', (await connect('0'.repeat(64))) === 'HTTP 401')
+  const startedAgain = await rpc('remote', 'start')
+  check('remote: starting again returns the same server without asking again', startedAgain.ok && startedAgain.value.token === started.value.token && asked === 2, JSON.stringify([startedAgain, asked]))
+  await rpc('remote', 'stop')
+  const afterStop = await connect(started.value.token)
+  check('remote: after Stop the port no longer answers', String(afterStop).startsWith('error '), String(afterStop))
+  dialog.showMessageBox = realBox
 
   const server = http.createServer((_req, res) => res.end('pong'))
   await new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(undefined)))

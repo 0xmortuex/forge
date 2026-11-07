@@ -5,6 +5,7 @@ import { RpcServer, type RpcRequest } from '../../shared/rpc'
 import { onFsChange, setWatchEmitter, WatchService } from '../watch'
 import { FileIndex } from './fileindex'
 import { ModuleRegistry } from './modules'
+import { RemoteService } from '../remote'
 import { SpellService } from '../spell'
 import { HistoryService } from '../history'
 import { ScratchService } from '../scratch'
@@ -70,6 +71,16 @@ registry.register({ id: 'forge.watch', activation: 'lazy', provides: ['watch'], 
 registry.register({ id: 'forge.lsp', activation: 'lazy', provides: ['lsp'], activate: () => ({ services: { lsp: new LspService() } }) })
 registry.register({ id: 'forge.debug', activation: 'lazy', provides: ['debug'], activate: () => ({ services: { debug: new DebugService() } }) })
 registry.register({ id: 'forge.ai', activation: 'lazy', provides: ['ai'], activate: () => ({ services: { ai: new AiService() } }) })
+let rpcServer: RpcServer | null = null
+registry.register({
+  id: 'forge.remote',
+  activation: 'lazy',
+  provides: ['remote'],
+  activate: () => {
+    if (!rpcServer) throw new Error('The platform has not started')
+    return { services: { remote: new RemoteService(rpcServer, registry.bus) } }
+  }
+})
 
 export function registerPlatform(): void {
   // Set now, not when the module activates: the debugger starts terminals without ever calling the service.
@@ -79,6 +90,7 @@ export function registerPlatform(): void {
   setDebugEmitter((topic, payload) => registry.bus.publish(topic, payload))
   setAiEmitter((topic, payload) => registry.bus.publish(topic, payload))
   const server = new RpcServer((name) => registry.service(name))
+  rpcServer = server
   ipcMain.handle('rpc:call', (_e, req: RpcRequest) => server.dispatch(req))
   registry.bus.tap((topic, payload) => {
     for (const win of BrowserWindow.getAllWindows()) if (!win.webContents.isDestroyed()) win.webContents.send('rpc:event', topic, payload)

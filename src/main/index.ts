@@ -7,6 +7,7 @@ import { killAllLsp } from './lsp'
 import { closeAllDatabases } from './database'
 import { stopWatching } from './watch'
 import { registerPlatform } from './platform'
+import { stopRemoteServer } from './remote'
 import { killAllTerminals } from './terminal'
 
 function createWindow(): void {
@@ -100,6 +101,7 @@ registerPlatform()
 let terminalsEnded = false
 app.on('before-quit', (e) => {
   stopWatching()
+  void stopRemoteServer()
   killAllLsp()
   closeAllDatabases()
   if (terminalsEnded) return

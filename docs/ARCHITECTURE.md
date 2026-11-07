@@ -33,6 +33,7 @@ All are lazy modules, reached through `src/renderer/rpc.ts`.
 | Service | Replaces | Notes |
 |---|---|---|
 | `fileindex` | (new) | `open`, `query`, `list`, `searchText`, `textStats`, `changed` |
+| `remote` | (new) | `start`, `stop`, `status` for the WebSocket backend (see Remote transport) |
 | `files` | `fs:*` handlers | read/write, encodings, bytes, listing, search/replace, create/rename/copy, realpath, references |
 | `git` | `git:*` (44) | one method per old handler; moved by a parser, bodies unchanged |
 | `settings`, `extensions` | `settings:*`, `state:save`, `extensions:*` | the files in the user-data folder |
@@ -80,13 +81,18 @@ throws; output is never silently dropped.
 `startWsServer(rpc, bus)` / `connectWs(url, token)` carry the same requests and events over a WebSocket. Every service is
 reachable through it, **the terminal included**, so it is strict by construction: loopback only, a random 256-bit token in
 the `Authorization` header compared in constant time, any browser `Origin` refused, 8 MB message cap, a malformed message
-closes the connection. It is not started by anything; wiring it to a user action is a separate decision.
+closes the connection.
+
+The only way to start it is the **Start Remote Backend…** command (Stop Remote Backend ends it; quitting Forge does too).
+Starting shows a **native confirmation dialog from the main process** - the page cannot answer or skip it - that says what a
+connection can do. On Start the token is copied to the clipboard and only the address is shown in the status line.
 
 Known limits for a real remote setup:
 
 * `files.readBytes` returns a `Uint8Array`: IPC carries it, JSON does not. It needs binary framing first.
 * `ai`: the API key is encrypted with Electron `safeStorage` (the OS account of the machine running the window), so key
   storage would have to stay with the host.
+* Nothing in the window talks to a remote backend yet; the transport is for other programs.
 * `lsp.applyEdit` is a round trip to the window (it owns the editor models); with no window it waits for its 30 s timeout.
 
 ## The MCP server
@@ -115,7 +121,7 @@ links that point outside it. Only protocol messages go to stdout; diagnostics go
 
 ## What is not done
 
-* Nothing starts the WebSocket server, and no UI exists for it.
 * The text index is in memory and rebuilt when a project opens; only the file list is persisted.
-* No UI uses `searchText` yet (Search Everywhere still filters names in the window); the MCP server does.
+* Search Everywhere's **Text** scope (command *Find Text in Project*) and the MCP server use `searchText`; the older Find in Files
+  window still has its own search with regex and case options.
 * Local completion models (the notes' "Full Line") are not part of this; `ai` talks to any OpenAI-compatible server.

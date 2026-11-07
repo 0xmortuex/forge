@@ -35,7 +35,7 @@ import { initProblems } from './problems'
 import { initBreadcrumbs } from './breadcrumbs'
 import { initTooltips } from './tooltips'
 import { initQuick, quickPick } from './quick'
-import { fileIndex, indexedFiles, inspectService, scratchService, settingsService, gitService, filesService, onFsChanged, onFsWatchError, watchService } from './rpc'
+import { fileIndex, indexedFiles, remoteService, inspectService, scratchService, settingsService, gitService, filesService, onFsChanged, onFsWatchError, watchService } from './rpc'
 import { initNavigation } from './navigation'
 import { initBookmarks } from './bookmarks'
 import { initSearchEverywhere, type SearchScope } from './searchall'
@@ -2105,6 +2105,19 @@ registerBuiltinCommands({
     if (active) requestClose(active)
   },
   openSearch: () => void openSearch(),
+  remoteStart: () =>
+    void remoteService.start().then(
+      async (info) => {
+        await window.forge.copyText(info.token)
+        report(`Remote backend listening on ${info.url}. The connection token is on your clipboard.`)
+      },
+      (err: unknown) => report(`Remote backend: ${err instanceof Error ? err.message : String(err)}`, true)
+    ),
+  remoteStop: () =>
+    void remoteService.stop().then(
+      () => report('Remote backend stopped'),
+      (err: unknown) => report(`Remote backend: ${err instanceof Error ? err.message : String(err)}`, true)
+    ),
   openSearchScope: (scope, classesOnly) => void openSearch(scope, classesOnly ? { classesOnly } : undefined),
   showFind: () => showView('find'),
   toggleSide,
