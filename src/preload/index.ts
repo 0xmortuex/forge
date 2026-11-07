@@ -1,8 +1,5 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
-import type { DapLaunch, DebugEvent, DebugEval, DebugKind, DebugScope, DebugVar } from '../main/debug'
-import type { Breakpoint } from '../main/debug-types'
 import type { AiEvent, AiRequest } from '../main/ai'
-import type { PtySpec } from '../main/terminal'
 import type { RpcRequest, RpcResponse } from '../shared/rpc'
 
 const api = {
@@ -27,20 +24,7 @@ const api = {
             readClipboard: (): Promise<string> => ipcRenderer.invoke('clipboard:read'),
       trash: (path: string): Promise<void> => ipcRenderer.invoke('fs:trash', path),
 
-                                                                                                      debugLaunch: (cwd: string, cols: number, rows: number, spec: PtySpec, kind: DebugKind, dap?: DapLaunch): Promise<number> =>
-    ipcRenderer.invoke('debug:launch', cwd, cols, rows, spec, kind, dap),
-  debugSetBreakpoints: (path: string, lines: Breakpoint[]): Promise<void> =>
-    ipcRenderer.invoke('debug:setBreakpoints', path, lines),
-  debugControl: (cmd: 'resume' | 'stepOver' | 'stepInto' | 'stepOut' | 'pause'): Promise<void> =>
-    ipcRenderer.invoke('debug:control', cmd),
-  debugScopes: (frameId: number): Promise<DebugScope[]> => ipcRenderer.invoke('debug:scopes', frameId),
-  debugVariables: (ref: number): Promise<DebugVar[]> => ipcRenderer.invoke('debug:variables', ref),
-  debugEvaluate: (frameId: number, expression: string): Promise<DebugEval> =>
-    ipcRenderer.invoke('debug:evaluate', frameId, expression),
-  onDebugEvent: (cb: (evt: DebugEvent) => void): void => {
-    ipcRenderer.on('debug:event', (_e, evt: DebugEvent) => cb(evt))
-  },
-  settingsExport: (text: string): Promise<string | null> => ipcRenderer.invoke('settings:export', text),
+                                                                                                                  settingsExport: (text: string): Promise<string | null> => ipcRenderer.invoke('settings:export', text),
   settingsImport: (): Promise<{ path: string; text: string } | null> => ipcRenderer.invoke('settings:import'),
   openThemesDir: (): Promise<string> => ipcRenderer.invoke('themes:openDir'),
   openSnippetsDir: (): Promise<string> => ipcRenderer.invoke('snippets:openDir'),

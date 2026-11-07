@@ -1,4 +1,3 @@
-import type { WebContents } from 'electron'
 
 // Types shared by the debug backends (Node via the V8 inspector, Python via debugpy's DAP) and the UI.
 
@@ -54,7 +53,8 @@ export interface DapLaunch {
 }
 
 export interface SessionDeps {
-  wc: WebContents
+  /** Reports an event to the UI (published on the platform bus as "debug.event"). */
+  emit: (evt: DebugEvent) => void
   /** Breakpoints the user has set (path -> 1-based lines); kept even with no session. */
   desired: Map<string, Breakpoint[]>
   /** Tells the orchestrator this session is over. */

@@ -1,7 +1,6 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { registerDebug } from './debug'
 import { registerExtensions, registerExtensionScheme } from './extensions'
 import { registerSettings } from './settings'
 import { killAllLsp } from './lsp'
@@ -98,7 +97,6 @@ if (process.env['FORGE_USER_DATA']) app.setPath('userData', process.env['FORGE_U
 
 registerSettings()
 registerExtensions()
-registerDebug()
 registerAi()
 registerPlatform()
 let terminalsEnded = false

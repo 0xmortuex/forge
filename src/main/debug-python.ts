@@ -56,7 +56,7 @@ export class PythonSession implements DebugSession {
   constructor(private deps: SessionDeps) {}
 
   private emit(evt: DebugEvent): void {
-    if (!this.deps.wc.isDestroyed()) this.deps.wc.send('debug:event', evt)
+    this.deps.emit(evt)
   }
 
   get connected(): boolean {

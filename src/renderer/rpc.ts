@@ -19,6 +19,7 @@ import type { GitApi } from '../main/git'
 import type { FilesApi } from '../main/files'
 import type { FsChange, WatchApi } from '../main/watch'
 import type { LspApi } from '../main/lsp'
+import type { DebugApi, DebugEvent } from '../main/debug'
 
 // Typed handles to backend services (see src/main/platform). Each call is one round trip to the main process.
 
@@ -42,7 +43,14 @@ export const gitService = client<GitApi>('git', (req) => window.forge.rpc(req))
 export const filesService = client<FilesApi>('files', (req) => window.forge.rpc(req))
 export const watchService = client<WatchApi>('watch', (req) => window.forge.rpc(req))
 export const lspService = client<LspApi>('lsp', (req) => window.forge.rpc(req))
+export const debugService = client<DebugApi>('debug', (req) => window.forge.rpc(req))
 export const onBackendEvent = (cb: (topic: string, payload: unknown) => void): (() => void) => window.forge.onRpcEvent(cb)
+
+/** Debugger events: stopped, resumed, output, session ended ... */
+export const onDebugEvent = (cb: (evt: DebugEvent) => void): (() => void) =>
+  window.forge.onRpcEvent((topic, payload) => {
+    if (topic === 'debug.event') cb(payload as DebugEvent)
+  })
 
 /** Language server events: diagnostics, log lines and edits the server wants applied (answer with lspService.applyEditResult). */
 export const onLspDiagnostics = (cb: (uri: string, diagnostics: unknown[]) => void): (() => void) =>

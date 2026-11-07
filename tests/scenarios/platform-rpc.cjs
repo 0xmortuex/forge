@@ -191,6 +191,18 @@ run('platform-rpc', { 'src/alpha.ts': 'a\n', 'src/beta.ts': 'b\n', 'README.md': 
   const emptyCfg = await rpc('lsp', 'configure', [[]])
   check('lsp: an empty configuration is accepted', emptyCfg.ok && Array.isArray(emptyCfg.value) && emptyCfg.value.length === 0, JSON.stringify(emptyCfg))
 
+  // debug: validation that runs before any program or adapter is started (debug.cjs, debug-dap.cjs and debug-python.cjs drive real sessions through the UI)
+  const noSession = await rpc('debug', 'scopes', [1])
+  check('debug: asking for scopes with no session is an error', !noSession.ok && /No active debug session/.test(noSession.error), JSON.stringify(noSession))
+  const badCmd = await rpc('debug', 'control', ['explode'])
+  check('debug: an unknown debug command is refused', !badCmd.ok && /Unknown debug command/.test(badCmd.error), JSON.stringify(badCmd))
+  const badKind = await rpc('debug', 'launch', [root, 80, 24, { file: 'node', args: [] }, 'cobol'])
+  check('debug: an unknown debug kind is refused', !badKind.ok && /Unknown debug kind/.test(badKind.error), JSON.stringify(badKind))
+  const badDap = await rpc('debug', 'launch', [root, 80, 24, { file: 'node', args: [] }, 'dap'])
+  check('debug: a dap launch without an adapter is refused before anything starts', !badDap.ok && /needs an "adapter"/.test(badDap.error), JSON.stringify(badDap))
+  const bps = await rpc('debug', 'setBreakpoints', [path.join(root, 'src', 'beta.ts'), []])
+  check('debug: clearing breakpoints with no session is fine', bps.ok, JSON.stringify(bps))
+
   const server = http.createServer((_req, res) => res.end('pong'))
   await new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(undefined)))
   const url = 'http://127.0.0.1:' + /** @type {import('node:net').AddressInfo} */ (server.address()).port + '/'

@@ -97,7 +97,7 @@ export class NodeSession implements DebugSession {
   }
 
   private emit(evt: DebugEvent): void {
-    if (!this.deps.wc.isDestroyed()) this.deps.wc.send('debug:event', evt)
+    this.deps.emit(evt)
   }
 
   /** Watches the program's output for the line `Debugger listening on ws://...`. */

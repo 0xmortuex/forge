@@ -5,6 +5,7 @@ import { showMenu, askText, type MenuItem } from './menu'
 import { session } from './session'
 import type { ResolvedRun } from './run'
 import type { TerminalView } from './terminal'
+import { debugService, onDebugEvent } from './rpc'
 
 type Control = 'resume' | 'stepOver' | 'stepInto' | 'stepOut'
 
@@ -134,7 +135,7 @@ export function initDebug(deps: DebugDeps): {
     const model = deps.getModel(path)
     if (model) applyDecorations(model, sorted)
     persist()
-    void deps.guard('Breakpoints', () => window.forge.debugSetBreakpoints(path, sendable(sorted))).catch(() => undefined) // reported
+    void deps.guard('Breakpoints', () => debugService.setBreakpoints(path, sendable(sorted))).catch(() => undefined) // reported
   }
   const sendable = (bps: Bp[]): { line: number; condition?: string; logMessage?: string }[] =>
     bps.filter((b) => !b.disabled).map(({ line, condition, logMessage }) => ({ line, condition, logMessage }))
@@ -207,7 +208,7 @@ export function initDebug(deps: DebugDeps): {
   async function syncBreakpoints(): Promise<void> {
     const paths = new Map<string, string>()
     for (const { path } of saved.values()) paths.set(keyOf(path), path)
-    for (const path of paths.values()) await window.forge.debugSetBreakpoints(path, sendable(bpsOf(path)))
+    for (const path of paths.values()) await debugService.setBreakpoints(path, sendable(bpsOf(path)))
   }
 
   const allBreakpoints = (): (Bp & { path: string })[] => {
@@ -245,7 +246,7 @@ export function initDebug(deps: DebugDeps): {
       row.append(name, document.createTextNode(' = '), val, remove)
       watchList.append(row)
       if (frame !== undefined) {
-        void window.forge.debugEvaluate(frame, expr).then(
+        void debugService.evaluate(frame, expr).then(
           (r) => {
             val.className = `vval ${r.isError ? 'err' : r.type}`
             val.textContent = r.value
@@ -327,7 +328,7 @@ export function initDebug(deps: DebugDeps): {
       twisty.innerHTML = kids.hidden ? icons.chevronRight : icons.chevronDown
       if (loaded || kids.hidden) return
       loaded = true
-      const children: DebugVar[] = await window.forge.debugVariables(v.ref)
+      const children: DebugVar[] = await debugService.variables(v.ref)
       for (const c of children) varRow(c, depth + 1, kids)
     }
     row.onclick = () => void deps.guard('Variables', expand).catch(() => undefined) // reported
@@ -335,7 +336,7 @@ export function initDebug(deps: DebugDeps): {
   }
 
   async function loadVariables(frame: number): Promise<void> {
-    const scopes = await window.forge.debugScopes(frame)
+    const scopes = await debugService.scopes(frame)
     varsEl.replaceChildren()
     scopes.forEach((s, i) => varRow({ name: s.name, value: '', type: 'scope', ref: s.ref }, 0, varsEl, i === 0))
   }
@@ -381,7 +382,7 @@ export function initDebug(deps: DebugDeps): {
     })
   }
 
-  window.forge.onDebugEvent((evt: DebugEvent) => {
+  onDebugEvent((evt: DebugEvent) => {
     if (evt.type === 'stopped') {
       // Hide node: internals (module loader etc.) unless that is all there is.
       const user = evt.frames.filter((f) => f.path)
@@ -407,7 +408,7 @@ export function initDebug(deps: DebugDeps): {
 
   // ---- Controls ----
   async function control(cmd: Control): Promise<void> {
-    await deps.guard('Debugger', () => window.forge.debugControl(cmd))
+    await deps.guard('Debugger', () => debugService.control(cmd))
   }
 
   bar.querySelectorAll<HTMLButtonElement>('button[data-dbg]').forEach((b) => {
@@ -435,7 +436,7 @@ export function initDebug(deps: DebugDeps): {
     }
     line(`> ${expr}`, 'echo')
     if (selected < 0) return line('Not paused — run to a breakpoint first', 'err')
-    void window.forge.debugEvaluate(frames[selected]?.id ?? 0, expr).then(
+    void debugService.evaluate(frames[selected]?.id ?? 0, expr).then(
       (r) => line(r.value, r.isError ? 'err' : r.type),
       (err: unknown) => {
         line(err instanceof Error ? err.message : String(err), 'err')
@@ -456,7 +457,7 @@ export function initDebug(deps: DebugDeps): {
       deps.showView('run')
       deps.setBusy(true)
       try {
-        await deps.runView.begin((cols, rows) => window.forge.debugLaunch(resolved.cwd, cols, rows, resolved.spec, kind, resolved.dap))
+        await deps.runView.begin((cols, rows) => debugService.launch(resolved.cwd, cols, rows, resolved.spec, kind, resolved.dap))
       } catch (err) {
         deps.setBusy(false)
         throw err
