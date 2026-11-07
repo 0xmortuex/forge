@@ -96,7 +96,16 @@ export class FileIndex implements FileIndexApi {
     this.setState('ready')
   }
 
-  private async writeSnapshot(): Promise<void> {
+  private writing: Promise<void> = Promise.resolve()
+
+  /** Writes are queued: concurrent ones would share the temporary file and clobber each other. */
+  private writeSnapshot(): Promise<void> {
+    const run = this.writing.then(() => this.doWriteSnapshot())
+    this.writing = run.catch(() => undefined) // keeps the queue alive; the caller still gets the error from `run`
+    return run
+  }
+
+  private async doWriteSnapshot(): Promise<void> {
     const path = this.snapshotFile()
     if (!path) return
     const snap: Snapshot = { version: SNAPSHOT_VERSION, root: this.root, files: [...this.files].map((f) => relative(this.root, f)) }

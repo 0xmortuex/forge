@@ -36,8 +36,12 @@ run('platform-rpc', { 'src/alpha.ts': 'a\n', 'src/beta.ts': 'b\n', 'README.md': 
   const gone = await waitFor(async () => (await rpc('fileindex', 'query', ['alpha'])).value.length === 0, 8000)
   check('a deleted file leaves the index', !!gone)
 
-  const snapshots = fs.readdirSync(path.join(t.userData, 'index'))
-  check('the snapshot is stored in the user-data folder', snapshots.length === 1 && snapshots[0].endsWith('.json'), String(snapshots))
+  const dir = path.join(t.userData, 'index')
+  const settled = await waitFor(() => {
+    const f = fs.readdirSync(dir)
+    return f.length === 1 && f[0]?.endsWith('.json') ? f : null
+  }, 5000)
+  check('one snapshot is stored in the user-data folder and no temporary file is left', !!settled, String(fs.readdirSync(dir)))
 
   const ghost = await rpc('nope', 'x')
   check('an unknown service is an error response', !ghost.ok && /No module provides the service "nope"/.test(ghost.error), JSON.stringify(ghost))

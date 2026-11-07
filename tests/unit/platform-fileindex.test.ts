@@ -105,3 +105,23 @@ test('a corrupt or foreign-version snapshot is an explicit error', async () => {
 test('changed() before open() is an error', async () => {
   await assert.rejects(new FileIndex().changed(['x']), /no project open/)
 })
+
+test('many concurrent changes write the snapshot safely and leave no temporary file', async () => {
+  const p = await project(['a.ts'])
+  try {
+    const idx = new FileIndex({ snapshotPath: p.snap })
+    await idx.open(p.root)
+    const added: string[] = []
+    for (let i = 0; i < 25; i++) {
+      const f = join(p.root, `f${i}.ts`)
+      await writeFile(f, 'x')
+      added.push(f)
+    }
+    await Promise.all(added.map((f) => idx.changed([f])))
+    const { readdir, readFile } = await import('node:fs/promises')
+    assert.deepEqual(await readdir(join(p.snap, '..')), ['index.json'])
+    assert.equal((JSON.parse(await readFile(p.snap, 'utf8')) as { files: string[] }).files.length, 26)
+  } finally {
+    await p.done()
+  }
+})
