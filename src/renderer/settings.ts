@@ -123,6 +123,8 @@ export const DEFS: SettingDef[] = [
     description: 'Underlines misspelled words in comments, strings, Markdown and text files (English). Ctrl+. offers corrections.' },
   { key: 'projectWords', category: 'Editor', group: 'Display', label: 'Complete words from the whole project', default: false, control: onOff,
     description: 'Offers words used anywhere in the project (not only in the open file) as you type, after the language server\'s suggestions. Works offline; nothing is sent anywhere.' },
+  { key: 'localInline', category: 'Editor', group: 'Display', label: 'Finish the line from your project', default: false, control: onOff,
+    description: 'Grey text for the rest of the line, Tab accepts it. It comes from a small language model trained on this project\'s own files, on this computer: nothing is sent anywhere, and it stays silent unless it is sure. The AI suggestions take its place when they are on.' },
   { key: 'emmet', category: 'Editor', group: 'Display', label: 'Emmet abbreviations', default: true, control: onOff,
     description: 'Type ul>li*3 or df in an HTML or CSS file and press Tab (or pick the suggestion) to expand it.' },
   { key: 'codeVision', category: 'Editor', group: 'Display', label: 'Show usages above declarations', default: true, control: onOff,

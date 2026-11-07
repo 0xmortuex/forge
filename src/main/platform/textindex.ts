@@ -1,7 +1,10 @@
 // A trigram index over the text of the project's files: finding where a string occurs without reading every file.
 // Every run of three characters in a file is recorded (lower-cased); a query keeps only the files that contain all of the
 // query's trigrams, and only those are read and checked for the real match. Held in memory; rebuilt when a project opens.
-// The same pass also counts the identifiers in each file, so words can be completed from the whole project.
+// The same pass also counts the identifiers in each file, so words can be completed from the whole project, and trains a small
+// local language model (ngram.ts) that finishes the line you are typing.
+
+import { LocalModel, type ModelStats, type Suggestion } from './ngram'
 
 export const MIN_QUERY = 3
 export const MAX_INDEXED_BYTES = 512 * 1024
@@ -32,6 +35,7 @@ export class TextIndex {
   private readonly wordsOf = new Map<number, Map<string, number>>()
   private readonly totals = new Map<string, number>()
   private readonly byPrefix = new Map<string, Set<string>>()
+  private readonly model = new LocalModel()
 
   get size(): number {
     return this.gramsOf.size
@@ -65,6 +69,7 @@ export class TextIndex {
     const counts = new Map<string, number>()
     for (const w of text.match(WORD) ?? []) counts.set(w, (counts.get(w) ?? 0) + 1)
     this.wordsOf.set(id, counts)
+    this.model.train(path, text)
     for (const [w, c] of counts) {
       const before = this.totals.get(w) ?? 0
       this.totals.set(w, before + c)
@@ -86,6 +91,7 @@ export class TextIndex {
   }
 
   remove(path: string): void {
+    this.model.forget(path)
     const id = this.ids.get(path)
     if (id === undefined) return
     for (const g of this.gramsOf.get(id) ?? []) {
@@ -103,6 +109,15 @@ export class TextIndex {
       }
     }
     this.wordsOf.delete(id)
+  }
+
+  /** The rest of the line being typed, from the model trained on this project. */
+  suggestLine(path: string, before: string): Suggestion | null {
+    return this.model.suggest(path, before)
+  }
+
+  modelStats(): ModelStats {
+    return this.model.stats()
   }
 
   /** Removes `path` and everything beneath it (a deleted folder). */

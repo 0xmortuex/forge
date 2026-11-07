@@ -287,3 +287,47 @@ test('completeWord answers at once with what is indexed so far, or waits for the
     await p.done()
   }
 })
+
+test('suggestLine learns from the project when it opens and relearns when a file changes', async () => {
+  const p = await project(['a.ts', 'b.ts'])
+  try {
+    const lines = (word: string): string => Array.from({ length: 3 }, () => `const result = await ${word}(request)`).join('\n') + '\n'
+    await writeFile(join(p.root, 'a.ts'), lines('loadAccount'))
+    const idx = new FileIndex()
+    await idx.open(p.root)
+    assert.equal((await idx.suggestLine(join(p.root, 'b.ts'), 'const result = await load', true))?.text, 'Account(request)')
+    assert.ok(idx.modelStats().symbols > 0)
+    await writeFile(join(p.root, 'a.ts'), lines('loadOrder'))
+    await idx.changed([join(p.root, 'a.ts')])
+    assert.equal((await idx.suggestLine(join(p.root, 'b.ts'), 'const result = await load'))?.text, 'Order(request)', 'the old version no longer counts')
+    await rm(join(p.root, 'a.ts'))
+    await idx.changed([join(p.root, 'a.ts')])
+    assert.equal(await idx.suggestLine(join(p.root, 'b.ts'), 'const result = await load'), null, 'a deleted file is forgotten')
+    assert.equal(idx.modelStats().files, 1, 'only b.ts (a single line) is left')
+  } finally {
+    await p.done()
+  }
+})
+
+test('suggestLine answers at once from what is learned so far, or waits for the build when asked; no project is an error', async () => {
+  const p = await project(['a.ts'])
+  try {
+    await writeFile(join(p.root, 'a.ts'), Array.from({ length: 3 }, () => 'launch(rocket)').join('\n') + '\n')
+    let release!: () => void
+    const gate = new Promise<void>((ok) => (release = ok))
+    const idx = new FileIndex({
+      readText: async (path) => {
+        await gate
+        return readFile(path, 'utf8')
+      }
+    })
+    await assert.rejects(idx.suggestLine('/x.ts', 'launch('), /no project open/)
+    await idx.open(p.root)
+    assert.equal(await idx.suggestLine(join(p.root, 'b.ts'), 'launch('), null, 'nothing learned yet, and it does not wait')
+    const waiting = idx.suggestLine(join(p.root, 'b.ts'), 'launch(', true)
+    release()
+    assert.equal((await waiting)?.text, 'rocket)')
+  } finally {
+    await p.done()
+  }
+})

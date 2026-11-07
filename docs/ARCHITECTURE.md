@@ -23,6 +23,7 @@ rpc.ts: typed clients  ── rpc:call ─────▶ RpcServer ─▶ Modul
 | Platform wiring | `src/main/platform/index.ts` | Registers every module, exposes `rpc:call` over IPC, forwards the bus to the window as `rpc:event`, and tells the services where their events go. |
 | File index | `src/main/platform/fileindex.ts` | Every project file, persisted as a snapshot in user data (so the next start answers at once while a rescan reconciles), kept current from the file watcher, fuzzy name queries. |
 | Text index | `src/main/platform/textindex.ts` | A trigram index of file text (and a count of the identifiers in it, for word completion), built in the background after each scan and updated by the watcher. A query keeps only files that contain all its trigrams and reads just those. Binary, over-512 KB and unreadable files are reported by `textStats`, not hidden. |
+| Local line model | `src/main/platform/ngram.ts` | A token n-gram language model (contexts of 1 to 3 symbols, backoff to shorter ones) trained on the project's own files during the same index pass, one model per language family. It finishes the line being typed: it handles a half-typed word or string and a trailing space, and says nothing unless it is sure (first symbol at least 50% likely, every further one at least 35%, contexts seen at least twice). A file's contribution is stored so an edit or a delete takes back exactly what it taught. Caps: 200 KB per file, 5 million symbols. |
 | WebSocket transport | `src/main/platform/ws.ts` | The same RPC and bus over a socket. A library: **nothing starts it** (see Security). |
 | MCP server | `src/mcp/` | The project as tools for an external agent (see below). |
 
@@ -32,7 +33,7 @@ All are lazy modules, reached through `src/renderer/rpc.ts`.
 
 | Service | Replaces | Notes |
 |---|---|---|
-| `fileindex` | (new) | `open`, `query`, `list`, `searchText`, `completeWord`, `textStats`, `changed` |
+| `fileindex` | (new) | `open`, `query`, `list`, `searchText`, `completeWord`, `suggestLine`, `modelStats`, `textStats`, `changed` |
 | `remote` | (new) | `start`, `stop`, `status` for the WebSocket backend (see Remote transport) |
 | `files` | `fs:*` handlers | read/write, encodings, bytes, listing, search/replace, create/rename/copy, realpath, references |
 | `git` | `git:*` (44) | one method per old handler; moved by a parser, bodies unchanged |
@@ -124,7 +125,9 @@ links that point outside it. Only protocol messages go to stdout; diagnostics go
 * The text index is in memory and rebuilt when a project opens; only the file list is persisted.
 * Search Everywhere's **Text** scope (command *Find Text in Project*) and the MCP server use `searchText`; the older Find in Files
   window still has its own search with regex and case options.
-* The notes' local completion models ("Full Line": a proprietary ~68 MB model run by a native inference process) are not
-  part of this. What exists locally is the heuristic kind: **Complete words from the whole project** (Settings, Editor, off by
-  default) offers identifiers from every text file, ranked by how often the project uses them, after the language server's
-  items. `ai` covers model-based completion through any OpenAI-compatible server.
+* The notes' **Full Line** is a bundled neural model (about 68 MB, proprietary) run by a separate native process. Forge has the
+  same shape, built from what can be built here: ghost text from a *local* model trained on-device (**Finish the line from your
+  project**, Settings > Editor, off by default), word completion from the whole project (**Complete words from the whole
+  project**, off by default), and model-based completion through any OpenAI-compatible server (`ai`). The local model is
+  statistical, not neural, and it knows only the project it was trained on; it runs in the main process (a lookup takes
+  microseconds, training is spread over the index build), not in a separate process.

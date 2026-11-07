@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { dirname, relative, join, sep } from 'node:path'
 import { walkFiles } from '../walk'
+import type { ModelStats, Suggestion } from './ngram'
 import { TextIndex, type SkipReason, type TextHit, type WordHit } from './textindex'
 
 // A persistent list of the project's files, kept current from the file watcher. A snapshot on disk makes the next
@@ -29,6 +30,14 @@ export interface FileIndexApi {
    * opening; with `waitForBuild` it first waits for the scan and the build, so the answer is complete.
    */
   completeWord(prefix: string, limit?: number, waitForBuild?: boolean): Promise<WordHit[]>
+  /**
+   * The rest of the line being typed in `path` (`before` is the text up to the cursor, which must be at the end of a line), from a
+   * small language model trained on this project, or null when it is not sure. Like completeWord it answers from what has been
+   * learned so far unless `waitForBuild` is set.
+   */
+  suggestLine(path: string, before: string, waitForBuild?: boolean): Promise<Suggestion | null>
+  /** How much the local model has learned. */
+  modelStats(): ModelStats
   /** How much of the project is searchable as text, and which files are not (binary, too large, unreadable). */
   textStats(): { files: number; building: boolean; skipped: { path: string; reason: string }[] }
   /** Paths reported by the file watcher; `all` means events were lost and everything must be re-checked. */
@@ -186,6 +195,19 @@ export class FileIndex implements FileIndexApi {
     await this.scan
     await this.textBuild
     return this.text.search(text, limit, (p) => this.readText(p))
+  }
+
+  async suggestLine(path: string, before: string, waitForBuild = false): Promise<Suggestion | null> {
+    if (!this.root) throw new Error('The index has no project open')
+    if (waitForBuild) {
+      await this.scan
+      await this.textBuild
+    }
+    return this.text.suggestLine(path, before)
+  }
+
+  modelStats(): ModelStats {
+    return this.text.modelStats()
   }
 
   async completeWord(prefix: string, limit = 20, waitForBuild = false): Promise<WordHit[]> {

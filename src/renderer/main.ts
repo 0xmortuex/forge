@@ -54,6 +54,7 @@ import { initNpm } from './npm'
 import { initTestExplorer } from './testexplorer'
 import { initEmmet } from './emmet'
 import { initProjectWords } from './projectwords'
+import { initLocalInline } from './localinline'
 import { initPostfix } from './postfix'
 import { registerExtraLanguages } from './languages'
 import { addToDictionary, initSpell, wordAtCursor } from './spell'
@@ -1659,6 +1660,7 @@ tw.setOnShow('ai', () => {
 initAiInline({ report })
 initEmmet(editor)
 initProjectWords({ getRoot: () => rootDir, report })
+initLocalInline({ getRoot: () => rootDir, report })
 initPostfix()
 registerExtraLanguages()
 {
