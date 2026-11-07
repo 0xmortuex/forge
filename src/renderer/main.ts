@@ -35,7 +35,7 @@ import { initProblems } from './problems'
 import { initBreadcrumbs } from './breadcrumbs'
 import { initTooltips } from './tooltips'
 import { initQuick, quickPick } from './quick'
-import { indexedFiles, inspectService, scratchService } from './rpc'
+import { indexedFiles, inspectService, scratchService, settingsService } from './rpc'
 import { initNavigation } from './navigation'
 import { initBookmarks } from './bookmarks'
 import { initSearchEverywhere, type SearchScope } from './searchall'
@@ -2087,7 +2087,7 @@ async function importSettings(): Promise<void> {
 }
 
 async function openCustomCss(): Promise<void> {
-  await openFile(await window.forge.ensureCustomCss())
+  await openFile(await settingsService.ensureCss())
 }
 
 const settingsUi = initSettingsUi({ openFile, report, openCustomCss })

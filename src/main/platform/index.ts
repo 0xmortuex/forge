@@ -12,6 +12,8 @@ import { setTerminalEmitter, TerminalService } from '../terminal'
 import { DockerService } from '../docker'
 import { GithubService } from '../github'
 import { DatabaseService } from '../database'
+import { SettingsService } from '../settings'
+import { ExtensionsService } from '../extensions'
 import { NpmService } from '../npm'
 import { TestService } from '../testrun'
 import { HttpService } from '../http'
@@ -55,6 +57,8 @@ registry.register({ id: 'forge.terminal', activation: 'lazy', provides: ['termin
 registry.register({ id: 'forge.docker', activation: 'lazy', provides: ['docker'], activate: () => ({ services: { docker: new DockerService() } }) })
 registry.register({ id: 'forge.github', activation: 'lazy', provides: ['github'], activate: () => ({ services: { github: new GithubService() } }) })
 registry.register({ id: 'forge.database', activation: 'lazy', provides: ['database'], activate: () => ({ services: { database: new DatabaseService() } }) })
+registry.register({ id: 'forge.settings', activation: 'lazy', provides: ['settings'], activate: () => ({ services: { settings: new SettingsService() } }) })
+registry.register({ id: 'forge.extensions', activation: 'lazy', provides: ['extensions'], activate: () => ({ services: { extensions: new ExtensionsService() } }) })
 
 export function registerPlatform(): void {
   // Set now, not when the module activates: the debugger starts terminals without ever calling the service.

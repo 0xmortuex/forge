@@ -1,4 +1,5 @@
 import { userData } from './settings'
+import { settingsService } from './rpc'
 
 // What Forge remembers between launches (separate from settings, which are choices): the open project,
 // recent projects, open tabs and window layout. Stored in state.json in the user-data folder.
@@ -130,7 +131,7 @@ export const session = {
     state = { ...state, ...patch }
     window.clearTimeout(timer)
     timer = window.setTimeout(() => {
-      window.forge.stateSave(JSON.stringify(state, null, 2)).catch((err: unknown) => session.onError(err as Error))
+      settingsService.saveState(JSON.stringify(state, null, 2)).catch((err: unknown) => session.onError(err as Error))
     }, 300)
   },
   /** Writes any pending change right now (the window is closing). */
@@ -138,7 +139,7 @@ export const session = {
     if (timer === undefined) return Promise.resolve()
     window.clearTimeout(timer)
     timer = undefined
-    return window.forge.stateSave(JSON.stringify(state, null, 2))
+    return settingsService.saveState(JSON.stringify(state, null, 2))
   },
   addRecent(folder: string): void {
     const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase() // Windows paths ignore case

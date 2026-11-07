@@ -6,6 +6,7 @@ import type { ToolWindowDef, ToolWindows } from './docks'
 import { toast, type ToastKind } from './effects'
 import { askText } from './menu'
 import { settings } from './settings'
+import { extensionsService } from './rpc'
 
 // The extension host. Extensions are ES modules exporting `activate(forge)`. They are OFF until the user turns
 // them on in Settings → Extensions, because they run with the same power as Forge itself. API version 2 adds panels,
@@ -154,7 +155,7 @@ function makeApi(info: ExtensionInfo, cleanup: (() => void)[], data: Record<stri
   const save = (): void => {
     window.clearTimeout(saveTimer)
     saveTimer = undefined
-    window.forge.extensionDataSave(info.id, JSON.stringify(data)).catch((err: unknown) => d.report(`Extension "${info.name}" could not save its data: ${message(err)}`, true))
+    extensionsService.dataSave(info.id, JSON.stringify(data)).catch((err: unknown) => d.report(`Extension "${info.name}" could not save its data: ${message(err)}`, true))
   }
   cleanup.push(() => {
     if (saveTimer !== undefined) save()
@@ -274,7 +275,7 @@ function makeApi(info: ExtensionInfo, cleanup: (() => void)[], data: Record<stri
     net: {
       async fetch(url, init = {}) {
         need(info, 'network', 'net.fetch')
-        const res = await window.forge.extensionFetch(info.id, { method: init.method ?? 'GET', url, headers: init.headers ?? {}, body: init.body })
+        const res = await extensionsService.fetch(info.id, { method: init.method ?? 'GET', url, headers: init.headers ?? {}, body: init.body })
         return {
           status: res.status,
           ok: res.status >= 200 && res.status < 300,
@@ -308,7 +309,7 @@ function makeApi(info: ExtensionInfo, cleanup: (() => void)[], data: Record<stri
 async function activate(state: ExtensionState): Promise<void> {
   const cleanup: (() => void)[] = []
   try {
-    const data = await window.forge.extensionDataLoad(state.info.id)
+    const data = await extensionsService.dataLoad(state.info.id)
     // The forge-ext:// scheme serves only this extension's folder (see main/extensions.ts).
     const mod = (await import(/* @vite-ignore */ `forge-ext://${state.info.id}/${state.info.main}`)) as { activate?: (api: ForgeApi) => unknown }
     if (typeof mod.activate !== 'function') throw new Error(`${state.info.main} must export a function named "activate"`)
@@ -361,7 +362,7 @@ export const extensions = {
 /** Finds installed extensions and starts the ones the user has enabled. */
 export async function initExtensions(d: Deps): Promise<void> {
   deps = d
-  const found = await window.forge.extensionsList()
+  const found = await extensionsService.list()
   states = found.map((info) => ({ info, status: info.error ? 'error' : 'disabled', error: info.error }))
   const enabled = enabledMap()
   for (const s of states) {

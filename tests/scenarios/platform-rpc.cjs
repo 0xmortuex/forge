@@ -95,7 +95,19 @@ run('platform-rpc', { 'src/alpha.ts': 'a\n', 'src/beta.ts': 'b\n', 'README.md': 
   const badImage = await rpc('docker', 'removeImage', [root, 'bad id; rm -rf /'])
   check('docker: an image id with shell characters is refused', !badImage.ok && /Not an image id or name/.test(badImage.error), JSON.stringify(badImage))
   const noDb = await rpc('database', 'query', [path.join(root, 'none.db'), 'select 1'])
-  check('database: querying a database that is not open is an error', !noDb.ok && /The database is not open/.test(noDb.error), JSON.stringify(noDb))
+  // query() re-opens a database that is not open (that is how it recovers after Stop), so a missing file reports the file error.
+  check('database: querying a file that does not exist reports the file error', !noDb.ok && /ENOENT/.test(noDb.error), JSON.stringify(noDb))
+
+  const loaded = await rpc('settings', 'load')
+  check('settings: load returns the user-data folder and parsed settings', loaded.ok && fs.realpathSync.native(loaded.value.dir) === fs.realpathSync.native(t.userData) && typeof loaded.value.settings === 'object' && Array.isArray(loaded.value.errors), JSON.stringify(loaded).slice(0, 200))
+  const badSettings = await rpc('settings', 'save', ['this is not json'])
+  check('settings: text that cannot be read back is refused, not written', !badSettings.ok && /Settings to save/.test(badSettings.error), JSON.stringify(badSettings))
+  const extList = await rpc('extensions', 'list')
+  check('extensions: list returns an array', extList.ok && Array.isArray(extList.value), JSON.stringify(extList))
+  const badExtId = await rpc('extensions', 'dataLoad', ['../escape'])
+  check('extensions: an invalid extension id is refused', !badExtId.ok && /Not a valid extension id/.test(badExtId.error), JSON.stringify(badExtId))
+  const noNet = await rpc('extensions', 'fetch', ['ghost-ext', { method: 'GET', url: 'http://127.0.0.1:1/', headers: {} }])
+  check('extensions: fetch needs the network permission', !noNet.ok && /has not asked for the "network" permission/.test(noNet.error), JSON.stringify(noNet))
 
   const server = http.createServer((_req, res) => res.end('pong'))
   await new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(undefined)))

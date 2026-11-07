@@ -140,19 +140,11 @@ const api = {
   onDebugEvent: (cb: (evt: DebugEvent) => void): void => {
     ipcRenderer.on('debug:event', (_e, evt: DebugEvent) => cb(evt))
   },
-  settingsLoad: (): Promise<LoadedUserData> => ipcRenderer.invoke('settings:load'),
-  settingsSave: (text: string): Promise<void> => ipcRenderer.invoke('settings:save', text),
-  stateSave: (text: string): Promise<void> => ipcRenderer.invoke('state:save', text),
   settingsExport: (text: string): Promise<string | null> => ipcRenderer.invoke('settings:export', text),
   settingsImport: (): Promise<{ path: string; text: string } | null> => ipcRenderer.invoke('settings:import'),
-  ensureCustomCss: (): Promise<string> => ipcRenderer.invoke('settings:ensureCss'),
   openThemesDir: (): Promise<string> => ipcRenderer.invoke('themes:openDir'),
   openSnippetsDir: (): Promise<string> => ipcRenderer.invoke('snippets:openDir'),
   toggleFullscreen: (): Promise<boolean> => ipcRenderer.invoke('win:toggleFullscreen'),
-  extensionDataLoad: (id: string): Promise<Record<string, unknown>> => ipcRenderer.invoke('extensions:data-load', id),
-  extensionDataSave: (id: string, json: string): Promise<void> => ipcRenderer.invoke('extensions:data-save', id, json),
-  extensionFetch: (id: string, spec: HttpRequestSpec): Promise<HttpResponse> => ipcRenderer.invoke('extensions:fetch', id, spec),
-  extensionsList: (): Promise<ExtensionInfo[]> => ipcRenderer.invoke('extensions:list'),
   /** Starts watching the project folder for changes made outside Forge (replacing any earlier watch). */
   /** Typed backend services (see src/shared/rpc.ts and src/renderer/rpc.ts). */
   rpc: (req: RpcRequest): Promise<RpcResponse> => ipcRenderer.invoke('rpc:call', req),

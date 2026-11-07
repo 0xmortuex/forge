@@ -1,4 +1,6 @@
 import { KEYMAP_PRESETS } from './keymap-presets'
+import { settingsService } from './rpc'
+import type { LoadedUserData } from '../main/settings'
 
 // Every user-changeable option is declared once here. The Settings window is generated from this list,
 // settings.json stores only what differs from the defaults, and appearance.ts applies each value live.
@@ -207,7 +209,7 @@ export interface Store {
 }
 
 // If the user-data folder can't be read at all, start with defaults and say why (the page must still render).
-const data: Awaited<ReturnType<typeof window.forge.settingsLoad>> = await window.forge.settingsLoad().catch((err: unknown) => ({
+const data: LoadedUserData = await settingsService.load().catch((err: unknown) => ({
   settings: {},
   state: {},
   themes: [],
@@ -307,7 +309,7 @@ function changed(key: string, value: Value): void {
   window.clearTimeout(timer)
   timer = window.setTimeout(() => {
     const out = { ...extra, ...Object.fromEntries(overrides) }
-    window.forge.settingsSave(JSON.stringify(out, null, 2)).catch((err: unknown) => settings.onSaveError(err as Error))
+    settingsService.save(JSON.stringify(out, null, 2)).catch((err: unknown) => settings.onSaveError(err as Error))
   }, 250)
 }
 
@@ -317,12 +319,12 @@ export function flushSettings(): Promise<void> {
   window.clearTimeout(timer)
   timer = undefined
   const out = { ...extra, ...Object.fromEntries(overrides) }
-  return window.forge.settingsSave(JSON.stringify(out, null, 2))
+  return settingsService.save(JSON.stringify(out, null, 2))
 }
 
 /** Writes settings.json now (an empty object if nothing is customized), so it can be opened in the editor. */
 export function ensureSettingsFile(): Promise<void> {
   window.clearTimeout(timer)
   timer = undefined
-  return window.forge.settingsSave(JSON.stringify({ ...extra, ...Object.fromEntries(overrides) }, null, 2))
+  return settingsService.save(JSON.stringify({ ...extra, ...Object.fromEntries(overrides) }, null, 2))
 }

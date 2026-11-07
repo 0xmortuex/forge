@@ -60,7 +60,68 @@ export interface LoadedUserData {
 let settingsBroken = false
 
 export function registerSettings(): void {
-  ipcMain.handle('settings:load', async (): Promise<LoadedUserData> => {
+  /** Settings backup: the renderer sends the text, the user picks where it goes. Null if they cancel. */
+  ipcMain.handle('settings:export', async (_e, text: string): Promise<string | null> => {
+    parseObject(text, 'Settings to export')
+    const res = await dialog.showSaveDialog({
+      title: 'Export Forge settings',
+      defaultPath: 'forge-settings.json',
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    })
+    if (res.canceled || !res.filePath) return null
+    await writeFile(res.filePath, text, 'utf8')
+    return res.filePath
+  })
+
+  /** Reads a settings backup the user picks (not applied here). Null if they cancel. */
+  ipcMain.handle('settings:import', async (): Promise<{ path: string; text: string } | null> => {
+    const res = await dialog.showOpenDialog({
+      title: 'Import Forge settings',
+      properties: ['openFile'],
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    })
+    const path = res.filePaths[0]
+    if (res.canceled || !path) return null
+    return { path, text: await readFile(path, 'utf8') }
+  })
+
+  ipcMain.handle('themes:openDir', async () => {
+    await mkdir(userPath(THEMES), { recursive: true })
+    const problem = await shell.openPath(userPath(THEMES))
+    if (problem) throw new Error(`Could not open the themes folder: ${problem}`)
+    return userPath(THEMES)
+  })
+
+  ipcMain.handle('snippets:openDir', async () => {
+    await mkdir(userPath(SNIPPETS), { recursive: true })
+    const problem = await shell.openPath(userPath(SNIPPETS))
+    if (problem) throw new Error(`Could not open the snippets folder: ${problem}`)
+    return userPath(SNIPPETS)
+  })
+
+  ipcMain.handle('win:toggleFullscreen', (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win) throw new Error('No window to toggle full screen on')
+    win.setFullScreen(!win.isFullScreen())
+    return win.isFullScreen()
+  })
+}
+
+export interface SettingsApi {
+  load(): Promise<LoadedUserData>
+  save(text: string): Promise<void>
+  saveState(text: string): Promise<void>
+  /** Creates custom.css with a short guide if it does not exist yet, and returns its path. */
+  ensureCss(): Promise<string>
+}
+
+/**
+ * Provided as the "settings" service (see platform): the files in the user-data folder. The handlers left in
+ * registerSettings (file dialogs, opening folders in the file manager, full screen) act on this computer's screen
+ * and stay with the window.
+ */
+export class SettingsService implements SettingsApi {
+  async load(): Promise<LoadedUserData> {
     const errors: string[] = []
     let settings: Record<string, unknown> = {}
     let state: Record<string, unknown> = {}
@@ -111,49 +172,24 @@ export function registerSettings(): void {
       customCss,
       customCssPath: userPath(CUSTOM_CSS)
     }
-  })
+  }
 
-  ipcMain.handle('settings:save', async (_e, text: string) => {
+  async save(text: string): Promise<void> {
     parseObject(text, 'Settings to save') // never write something we couldn't read back
     if (settingsBroken) {
       await copyFile(userPath(SETTINGS), userPath(`${SETTINGS}.broken`))
       settingsBroken = false
     }
     await writeAtomic(userPath(SETTINGS), text)
-  })
+  }
 
-  /** Settings backup: the renderer sends the text, the user picks where it goes. Null if they cancel. */
-  ipcMain.handle('settings:export', async (_e, text: string): Promise<string | null> => {
-    parseObject(text, 'Settings to export')
-    const res = await dialog.showSaveDialog({
-      title: 'Export Forge settings',
-      defaultPath: 'forge-settings.json',
-      filters: [{ name: 'JSON', extensions: ['json'] }]
-    })
-    if (res.canceled || !res.filePath) return null
-    await writeFile(res.filePath, text, 'utf8')
-    return res.filePath
-  })
-
-  /** Reads a settings backup the user picks (not applied here). Null if they cancel. */
-  ipcMain.handle('settings:import', async (): Promise<{ path: string; text: string } | null> => {
-    const res = await dialog.showOpenDialog({
-      title: 'Import Forge settings',
-      properties: ['openFile'],
-      filters: [{ name: 'JSON', extensions: ['json'] }]
-    })
-    const path = res.filePaths[0]
-    if (res.canceled || !path) return null
-    return { path, text: await readFile(path, 'utf8') }
-  })
-
-  ipcMain.handle('state:save', async (_e, text: string) => {
+  async saveState(text: string): Promise<void> {
     parseObject(text, 'State to save')
     await writeAtomic(userPath(STATE), text)
-  })
+  }
 
   /** Creates custom.css with a short guide if it doesn't exist yet, and returns its path. */
-  ipcMain.handle('settings:ensureCss', async () => {
+  async ensureCss(): Promise<string> {
     if ((await readText(userPath(CUSTOM_CSS))) === null) {
       await writeAtomic(
         userPath(CUSTOM_CSS),
@@ -172,26 +208,5 @@ export function registerSettings(): void {
       )
     }
     return userPath(CUSTOM_CSS)
-  })
-
-  ipcMain.handle('themes:openDir', async () => {
-    await mkdir(userPath(THEMES), { recursive: true })
-    const problem = await shell.openPath(userPath(THEMES))
-    if (problem) throw new Error(`Could not open the themes folder: ${problem}`)
-    return userPath(THEMES)
-  })
-
-  ipcMain.handle('snippets:openDir', async () => {
-    await mkdir(userPath(SNIPPETS), { recursive: true })
-    const problem = await shell.openPath(userPath(SNIPPETS))
-    if (problem) throw new Error(`Could not open the snippets folder: ${problem}`)
-    return userPath(SNIPPETS)
-  })
-
-  ipcMain.handle('win:toggleFullscreen', (e) => {
-    const win = BrowserWindow.fromWebContents(e.sender)
-    if (!win) throw new Error('No window to toggle full screen on')
-    win.setFullScreen(!win.isFullScreen())
-    return win.isFullScreen()
-  })
+  }
 }
