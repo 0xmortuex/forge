@@ -69,14 +69,14 @@ run('platform-rpc', { 'src/alpha.ts': 'a\n', 'src/beta.ts': 'b\n', 'README.md': 
   const badExt = await rpc('scratch', 'create', ['../x'])
   check('scratch: an invalid extension is an error', !badExt.ok && /Invalid file extension/.test(badExt.error), JSON.stringify(badExt))
 
-  // Streaming: terminal output and exits arrive as bus events (Electron itself runs as plain node, so no shell is involved).
-  // The program lingers after printing: on Windows a pseudo-console can lose the output of a process that exits at once.
-  const asNode = { file: process.execPath, env: { ELECTRON_RUN_AS_NODE: '1' } }
+  // Streaming: terminal output and exits arrive as bus events. A console `node` from PATH is the child (the electron
+  // executable is a GUI-subsystem program on Windows and is not a reliable thing to run inside a pseudo-console).
+  const asNode = { file: 'node' }
   const events4 = (/** @type {number} */ id, /** @type {string} */ topic) => js(`window.__events.filter((e) => e[0] === ${JSON.stringify(topic)} && e[1].id === ${id}).map((e) => e[1])`)
   const quick = await rpc('terminal', 'create', [root, 80, 24, { ...asNode, args: ['-e', "console.log('hi-' + 'term'); setTimeout(() => {}, 1500)"] }])
   check('terminal: create returns an id', quick.ok && typeof quick.value === 'number', JSON.stringify(quick))
   const outSeen = await waitFor(async () => (await events4(quick.value, 'term.data')).some((/** @type {{ data: unknown }} */ e) => String(e.data).includes('hi-term')), 15000)
-  check('terminal: the program output arrives as term.data events', !!outSeen)
+  check('terminal: the program output arrives as term.data events', !!outSeen, JSON.stringify(await events4(quick.value, 'term.data')))
   const exited = await waitFor(async () => (await events4(quick.value, 'term.exit'))[0], 15000)
   check('terminal: the exit arrives as a term.exit event with code 0', !!exited && exited.code === 0, JSON.stringify(exited))
 
