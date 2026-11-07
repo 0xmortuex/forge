@@ -38,6 +38,17 @@ run('platform-rpc', { 'src/alpha.ts': 'a\n', 'src/beta.ts': 'b\n', 'README.md': 
   }, 8000)
   check('a file created outside Forge shows up through the watcher', !!seen)
 
+  fs.writeFileSync(path.join(root, 'src', 'texty.ts'), 'line one' + String.fromCharCode(10) + 'a Distinctive-Token-xyz here' + String.fromCharCode(10))
+  const textFound = await waitFor(async () => {
+    const r = await rpc('fileindex', 'searchText', ['distinctive-token'])
+    return r.ok && r.value.length === 1 ? r.value[0] : null
+  }, 8000)
+  check('searchText finds text in a file created outside Forge (line 2, case-insensitive)', !!textFound && textFound.line === 2 && textFound.path.endsWith('texty.ts'), JSON.stringify(textFound))
+  const shortQ = await rpc('fileindex', 'searchText', ['ab'])
+  check('searchText with fewer than 3 characters is an error', !shortQ.ok && /at least 3 characters/.test(shortQ.error), JSON.stringify(shortQ))
+  const tstats = await rpc('fileindex', 'textStats')
+  check('textStats reports the searchable files', tstats.ok && tstats.value.files >= 3 && tstats.value.building === false, JSON.stringify(tstats))
+
   fs.rmSync(path.join(root, 'src', 'alpha.ts'))
   const gone = await waitFor(async () => (await rpc('fileindex', 'query', ['alpha'])).value.length === 0, 8000)
   check('a deleted file leaves the index', !!gone)

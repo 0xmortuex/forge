@@ -139,3 +139,107 @@ test('list() returns every indexed file and follows watcher changes', async () =
     await p.done()
   }
 })
+
+test('searchText finds lines across the project and short queries are an error', async () => {
+  const p = await project(['src/a.ts', 'src/b.ts'])
+  try {
+    await writeFile(join(p.root, 'src', 'a.ts'), 'const Greeting = "hello world"\nother\n')
+    await writeFile(join(p.root, 'src', 'b.ts'), 'nothing\nsay HELLO again\n')
+    const idx = new FileIndex()
+    await idx.open(p.root)
+    const hits = await idx.searchText('hello')
+    assert.deepEqual(hits.map((h) => `${rel(p.root, h.path)}:${h.line}`).sort(), ['src/a.ts:1', 'src/b.ts:2'])
+    await assert.rejects(idx.searchText('he'), /at least 3 characters/)
+  } finally {
+    await p.done()
+  }
+})
+
+test('the text index follows watcher changes: edits, new files and removed folders', async () => {
+  const p = await project(['src/a.ts', 'keep/k.ts'])
+  try {
+    await writeFile(join(p.root, 'src', 'a.ts'), 'first version\n')
+    const idx = new FileIndex()
+    await idx.open(p.root)
+    assert.equal((await idx.searchText('first version')).length, 1)
+    await writeFile(join(p.root, 'src', 'a.ts'), 'second version\n')
+    await writeFile(join(p.root, 'src', 'new.ts'), 'brand new text\n')
+    await idx.changed([join(p.root, 'src', 'a.ts'), join(p.root, 'src', 'new.ts')])
+    assert.equal((await idx.searchText('first version')).length, 0)
+    assert.equal((await idx.searchText('second version')).length, 1)
+    assert.equal((await idx.searchText('brand new')).length, 1)
+    await rm(join(p.root, 'src'), { recursive: true })
+    await idx.changed([join(p.root, 'src')])
+    assert.equal((await idx.searchText('second version')).length, 0)
+  } finally {
+    await p.done()
+  }
+})
+
+test('binary files are listed as skipped, not searched', async () => {
+  const p = await project(['text.txt', 'blob.bin'])
+  try {
+    await writeFile(join(p.root, 'text.txt'), 'needle in a haystack\n')
+    await writeFile(join(p.root, 'blob.bin'), Buffer.from('needle\0\0binary'))
+    const idx = new FileIndex()
+    await idx.open(p.root)
+    assert.deepEqual((await idx.searchText('needle')).map((h) => rel(p.root, h.path)), ['text.txt'])
+    const stats = idx.textStats()
+    assert.equal(stats.files, 1)
+    assert.deepEqual(stats.skipped.map((s) => `${rel(p.root, s.path)}=${s.reason}`), ['blob.bin=binary'])
+  } finally {
+    await p.done()
+  }
+})
+
+test('opening another project leaves nothing of the first one searchable', async () => {
+  const one = await project(['a.txt'])
+  const two = await project(['b.txt'])
+  try {
+    await writeFile(join(one.root, 'a.txt'), 'only in project one\n')
+    await writeFile(join(two.root, 'b.txt'), 'only in project two\n')
+    const idx = new FileIndex()
+    await idx.open(one.root)
+    assert.equal((await idx.searchText('project one')).length, 1)
+    await idx.open(two.root)
+    assert.equal((await idx.searchText('project one')).length, 0)
+    assert.equal((await idx.searchText('project two')).length, 1)
+  } finally {
+    await one.done()
+    await two.done()
+  }
+})
+
+test('a file that changes while the text index is still being built is not left stale', async () => {
+  const p = await project(['a.txt'])
+  try {
+    const target = join(p.root, 'a.txt')
+    let current = 'old content\n'
+    let release!: () => void
+    const gate = new Promise<void>((ok) => (release = ok))
+    let firstRead = true
+    const idx = new FileIndex({
+      readText: async (path) => {
+        const seen = current // read before the gate: this is the stale text the build holds
+        if (path === target && firstRead) {
+          firstRead = false
+          await gate
+        }
+        return seen
+      }
+    })
+    await idx.open(p.root) // returns once the file list is final; the text build is blocked on the gate
+    assert.equal(idx.textStats().building, true)
+    current = 'new content\n'
+    await idx.changed([target])
+    release()
+    assert.equal((await idx.searchText('new content')).length, 1)
+    assert.equal((await idx.searchText('old content')).length, 0)
+  } finally {
+    await p.done()
+  }
+})
+
+test('searchText before a project is open is an error', async () => {
+  await assert.rejects(new FileIndex().searchText('anything'), /no project open/)
+})

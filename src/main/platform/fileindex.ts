@@ -1,9 +1,11 @@
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { dirname, relative, join, sep } from 'node:path'
 import { walkFiles } from '../walk'
+import { TextIndex, type SkipReason, type TextHit } from './textindex'
 
 // A persistent list of the project's files, kept current from the file watcher. A snapshot on disk makes the next
-// start answer queries immediately while a rescan reconciles anything that changed while Forge was closed.
+// start answer queries immediately while a rescan reconciles anything that changed while Forge was closed. Alongside it
+// lives an in-memory trigram index of the files' text (see textindex.ts), built in the background after each scan.
 
 export type IndexState = 'idle' | 'indexing' | 'ready'
 
@@ -19,6 +21,10 @@ export interface FileIndexApi {
   query(text: string, limit?: number): IndexHit[]
   /** Every indexed file, in the order the scan found them. */
   list(): string[]
+  /** Lines containing the text (at least 3 characters), case-insensitive. Waits for the text index to be built. */
+  searchText(text: string, limit?: number): Promise<TextHit[]>
+  /** How much of the project is searchable as text, and which files are not (binary, too large, unreadable). */
+  textStats(): { files: number; building: boolean; skipped: { path: string; reason: string }[] }
   /** Paths reported by the file watcher; `all` means events were lost and everything must be re-checked. */
   changed(paths: string[], all?: boolean): Promise<void>
 }
@@ -35,12 +41,20 @@ export interface FileIndexOptions {
   snapshotPath?: string | ((root: string) => string)
   walk?: (root: string, onFile: (path: string) => void) => Promise<void>
   onState?: (state: IndexState) => void
+  /** Reads a file's text for the text index; defaults to UTF-8 from disk. */
+  readText?: (path: string) => Promise<string>
 }
 
 export class FileIndex implements FileIndexApi {
   private root = ''
   private files = new Set<string>()
   private status: IndexState = 'idle'
+  private text = new TextIndex()
+  private textBuild: Promise<void> = Promise.resolve()
+  private building = false
+  private generation = 0
+  private dirty = new Set<string>()
+  private skipped = new Map<string, SkipReason | string>()
 
   constructor(private readonly opts: FileIndexOptions = {}) {}
 
@@ -58,14 +72,26 @@ export class FileIndex implements FileIndexApi {
     this.opts.onState?.(s)
   }
 
-  async open(root: string): Promise<{ files: number }> {
+  /** Resolves when the scan in progress (if any) is over, however it ended; searchText waits for it. */
+  private scan: Promise<void> = Promise.resolve()
+
+  open(root: string): Promise<{ files: number }> {
     this.root = root
     this.files = new Set()
+    this.generation++ // a text index build for the previous project must not land in this one
+    this.text = new TextIndex()
+    this.skipped = new Map()
+    this.dirty = new Set()
+    this.building = false
     this.setState('indexing')
-    const cached = await this.readSnapshot(root)
-    if (cached) this.files = new Set(cached.files.map((rel) => join(root, rel)))
-    await this.rescan()
-    return { files: this.files.size }
+    const run = (async () => {
+      const cached = await this.readSnapshot(root)
+      if (cached) this.files = new Set(cached.files.map((rel) => join(root, rel)))
+      await this.doRescan()
+      return { files: this.files.size }
+    })()
+    this.scan = run.then(() => undefined, () => undefined)
+    return run
   }
 
   private async readSnapshot(root: string): Promise<Snapshot | null> {
@@ -89,13 +115,75 @@ export class FileIndex implements FileIndexApi {
     return snap.root === root ? snap : null
   }
 
-  private async rescan(): Promise<void> {
+  /** A rescan on its own (events were lost): tracked so that searchText waits for it. */
+  private rescan(): Promise<void> {
+    const run = this.doRescan()
+    this.scan = run.then(() => undefined, () => undefined)
+    return run
+  }
+
+  private async doRescan(): Promise<void> {
     this.setState('indexing')
     const fresh = new Set<string>()
     await (this.opts.walk ?? walkFiles)(this.root, (p) => void fresh.add(p))
     this.files = fresh
     await this.writeSnapshot()
     this.setState('ready')
+    const build = this.buildText(++this.generation)
+    build.catch(() => undefined) // not unhandled: searchText awaits this promise and reports a failure itself
+    this.textBuild = build
+  }
+
+  private readText(path: string): Promise<string> {
+    return (this.opts.readText ?? ((p: string) => readFile(p, 'utf8')))(path)
+  }
+
+  private async indexTextOf(ix: TextIndex, path: string): Promise<void> {
+    let text: string
+    try {
+      text = await this.readText(path)
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code
+      ix.remove(path)
+      if (code === 'ENOENT') this.skipped.delete(path) // gone; the watcher drops it from the file list
+      else this.skipped.set(path, `unreadable (${code ?? (err as Error).message})`)
+      return
+    }
+    const why = ix.add(path, text)
+    if (why) this.skipped.set(path, why)
+    else this.skipped.delete(path)
+  }
+
+  private async buildText(gen: number): Promise<void> {
+    this.building = true
+    this.dirty = new Set()
+    this.skipped = new Map()
+    const ix = new TextIndex()
+    const queue = [...this.files]
+    const worker = async (): Promise<void> => {
+      for (let p = queue.pop(); p !== undefined; p = queue.pop()) {
+        if (gen !== this.generation) return // a newer scan replaced this one
+        await this.indexTextOf(ix, p)
+      }
+    }
+    await Promise.all(Array.from({ length: 16 }, worker))
+    if (gen !== this.generation) return
+    // Files that changed while this build was running may have been read before the change.
+    for (const p of this.dirty) await this.indexTextOf(ix, p)
+    this.dirty.clear()
+    this.text = ix
+    this.building = false
+  }
+
+  async searchText(text: string, limit = 100): Promise<TextHit[]> {
+    if (!this.root) throw new Error('The index has no project open')
+    await this.scan
+    await this.textBuild
+    return this.text.search(text, limit, (p) => this.readText(p))
+  }
+
+  textStats(): { files: number; building: boolean; skipped: { path: string; reason: string }[] } {
+    return { files: this.text.size, building: this.building, skipped: [...this.skipped].map(([path, reason]) => ({ path, reason })) }
   }
 
   private writing: Promise<void> = Promise.resolve()
@@ -132,7 +220,11 @@ export class FileIndex implements FileIndexApi {
       if (kind === 'file') {
         if (!this.files.has(p)) touched = true
         this.files.add(p)
+        if (this.building) this.dirty.add(p)
+        await this.indexTextOf(this.text, p)
       } else if (kind === 'gone') {
+        this.text.removeTree(p, sep)
+        for (const k of [...this.skipped.keys()]) if (k === p || k.startsWith(p + sep)) this.skipped.delete(k)
         // The path may have been a file or a whole folder: drop it and everything beneath it.
         const prefix = p + sep
         for (const f of [...this.files]) {
