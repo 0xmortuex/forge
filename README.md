@@ -8,6 +8,8 @@ with an end-to-end test suite that drives the real UI.
 
 ![Forge: project tree, editor with breadcrumbs, Structure and Problems windows](docs/overview.png)
 
+How the backend is organised (modules, typed RPC, project index, MCP server): [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## Highlights
 
 - **Colorful, animated, and yours to change** — 17 themes (dark, light and neon), a rainbow accent, glass panels, an
