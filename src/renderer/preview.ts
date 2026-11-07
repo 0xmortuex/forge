@@ -1,5 +1,6 @@
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
+import { filesService } from './rpc'
 
 // The Preview window: the Markdown file in the editor, rendered, and updated as you type. The HTML is sanitized (a
 // Markdown file can contain raw HTML), relative images are loaded from disk, and links open where you would expect:
@@ -59,8 +60,7 @@ export function initPreview(d: PreviewDeps): Preview {
       if (!src || /^(data:|https?:|\/\/)/i.test(src)) continue
       const abs = `${baseDir}${baseDir.includes('\\') ? '\\' : '/'}${decodeURI(src).replace(/^\.[\\/]/, '')}`
       img.removeAttribute('src')
-      window.forge
-        .readDataUrl(abs)
+      filesService.readDataUrl(abs)
         .then((r) => {
           if (mine === seq) img.setAttribute('src', r.url)
         })

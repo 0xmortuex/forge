@@ -3,6 +3,7 @@ import { askText } from './menu'
 import { settings } from './settings'
 import { applyWorkspaceEdit } from './lsp-edits'
 import type { HierarchyNode, HierarchyRoot } from './hierarchy'
+import { filesService } from './rpc'
 import type {
   CallHierarchyIncomingCall,
   CallHierarchyItem,
@@ -34,6 +35,7 @@ import type {
   WorkspaceEdit,
   WorkspaceSymbol
 } from 'vscode-languageserver-protocol'
+import { lspService, onLspApplyEdit, onLspDiagnostics, onLspLog } from './rpc'
 
 /** Monaco language ids that Forge can talk to a language server for (see BY_EXT in main/lsp.ts). */
 // Every language: which files have a server is decided by the main process (docs it declines stay unsupported and the providers
@@ -140,7 +142,7 @@ export function initLsp(deps: LspDeps): {
     const version = doc.model.getVersionId()
     if (!doc.supported || version === doc.sentVersion) return
     doc.sentVersion = version
-    await window.forge.lspChange(doc.uri, version, doc.model.getValue())
+    await lspService.change(doc.uri, version, doc.model.getValue())
   }
 
   /** Sends pending edits first, then the request. Null if no server handles this document. */
@@ -151,7 +153,7 @@ export function initLsp(deps: LspDeps): {
     if (!doc.supported) return null
     await flush(doc)
     try {
-      return (await window.forge.lspRequest(doc.uri, method, {
+      return (await lspService.request(doc.uri, method, {
         textDocument: { uri: doc.uri },
         ...params
       })) as T | null
@@ -170,8 +172,7 @@ export function initLsp(deps: LspDeps): {
       model, uri, supported: false, sentVersion: model.getVersionId(), timer: undefined,
       errors: 0, warnings: 0, diagnostics: [], opening: Promise.resolve()
     }
-    doc.opening = window.forge
-      .lspOpen(root, uri, path, model.getVersionId(), model.getValue())
+    doc.opening = lspService.open(root, uri, path, model.getVersionId(), model.getValue())
       .then((supported) => {
         doc.supported = supported
       })
@@ -194,7 +195,7 @@ export function initLsp(deps: LspDeps): {
     docs.delete(key)
     publishProblems()
     void doc.opening
-      .then(() => (doc.supported ? window.forge.lspClose(doc.uri) : undefined))
+      .then(() => (doc.supported ? lspService.close(doc.uri) : undefined))
       .catch((err: unknown) => deps.report(`Language server close: ${String(err)}`, true))
   }
 
@@ -209,7 +210,7 @@ export function initLsp(deps: LspDeps): {
   }
 
   // ---- Diagnostics ----
-  window.forge.onLspDiagnostics((uri, raw) => {
+  onLspDiagnostics((uri, raw) => {
     const doc = docs.get(keyOf(uri))
     if (!doc) return
     const diags = raw as Diagnostic[]
@@ -232,7 +233,7 @@ export function initLsp(deps: LspDeps): {
   })
 
   // Only real problems are shown; chatty Info/Log messages are dropped on purpose.
-  window.forge.onLspLog((server, type, message) => {
+  onLspLog((server, type, message) => {
     if (type <= 2) deps.report(`[${server}] ${message}`, type === 1)
   })
 
@@ -282,7 +283,7 @@ export function initLsp(deps: LspDeps): {
     async resolveCompletionItem(item) {
       const entry = rawItems.get(item)
       if (!entry) return item
-      const full = (await window.forge.lspRequest(entry.uri, 'completionItem/resolve', entry.raw)) as CompletionItem | null
+      const full = (await lspService.request(entry.uri, 'completionItem/resolve', entry.raw)) as CompletionItem | null
       if (!full) return item
       item.detail = full.detail ?? item.detail
       item.documentation = docText(full.documentation) ?? item.documentation
@@ -350,7 +351,7 @@ export function initLsp(deps: LspDeps): {
     if (!doc) return null
     await doc.opening
     if (!doc.supported) return null
-    doc.caps ??= window.forge.lspCapabilities(doc.uri) as Promise<ServerCapabilities>
+    doc.caps ??= lspService.capabilities(doc.uri) as Promise<ServerCapabilities>
     return doc.caps
   }
 
@@ -528,7 +529,7 @@ export function initLsp(deps: LspDeps): {
 
   async function lineTexts(path: string): Promise<string[]> {
     const open = deps.getModel(path)
-    const text = open ? open.getValue() : await window.forge.readFile(path)
+    const text = open ? open.getValue() : await filesService.readFile(path)
     return text.split('\n').map((l) => (l.endsWith('\r') ? l.slice(0, -1) : l))
   }
 
@@ -624,10 +625,10 @@ export function initLsp(deps: LspDeps): {
     let a = action
     if (!a.edit && !a.command) {
       // Many servers send fixes without their edit and fill it in on demand.
-      const caps = await window.forge.lspCapabilities(uri)
+      const caps = await lspService.capabilities(uri)
       const provider = (caps as ServerCapabilities).codeActionProvider
       if (typeof provider === 'object' && provider.resolveProvider) {
-        a = (await window.forge.lspRequest(uri, 'codeAction/resolve', a)) as CodeAction
+        a = (await lspService.request(uri, 'codeAction/resolve', a)) as CodeAction
       }
     }
     if (a.edit) {
@@ -635,7 +636,7 @@ export function initLsp(deps: LspDeps): {
       deps.report(`${a.title}: ${res.edits} edit${res.edits === 1 ? '' : 's'}`)
     }
     if (a.command) {
-      await window.forge.lspRequest(uri, 'workspace/executeCommand', { command: a.command.command, arguments: a.command.arguments })
+      await lspService.request(uri, 'workspace/executeCommand', { command: a.command.command, arguments: a.command.arguments })
     }
     if (!a.edit && !a.command) throw new Error('The language server offered no edit or command for this fix')
   }
@@ -671,7 +672,7 @@ export function initLsp(deps: LspDeps): {
   // Which request lists a node's children depends on which hierarchy it belongs to; `mode` is remembered per tree.
   let mode: 'incoming' | 'outgoing' | 'supertypes' | 'subtypes' = 'incoming'
   async function childrenOf(origin: string, it: CallHierarchyItem | TypeHierarchyItem): Promise<(CallHierarchyItem | TypeHierarchyItem)[]> {
-    const ask = <T,>(method: string): Promise<T | null> => window.forge.lspRequest(origin, method, { item: it }) as Promise<T | null>
+    const ask = <T,>(method: string): Promise<T | null> => lspService.request(origin, method, { item: it }) as Promise<T | null>
     if (mode === 'incoming') return ((await ask<CallHierarchyIncomingCall[]>('callHierarchy/incomingCalls')) ?? []).map((c) => c.from)
     if (mode === 'outgoing') return ((await ask<CallHierarchyOutgoingCall[]>('callHierarchy/outgoingCalls')) ?? []).map((c) => c.to)
     return (await ask<TypeHierarchyItem[]>(mode === 'supertypes' ? 'typeHierarchy/supertypes' : 'typeHierarchy/subtypes')) ?? []
@@ -712,7 +713,7 @@ export function initLsp(deps: LspDeps): {
   async function workspaceSymbols(query: string): Promise<SymbolHit[]> {
     const root = deps.getRoot()
     if (!root || !query.trim()) return []
-    const answers = await window.forge.lspWorkspace(root, 'workspace/symbol', { query })
+    const answers = await lspService.workspace(root, 'workspace/symbol', { query })
     const out: SymbolHit[] = []
     for (const a of answers) {
       if (a.error) {
@@ -737,7 +738,7 @@ export function initLsp(deps: LspDeps): {
   async function willRename(files: { from: string; to: string }[]): Promise<number> {
     const root = deps.getRoot()
     if (!root) return 0
-    const answers = await window.forge.lspWorkspace(root, 'workspace/willRenameFiles', {
+    const answers = await lspService.workspace(root, 'workspace/willRenameFiles', {
       files: files.map((f) => ({ oldUri: monaco.Uri.file(f.from).toString(), newUri: monaco.Uri.file(f.to).toString() }))
     })
     let edits = 0
@@ -861,13 +862,13 @@ export function initLsp(deps: LspDeps): {
   )
 
   // A server can also push edits itself (workspace/applyEdit), e.g. after running a command.
-  window.forge.onLspApplyEdit((id, edit) => {
+  onLspApplyEdit((id, edit) => {
     applyWorkspaceEdit(edit as WorkspaceEdit, { getModel: deps.getModel }).then(
-      () => void window.forge.lspApplyEditResult(id, true),
+      () => void lspService.applyEditResult(id, true),
       (err: unknown) => {
         const message = err instanceof Error ? err.message : String(err)
         deps.report(`Applying a server edit failed: ${message}`, true)
-        void window.forge.lspApplyEditResult(id, false, message)
+        void lspService.applyEditResult(id, false, message)
       }
     )
   })

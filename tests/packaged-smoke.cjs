@@ -73,19 +73,19 @@ async function main() {
       }).then((m) => (m.result.exceptionDetails ? { error: m.result.exceptionDetails.exception?.description ?? m.result.exceptionDetails.text } : m.result.result.value))
 
     for (let i = 0; i < 40 && (await evaluate("typeof window.forge === 'object' && !!document.getElementById('welcome')")) !== true; i++) await sleep(500)
-    check('the page loads with its preload bridge', (await evaluate("typeof window.forge.termCreate === 'function'")) === true)
+    check('the page loads with its preload bridge', (await evaluate("typeof window.forge.rpc === 'function'")) === true)
 
-    const pty = await evaluate(`window.forge.termCreate(${JSON.stringify(project)}, 80, 24).then((id) => { window.forge.termKill(id); return typeof id })`)
+    const pty = await evaluate(`window.forge.rpc({ service: 'terminal', method: 'create', args: [${JSON.stringify(project)}, 80, 24] }).then((r) => { window.forge.rpc({ service: 'terminal', method: 'kill', args: [r.value] }); return typeof r.value })`)
     check('a real shell starts (node-pty works from the package)', pty === 'number', JSON.stringify(pty))
 
-    const dict = await evaluate('window.forge.spellDictionary().then((d) => ({ aff: (d.aff || "").length, dic: (d.dic || "").length }))')
+    const dict = await evaluate('window.forge.rpc({ service: "spell", method: "dictionary", args: [] }).then((r) => r.value).then((d) => ({ aff: (d.aff || "").length, dic: (d.dic || "").length }))')
     check('the spell-check dictionary is found', !!dict && dict.aff > 100 && dict.dic > 1000, JSON.stringify(dict))
 
     for (const [file, text] of [['config.yaml', 'a: 1\n'], ['main.ts', 'const x: number = 1\n']]) {
       const full = path.join(project, file)
       fs.writeFileSync(full, text)
       const uri = 'file:///' + full.split(path.sep).join('/')
-      const caps = await evaluate(`window.forge.lspOpen(${JSON.stringify(project)}, ${JSON.stringify(uri)}, ${JSON.stringify(full)}, 1, ${JSON.stringify(text)}).then(async (ok) => ok ? Object.keys(await window.forge.lspCapabilities(${JSON.stringify(uri)})).length : -1)`)
+      const caps = await evaluate(`(async () => { const call = (m, ...a) => window.forge.rpc({ service: 'lsp', method: m, args: a }).then((r) => { if (!r.ok) throw new Error(r.error); return r.value }); const ok = await call('open', ${JSON.stringify(project)}, ${JSON.stringify(uri)}, ${JSON.stringify(full)}, 1, ${JSON.stringify(text)}); return ok ? Object.keys(await call('capabilities', ${JSON.stringify(uri)})).length : -1 })()`)
       check(`the bundled language server for ${file} starts`, typeof caps === 'number' && caps > 0, JSON.stringify(caps))
     }
     ws.close()

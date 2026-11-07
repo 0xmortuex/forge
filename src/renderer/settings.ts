@@ -1,4 +1,6 @@
 import { KEYMAP_PRESETS } from './keymap-presets'
+import { settingsService } from './rpc'
+import type { LoadedUserData } from '../main/settings'
 
 // Every user-changeable option is declared once here. The Settings window is generated from this list,
 // settings.json stores only what differs from the defaults, and appearance.ts applies each value live.
@@ -119,6 +121,10 @@ export const DEFS: SettingDef[] = [
     description: 'Type value.log, items.for, user.if and similar, then accept the suggestion to rewrite the expression (JavaScript, TypeScript, Python, Java, Kotlin, C#, Go, Rust).' },
   { key: 'spellcheck', category: 'Editor', group: 'Display', label: 'Check spelling', default: true, control: onOff,
     description: 'Underlines misspelled words in comments, strings, Markdown and text files (English). Ctrl+. offers corrections.' },
+  { key: 'projectWords', category: 'Editor', group: 'Display', label: 'Complete words from the whole project', default: false, control: onOff,
+    description: 'Offers words used anywhere in the project (not only in the open file) as you type, after the language server\'s suggestions. Works offline; nothing is sent anywhere.' },
+  { key: 'localInline', category: 'Editor', group: 'Display', label: 'Finish the line from your project', default: false, control: onOff,
+    description: 'Grey text for the rest of the line, Tab accepts it. It comes from a small language model trained on this project\'s own files, on this computer: nothing is sent anywhere, and it stays silent unless it is sure. The AI suggestions take its place when they are on.' },
   { key: 'emmet', category: 'Editor', group: 'Display', label: 'Emmet abbreviations', default: true, control: onOff,
     description: 'Type ul>li*3 or df in an HTML or CSS file and press Tab (or pick the suggestion) to expand it.' },
   { key: 'codeVision', category: 'Editor', group: 'Display', label: 'Show usages above declarations', default: true, control: onOff,
@@ -207,7 +213,7 @@ export interface Store {
 }
 
 // If the user-data folder can't be read at all, start with defaults and say why (the page must still render).
-const data: Awaited<ReturnType<typeof window.forge.settingsLoad>> = await window.forge.settingsLoad().catch((err: unknown) => ({
+const data: LoadedUserData = await settingsService.load().catch((err: unknown) => ({
   settings: {},
   state: {},
   themes: [],
@@ -307,7 +313,7 @@ function changed(key: string, value: Value): void {
   window.clearTimeout(timer)
   timer = window.setTimeout(() => {
     const out = { ...extra, ...Object.fromEntries(overrides) }
-    window.forge.settingsSave(JSON.stringify(out, null, 2)).catch((err: unknown) => settings.onSaveError(err as Error))
+    settingsService.save(JSON.stringify(out, null, 2)).catch((err: unknown) => settings.onSaveError(err as Error))
   }, 250)
 }
 
@@ -317,12 +323,12 @@ export function flushSettings(): Promise<void> {
   window.clearTimeout(timer)
   timer = undefined
   const out = { ...extra, ...Object.fromEntries(overrides) }
-  return window.forge.settingsSave(JSON.stringify(out, null, 2))
+  return settingsService.save(JSON.stringify(out, null, 2))
 }
 
 /** Writes settings.json now (an empty object if nothing is customized), so it can be opened in the editor. */
 export function ensureSettingsFile(): Promise<void> {
   window.clearTimeout(timer)
   timer = undefined
-  return window.forge.settingsSave(JSON.stringify({ ...extra, ...Object.fromEntries(overrides) }, null, 2))
+  return settingsService.save(JSON.stringify({ ...extra, ...Object.fromEntries(overrides) }, null, 2))
 }

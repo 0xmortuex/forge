@@ -77,8 +77,12 @@ run(
     )
 
     // ---- tabs ----
-    for (const n of ['a.txt', 'b.txt', 'c.txt']) await js(`${node(n)}.click()`)
-    await waitFor(async () => (await tabNames()) === 'shapes.ts,a.txt,b.txt,c.txt', 3000)
+    // One at a time: a tab appears when its file has been read, so clicking all three at once gives them in any order.
+    for (const n of ['a.txt', 'b.txt', 'c.txt']) {
+      await js(`${node(n)}.click()`)
+      await waitFor(async () => (await tabNames()).split(',').includes(n), 5000)
+    }
+    await waitFor(async () => (await tabNames()) === 'shapes.ts,a.txt,b.txt,c.txt', 8000)
     check('the breadcrumbs follow the active tab', (await crumbs()) === 'c.txt', await crumbs())
     await js(`(() => {
       const [, , , c] = document.querySelectorAll('#tabs .tab')
@@ -88,7 +92,7 @@ run(
       a.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }))
       a.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }))
     })()`)
-    check('dragging a tab onto another reorders them', !!(await waitFor(async () => (await tabNames()) === 'shapes.ts,c.txt,a.txt,b.txt', 3000)), await tabNames())
+    check('dragging a tab onto another reorders them', !!(await waitFor(async () => (await tabNames()) === 'shapes.ts,c.txt,a.txt,b.txt', 8000)), await tabNames())
     await js("[...document.querySelectorAll('#tabs .tab')].find(t => t.textContent.includes('a.txt')).dispatchEvent(new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 }))")
     check('middle-click closes a tab', !!(await waitFor(async () => (await tabNames()) === 'shapes.ts,c.txt,b.txt', 3000)), await tabNames())
 

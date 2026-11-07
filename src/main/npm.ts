@@ -2,7 +2,6 @@ import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
-import { ipcMain } from 'electron'
 import { findOnPath } from './terminal'
 
 // The npm window's data: the package.json files of the project (a monorepo has several), their scripts, their dependencies with
@@ -141,7 +140,17 @@ export async function checkOutdated(dir: string): Promise<Record<string, Outdate
   return out
 }
 
-export function registerNpm(): void {
-  ipcMain.handle('npm:packages', (_e, root: string) => findPackages(resolve(root)))
-  ipcMain.handle('npm:outdated', (_e, dir: string) => checkOutdated(dir))
+export interface NpmApi {
+  packages(root: string): Promise<NpmPackage[]>
+  outdated(dir: string): Promise<Record<string, Outdated>>
+}
+
+/** Provided as the "npm" service (see platform). */
+export class NpmService implements NpmApi {
+  packages(root: string): Promise<NpmPackage[]> {
+    return findPackages(resolve(root))
+  }
+  outdated(dir: string): Promise<Record<string, Outdated>> {
+    return checkOutdated(dir)
+  }
 }

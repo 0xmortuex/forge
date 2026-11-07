@@ -79,39 +79,7 @@ function checkId(id: string): void {
 
 export function registerExtensions(): void {
   // Each extension's private key-value store (forge.storage), one JSON file per extension.
-  ipcMain.handle('extensions:data-load', async (_e, id: string): Promise<Record<string, unknown>> => {
-    checkId(id)
-    try {
-      const parsed = JSON.parse(await readFile(join(dataDir(), `${id}.json`), 'utf8')) as unknown
-      return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {}
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return {}
-      throw new Error(`The stored data of extension "${id}" cannot be read: ${(err as Error).message}`)
-    }
-  })
-  ipcMain.handle('extensions:data-save', async (_e, id: string, json: string) => {
-    checkId(id)
-    if (Buffer.byteLength(json) > MAX_DATA_BYTES) throw new Error(`Extension "${id}" stores too much data (the limit is ${MAX_DATA_BYTES / 1024} KB)`)
-    await mkdir(dataDir(), { recursive: true })
-    await writeFile(join(dataDir(), `${id}.json`), json)
-  })
   // forge.net.fetch: the request is made here, not in the page, and only for an extension that asked for "network".
-  ipcMain.handle('extensions:fetch', async (_e, id: string, spec: HttpRequestSpec): Promise<HttpResponse> => {
-    const info = await describe(id)
-    if (info.error || !info.permissions.includes('network')) throw new Error(`Extension "${id}" has not asked for the "network" permission`)
-    return sendRequest(spec)
-  })
-
-  ipcMain.handle('extensions:list', async (): Promise<ExtensionInfo[]> => {
-    let names: string[] = []
-    try {
-      const entries = await readdir(extensionsDir(), { withFileTypes: true })
-      names = entries.filter((e) => e.isDirectory()).map((e) => e.name).sort()
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err // no extensions folder yet is normal
-    }
-    return Promise.all(names.map(describe))
-  })
 
   ipcMain.handle('extensions:openDir', async () => {
     await mkdir(extensionsDir(), { recursive: true })
@@ -132,4 +100,49 @@ export function registerExtensions(): void {
       return net.fetch(pathToFileURL(file).href)
     })
   })
+}
+
+export interface ExtensionsApi {
+  dataLoad(id: string): Promise<Record<string, unknown>>
+  dataSave(id: string, json: string): Promise<void>
+  fetch(id: string, spec: HttpRequestSpec): Promise<HttpResponse>
+  list(): Promise<ExtensionInfo[]>
+}
+
+/** Provided as the "extensions" service (see platform). Opening the folder and the forge-ext:// scheme stay with the window. */
+export class ExtensionsService implements ExtensionsApi {
+  async dataLoad(id: string): Promise<Record<string, unknown>> {
+    checkId(id)
+    try {
+      const parsed = JSON.parse(await readFile(join(dataDir(), `${id}.json`), 'utf8')) as unknown
+      return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {}
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return {}
+      throw new Error(`The stored data of extension "${id}" cannot be read: ${(err as Error).message}`)
+    }
+  }
+
+  async dataSave(id: string, json: string): Promise<void> {
+    checkId(id)
+    if (Buffer.byteLength(json) > MAX_DATA_BYTES) throw new Error(`Extension "${id}" stores too much data (the limit is ${MAX_DATA_BYTES / 1024} KB)`)
+    await mkdir(dataDir(), { recursive: true })
+    await writeFile(join(dataDir(), `${id}.json`), json)
+  }
+
+  async fetch(id: string, spec: HttpRequestSpec): Promise<HttpResponse> {
+    const info = await describe(id)
+    if (info.error || !info.permissions.includes('network')) throw new Error(`Extension "${id}" has not asked for the "network" permission`)
+    return sendRequest(spec)
+  }
+
+  async list(): Promise<ExtensionInfo[]> {
+    let names: string[] = []
+    try {
+      const entries = await readdir(extensionsDir(), { withFileTypes: true })
+      names = entries.filter((e) => e.isDirectory()).map((e) => e.name).sort()
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err // no extensions folder yet is normal
+    }
+    return Promise.all(names.map(describe))
+  }
 }

@@ -2,6 +2,7 @@ import { Terminal, type ITheme } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { settings } from './settings'
+import { onTermData, onTermExit, terminalService } from './rpc'
 
 // Set from the active theme (see themes.ts); until then, a neutral dark default.
 let currentTheme: ITheme = { background: '#263238', foreground: '#b0bec5', cursor: '#26c6b0' }
@@ -102,10 +103,10 @@ export function createTerminalView(
   const observer = new ResizeObserver(fitNow)
   observer.observe(container)
 
-  const offData = window.forge.onTermData((tid, data) => {
+  const offData = onTermData((tid, data) => {
     if (tid === id) term?.write(data)
   })
-  const offExit = window.forge.onTermExit((tid, code) => {
+  const offExit = onTermExit((tid, code) => {
     if (tid !== id) return
     id = null
     term?.write(`\r\n\x1b[90m[${opts.exitMessage(code)}]\x1b[0m\r\n`)
@@ -121,10 +122,10 @@ export function createTerminalView(
     term.open(container)
     term.attachCustomKeyEventHandler((e) => !isAppShortcut(e)) // false = xterm ignores it and it reaches the app
     term.onData((data) => {
-      if (id !== null) void window.forge.termWrite(id, data)
+      if (id !== null) void terminalService.write(id, data)
     })
     term.onResize(({ cols, rows }) => {
-      if (id !== null) void window.forge.termResize(id, cols, rows)
+      if (id !== null) void terminalService.resize(id, cols, rows)
     })
     return term
   }
@@ -133,7 +134,7 @@ export function createTerminalView(
     if (id === null) return
     const old = id
     id = null // the old process's output and exit are ignored from here on
-    await window.forge.termKill(old)
+    await terminalService.kill(old)
   }
 
   async function begin(create: (cols: number, rows: number) => Promise<number>): Promise<void> {
@@ -147,7 +148,7 @@ export function createTerminalView(
   function startShell(): Promise<void> {
     const cwd = getCwd()
     if (!cwd) throw new Error('Open a folder first (Ctrl+O) — the terminal starts in the project folder')
-    return begin((cols, rows) => window.forge.termCreate(cwd, cols, rows, shellSpec()))
+    return begin((cols, rows) => terminalService.create(cwd, cols, rows, shellSpec()))
   }
 
   return {
@@ -165,7 +166,7 @@ export function createTerminalView(
     kill,
     isRunning: () => id !== null,
     write: (data) => {
-      if (id !== null) void window.forge.termWrite(id, data)
+      if (id !== null) void terminalService.write(id, data)
     },
     dispose: async () => {
       await kill()

@@ -22,12 +22,17 @@ run('terminal-split', { 'a.txt': 'x\n' }, async (t) => {
   const rects = await js("[...document.querySelectorAll('.term-pane:not([hidden]) .term-cell')].map(c => { const r = c.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.width), Math.round(r.height)] })")
   check('they sit side by side with similar widths', rects[1][0] > rects[0][0] + rects[0][1] - 4 && Math.abs(rects[0][1] - rects[1][1]) < 40 && rects[0][2] > 50, JSON.stringify(rects))
 
-  await focusCell(0)
-  await type('echo LEFT-$(1+1)')
-  enter()
-  await focusCell(1)
-  await type('echo RIGHT-$(2+2)')
-  enter()
+  // Enter is a synthetic key event and can be lost; the command stays typed at the prompt, so press it again until the output shows.
+  const runIn = async (/** @type {number} */ cell, /** @type {string} */ command, /** @type {string} */ output) => {
+    await focusCell(cell)
+    await type(command)
+    for (let attempt = 0; attempt < 4; attempt++) {
+      enter()
+      if (await waitFor(async () => (await cellText(cell)).includes(output), 4000)) return
+    }
+  }
+  await runIn(0, 'echo LEFT-$(1+1)', 'LEFT-2')
+  await runIn(1, 'echo RIGHT-$(2+2)', 'RIGHT-4')
   check('each half runs its own commands', !!(await waitFor(async () => (await cellText(0)).includes('LEFT-2') && (await cellText(1)).includes('RIGHT-4'), 15000)), `${await cellText(0)} || ${await cellText(1)}`)
   check('and neither sees the other’s output', !(await cellText(0)).includes('RIGHT-4') && !(await cellText(1)).includes('LEFT-2'))
 

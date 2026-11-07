@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { app, ipcMain } from 'electron'
+import { app } from 'electron'
 
 // Local History: Forge keeps a snapshot of a file whenever you open it (if it changed since the last one) and whenever
 // you save it, so you can see what it looked like earlier and go back. Snapshots live in the user-data folder, one
@@ -62,8 +62,23 @@ export async function readSnapshot(path: string, id: string): Promise<string> {
   return readFile(join(dirFor(path), `${id}.txt`), 'utf8')
 }
 
-export function registerHistory(): void {
-  ipcMain.handle('history:add', (_e, path: string, text: string) => addSnapshot(path, text))
-  ipcMain.handle('history:list', (_e, path: string) => listSnapshots(path))
-  ipcMain.handle('history:read', (_e, path: string, id: string) => readSnapshot(path, id))
+export interface HistoryApi {
+  /** Stores a snapshot unless it equals the latest one; says whether anything was stored. */
+  add(path: string, text: string): Promise<boolean>
+  /** Newest first. */
+  list(path: string): Promise<Snapshot[]>
+  read(path: string, id: string): Promise<string>
+}
+
+/** Provided as the "history" service (see platform). */
+export class HistoryService implements HistoryApi {
+  add(path: string, text: string): Promise<boolean> {
+    return addSnapshot(path, text)
+  }
+  list(path: string): Promise<Snapshot[]> {
+    return listSnapshots(path)
+  }
+  read(path: string, id: string): Promise<string> {
+    return readSnapshot(path, id)
+  }
 }

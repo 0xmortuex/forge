@@ -2,6 +2,7 @@ import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import { ago, type PrDetail, type PrSummary } from '../main/ghparse'
 import { askText } from './menu'
+import { githubService } from './rpc'
 
 // The Pull Requests window (GitHub, through the gh CLI): the open / closed / merged pull requests of the project's
 // repository with their checks and review state, a detail pane, and checkout, diff, comment and create.
@@ -99,7 +100,7 @@ export function initGithub(d: GithubDeps): GithubView {
     const root = d.getRoot()
     if (!root) return
     hint(detail, 'Loading…')
-    const pr = await run(`Pull request #${n}`, () => window.forge.ghView(root, n))
+    const pr = await run(`Pull request #${n}`, () => githubService.view(root, n))
     if (!pr || selected !== n) return
     detail.replaceChildren(renderDetail(pr, root))
   }
@@ -123,19 +124,19 @@ export function initGithub(d: GithubDeps): GithubView {
     actions.append(
       button('gh-checkout', 'Checkout', () => {
         void run('Checkout', async () => {
-          const said = await window.forge.ghCheckout(root, pr.number)
+          const said = await githubService.checkout(root, pr.number)
           d.report(said)
           d.branchChanged()
         })
       }, true),
       button('gh-diff', 'View Diff', () => {
-        void run('Diff', async () => d.openText('diff', await window.forge.ghDiff(root, pr.number)))
+        void run('Diff', async () => d.openText('diff', await githubService.diff(root, pr.number)))
       }),
       button('gh-comment', 'Add Comment…', () => {
         void run('Comment', async () => {
           const text = await askText(`Comment on #${pr.number}`)
           if (text === null || !text.trim()) return
-          await window.forge.ghComment(root, pr.number, text)
+          await githubService.comment(root, pr.number, text)
           d.report(`Commented on #${pr.number}`)
           await showDetail(pr.number)
         })
@@ -189,7 +190,7 @@ export function initGithub(d: GithubDeps): GithubView {
       detail.replaceChildren()
       return
     }
-    const status = await window.forge.ghStatus(root)
+    const status = await githubService.status(root)
     if (mine !== seq) return
     repoEl.textContent = status.repo ?? ''
     newBtn.disabled = !status.repo
@@ -201,7 +202,7 @@ export function initGithub(d: GithubDeps): GithubView {
     hint(list, 'Loading…')
     let prs: PrSummary[]
     try {
-      prs = await window.forge.ghList(root, stateSel.value as State)
+      prs = await githubService.list(root, stateSel.value as State)
     } catch (err) {
       if (mine === seq) hint(list, err instanceof Error ? err.message : String(err), true)
       return
@@ -232,7 +233,7 @@ export function initGithub(d: GithubDeps): GithubView {
       const prTitle = await askText('Pull request title')
       if (prTitle === null || !prTitle.trim()) return
       const prBody = (await askText('Description (optional)')) ?? ''
-      const url = await window.forge.ghCreate(root, { title: prTitle.trim(), body: prBody })
+      const url = await githubService.create(root, { title: prTitle.trim(), body: prBody })
       d.report(`Created ${url}`)
       await refresh()
     })

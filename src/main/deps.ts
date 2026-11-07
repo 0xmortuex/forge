@@ -1,6 +1,5 @@
 import { readFile, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { ipcMain } from 'electron'
 import { buildGraph, findCycles, type Graph } from './depgraph'
 import { walkFiles } from './walk'
 
@@ -31,6 +30,13 @@ export async function analyseDependencies(root: string): Promise<DepsResult> {
   return { graph, cycles: findCycles(graph), truncated }
 }
 
-export function registerDeps(): void {
-  ipcMain.handle('deps:analyse', (_e, root: string) => analyseDependencies(root))
+export interface DepsApi {
+  analyse(root: string): Promise<DepsResult>
+}
+
+/** Provided as the "deps" service (see platform). */
+export class DepsService implements DepsApi {
+  analyse(root: string): Promise<DepsResult> {
+    return analyseDependencies(root)
+  }
 }

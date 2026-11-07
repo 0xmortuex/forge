@@ -1,5 +1,6 @@
 import { session } from './session'
 import { settings } from './settings'
+import { aiService, onAiEvent } from './rpc'
 
 // The renderer's side of the AI features: reads the settings, asks the user before code goes to a new server, and talks to
 // the main process (which holds the API key). Everything that builds prompts lives here too, so the chat, the selection
@@ -67,7 +68,7 @@ export function chat(messages: ChatMessage[], onDelta: (text: string) => void, o
   let fail: (err: Error) => void = () => undefined
   const done = new Promise<void>((resolve, reject) => {
     fail = reject
-    off = window.forge.onAiEvent((e) => {
+    off = onAiEvent((e) => {
       if (e.id !== id) return
       if (e.type === 'delta') onDelta(e.text)
       else {
@@ -77,18 +78,18 @@ export function chat(messages: ChatMessage[], onDelta: (text: string) => void, o
       }
     })
   })
-  window.forge.aiChat(id, { ...cfg, messages, maxTokens: opts.maxTokens, temperature: opts.temperature, timeoutMs: opts.timeoutMs }).catch((err: unknown) => {
+  aiService.chat(id, { ...cfg, messages, maxTokens: opts.maxTokens, temperature: opts.temperature, timeoutMs: opts.timeoutMs }).catch((err: unknown) => {
     off()
     fail(err instanceof Error ? err : new Error(String(err)))
   })
-  return { done, cancel: () => void window.forge.aiCancel(id) }
+  return { done, cancel: () => void aiService.cancel(id) }
 }
 
 /** One complete answer. */
 export async function ask(messages: ChatMessage[], opts: AiOptions = {}): Promise<string> {
   const cfg = aiConfig(opts.model)
   approveServer(cfg.baseUrl)
-  return window.forge.aiComplete({ ...cfg, messages, maxTokens: opts.maxTokens, temperature: opts.temperature, timeoutMs: opts.timeoutMs })
+  return aiService.complete({ ...cfg, messages, maxTokens: opts.maxTokens, temperature: opts.temperature, timeoutMs: opts.timeoutMs })
 }
 
 // ---------------------------------------------------------------- prompts

@@ -1,6 +1,7 @@
 import * as monaco from 'monaco-editor'
 import type { DbCell, DbQueryResult, DbResult, DbSchema, DbTable } from '../main/database'
 import { bindExtraEditor, editorOptions } from './appearance'
+import { databaseService } from './rpc'
 
 // The Database window: a SQLite file opened from the project tree. A schema tree on the left (click a table to preview
 // it), a SQL editor on top (Ctrl+Enter runs the selection, or everything), and the result as a grid. It is read-only:
@@ -248,7 +249,7 @@ export function initDatabase(d: DatabaseDeps): DatabaseView {
     stop.hidden = false
     setStatus('Running…')
     try {
-      const res: DbQueryResult = await window.forge.dbQuery(file, sql, limit())
+      const res: DbQueryResult = await databaseService.query(file, sql, limit())
       if (path !== file) return // another database was opened meanwhile
       results = res.results
       shown = 0
@@ -283,7 +284,7 @@ export function initDatabase(d: DatabaseDeps): DatabaseView {
 
   run.onclick = runEditor
   stop.onclick = () => {
-    if (path) void window.forge.dbStop(path)
+    if (path) void databaseService.stop(path)
   }
   csv.onclick = () => {
     const r = results[shown]
@@ -318,8 +319,8 @@ export function initDatabase(d: DatabaseDeps): DatabaseView {
       const previous = path
       setStatus('Opening…')
       try {
-        const s = await window.forge.dbOpen(file)
-        if (previous && previous !== file) void window.forge.dbClose(previous).catch(() => undefined)
+        const s = await databaseService.open(file)
+        if (previous && previous !== file) void databaseService.close(previous).catch(() => undefined)
         path = file
         schema = s
         opened.clear()

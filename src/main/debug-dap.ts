@@ -74,7 +74,7 @@ export class DapSession implements DebugSession {
   }
 
   private emit(evt: DebugEvent): void {
-    if (!this.deps.wc.isDestroyed()) this.deps.wc.send('debug:event', evt)
+    this.deps.emit(evt)
   }
 
   get connected(): boolean {

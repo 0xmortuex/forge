@@ -1,5 +1,6 @@
 import { actionsFor, type Container, type ContainerAction, type DockerImage } from '../main/dockerparse'
 import type { DockerStatus } from '../main/docker'
+import { dockerService } from './rpc'
 
 // The Docker window: containers and images of the local Docker, start / stop / restart / pause / remove, logs in a tab,
 // a shell inside a running container (in a terminal tab), and docker compose up / down for the project's compose file.
@@ -88,13 +89,13 @@ export function initDocker(d: DockerDeps): DockerView {
       add(ACTION_LABEL[action], () => {
         if (action === 'remove' && !confirm(`Remove container ${c.name}? Its data that is not in a volume is lost.`)) return
         void run(ACTION_LABEL[action], async () => {
-          await window.forge.dockerAction(root, action, c.name)
+          await dockerService.action(root, action, c.name)
           d.report(`${ACTION_LABEL[action]}: ${c.name}`)
           await refresh()
         })
       }, action === 'remove')
     }
-    add('Logs', () => void run('Logs', async () => d.openText('log', await window.forge.dockerLogs(root, c.name))))
+    add('Logs', () => void run('Logs', async () => d.openText('log', await dockerService.logs(root, c.name))))
     if (c.state === 'running') add('Shell', () => d.runCommand(root, `docker exec -it ${c.name} sh`, `docker: ${c.name}`))
     r.append(buttons)
     return r
@@ -117,7 +118,7 @@ export function initDocker(d: DockerDeps): DockerView {
     rm.onclick = () => {
       if (!confirm(`Remove image ${ref}?`)) return
       void run('Remove image', async () => {
-        await window.forge.dockerRemoveImage(root, ref)
+        await dockerService.removeImage(root, ref)
         d.report(`Removed image ${ref}`)
         await refresh()
       })
@@ -135,7 +136,7 @@ export function initDocker(d: DockerDeps): DockerView {
       version.textContent = ''
       return hint('Open a project to use Docker from here.')
     }
-    const status: DockerStatus = await window.forge.dockerStatus(root)
+    const status: DockerStatus = await dockerService.status(root)
     if (mine !== seq) return
     version.textContent = status.running ? `Docker ${status.version}` : ''
     up.hidden = down.hidden = !(status.running && status.composeFile)
@@ -143,12 +144,12 @@ export function initDocker(d: DockerDeps): DockerView {
     if (!status.running) return hint(status.message, true)
     try {
       if (tab === 'containers') {
-        const list = await window.forge.dockerContainers(root)
+        const list = await dockerService.containers(root)
         if (mine !== seq) return
         if (!list.length) return hint('No containers. Start one from the Images tab, or with Compose Up.')
         body.replaceChildren(...list.map((c) => containerRow(root, c)))
       } else {
-        const list = await window.forge.dockerImages(root)
+        const list = await dockerService.images(root)
         if (mine !== seq) return
         if (!list.length) return hint('No images.')
         body.replaceChildren(...list.map((i) => imageRow(root, i)))

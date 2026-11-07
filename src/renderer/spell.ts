@@ -1,6 +1,7 @@
 import * as monaco from 'monaco-editor'
 import nspell from 'nspell'
 import { settings } from './settings'
+import { spell as spellService } from './rpc'
 
 // Typo checking: misspelled words in comments, strings and prose files (Markdown, plain text, HTML text) get a blue squiggle,
 // and Quick Fix (Ctrl+.) offers corrections, "Add to dictionary" and "Ignore". English only. To keep it quiet, a word that is
@@ -95,7 +96,7 @@ export function initSpell(): void {
   const verdicts = new Map<string, boolean>() // word (lowercase) -> spelled correctly
 
   const dictionary = (): Promise<ReturnType<typeof nspell>> => {
-    loading ??= window.forge.spellDictionary().then((d) => (speller = nspell({ aff: d.aff, dic: d.dic })))
+    loading ??= spellService.dictionary().then((d) => (speller = nspell({ aff: d.aff, dic: d.dic })))
     return loading
   }
   const userWords = (): string[] => settings.getJson<string[]>('spellWords', [])

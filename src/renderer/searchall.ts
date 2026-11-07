@@ -7,12 +7,13 @@ import { symbolBadge } from './structure'
 
 // Search Everywhere: one box for files, symbols (classes, functions ... from the language servers) and actions.
 // Double Shift opens it on "All"; Tab switches scope. Ctrl+Shift+N, Ctrl+N, Ctrl+Alt+Shift+N and Ctrl+Shift+A open it
-// straight on Files, Classes, Symbols and Actions.
+// straight on Files, Classes, Symbols and Actions. The Text scope searches inside the files, through the project's text index.
 
-export type SearchScope = 'all' | 'files' | 'symbols' | 'actions'
+export type SearchScope = 'all' | 'files' | 'text' | 'symbols' | 'actions'
 const SCOPES: [SearchScope, string][] = [
   ['all', 'All'],
   ['files', 'Files'],
+  ['text', 'Text'],
   ['symbols', 'Symbols'],
   ['actions', 'Actions']
 ]
@@ -26,6 +27,8 @@ export interface SearchDeps {
   openFile: (path: string, line?: number, column?: number) => Promise<void>
   listFiles: (root: string) => Promise<string[]>
   symbols: (query: string) => Promise<SymbolHit[]>
+  /** Lines of the project's files that contain the text (at least 3 characters). */
+  searchText: (query: string) => Promise<{ path: string; line: number; text: string }[]>
   report: (msg: string, isError?: boolean) => void
   /** What to focus again when the popup closes. */
   restoreFocus: () => void
@@ -67,10 +70,15 @@ export function initSearchEverywhere(deps: SearchDeps): SearchEverywhere {
   let symbolHits: SymbolHit[] = []
   let symbolQuery = ''
   let symbolError: string | null = null
+  let textHits: { path: string; line: number; text: string }[] = []
+  let textQuery = ''
+  let textError: string | null = null
   let rows: Row[] = []
   let selected = 0
   let seq = 0
   let timer: number | undefined
+  let textTimer: number | undefined
+  let textSeq = 0
 
   const rootless = (): boolean => deps.getRoot() === null
 
@@ -129,6 +137,22 @@ export function initSearchEverywhere(deps: SearchDeps): SearchEverywhere {
     })
   }
 
+  /** Lines of files that contain the text; the part that matched is highlighted. */
+  function textRows(limit: number): Row[] {
+    const q = textQuery.toLowerCase()
+    return textHits.slice(0, limit).map((h) => {
+      const at = h.text.toLowerCase().indexOf(q)
+      return {
+        section: 'Text',
+        label: h.text,
+        idx: at < 0 ? [] : Array.from({ length: q.length }, (_, i) => at + i),
+        detail: `${deps.relPath(h.path)}:${h.line}`,
+        icon: fileIcon(basename(h.path)),
+        run: () => void deps.openFile(h.path, h.line).catch(() => undefined)
+      }
+    })
+  }
+
   function actionRows(q: string, limit: number): Row[] {
     const all = commands()
     const matched = q
@@ -156,6 +180,7 @@ export function initSearchEverywhere(deps: SearchDeps): SearchEverywhere {
   function compute(): void {
     const q = input.value.trim()
     if (scope === 'files') rows = fileRows(q, 60)
+    else if (scope === 'text') rows = textRows(100)
     else if (scope === 'symbols') rows = symbolRows(q, 60)
     else if (scope === 'actions') rows = actionRows(q, 80)
     else rows = [...fileRows(q, q ? 8 : 12), ...(q ? [...symbolRows(q, 8), ...actionRows(q, 6)] : [])]
@@ -173,11 +198,13 @@ export function initSearchEverywhere(deps: SearchDeps): SearchEverywhere {
   function render(): void {
     results.replaceChildren()
     if (rootless() && scope !== 'actions') {
-      if (scope === 'files' || scope === 'symbols') return hint('Open a folder first (Ctrl+O)')
+      if (scope === 'files' || scope === 'symbols' || scope === 'text') return hint('Open a folder first (Ctrl+O)')
       if (!rows.length) hint('Open a folder first (Ctrl+O) — actions can still be searched')
     }
     if (symbolError && (scope === 'symbols' || scope === 'all')) hint(`Symbol search failed: ${symbolError}`)
+    if (textError && scope === 'text') hint(`Text search failed: ${textError}`)
     if (!rows.length && !results.childElementCount) {
+      if (scope === 'text' && !textError) return hint(input.value.trim().length < 3 ? 'Type at least 3 characters to search the text of the project' : textQuery !== input.value.trim() ? 'Searching…' : 'Nothing found')
       return hint(!indexed && scope === 'files' ? 'Indexing the project…' : scope === 'symbols' && !input.value.trim() ? 'Type a name to search symbols' : 'Nothing found')
     }
     let section = ''
@@ -257,6 +284,7 @@ export function initSearchEverywhere(deps: SearchDeps): SearchEverywhere {
     drawScopes()
     compute()
     askSymbols()
+    askText()
   }
 
   /** Symbols come from the language servers, so they arrive a moment after typing stops. */
@@ -283,6 +311,37 @@ export function initSearchEverywhere(deps: SearchDeps): SearchEverywhere {
     }, 180)
   }
 
+  /** Text comes from the project index (a moment after typing stops); fewer than 3 characters is not searched. */
+  function askText(): void {
+    if (scope !== 'text') return
+    const q = input.value.trim()
+    if (q.length < 3 || rootless()) {
+      textHits = []
+      textQuery = ''
+      textError = null
+      return compute()
+    }
+    window.clearTimeout(textTimer)
+    textTimer = window.setTimeout(() => {
+      const mine = ++textSeq
+      deps
+        .searchText(q)
+        .then((hits) => {
+          if (mine !== textSeq || overlay.hidden) return
+          textHits = hits
+          textQuery = q
+          textError = null
+          compute()
+        })
+        .catch((err: unknown) => {
+          if (mine !== textSeq || overlay.hidden) return
+          textHits = []
+          textError = err instanceof Error ? err.message : String(err)
+          compute()
+        })
+    }, 220)
+  }
+
   function choose(i: number): void {
     const row = rows[i]
     if (!row) return
@@ -292,13 +351,16 @@ export function initSearchEverywhere(deps: SearchDeps): SearchEverywhere {
 
   function close(): void {
     window.clearTimeout(timer)
+    window.clearTimeout(textTimer)
     seq++
+    textSeq++
     overlay.hidden = true
   }
 
   input.oninput = () => {
     compute()
     askSymbols()
+    askText()
   }
   input.onkeydown = (e) => {
     if (e.key === 'Escape') {
@@ -333,6 +395,9 @@ export function initSearchEverywhere(deps: SearchDeps): SearchEverywhere {
       symbolHits = []
       symbolQuery = ''
       symbolError = null
+      textHits = []
+      textQuery = ''
+      textError = null
       fileIndex = []
       indexed = false
       drawScopes()

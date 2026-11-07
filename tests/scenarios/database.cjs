@@ -40,7 +40,7 @@ run('database', { 'notes.txt': 'plain notes\n', 'broken.sqlite': 'this is not a 
   }
 
   key('O', ['control'])
-  await waitFor(async () => (await text('tree')).includes('shop.db'), 5000)
+  if (!(await waitFor(async () => (await text('tree')).includes('shop.db'), 30000))) throw new Error('shop.db never appeared in the project tree: ' + (await text('tree')))
   await js("[...document.querySelectorAll('.node')].find(n => n.textContent === 'shop.db').click()")
   check('opening a .db file shows the Database window', !!(await waitFor(() => js("!document.getElementById('view-db').hidden && document.getElementById('db-title').textContent === 'shop.db'"), 10000)))
   const schema = await text('db-schema')

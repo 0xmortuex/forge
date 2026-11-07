@@ -1,4 +1,5 @@
 import type { Framework, TestRunResult } from '../main/testrun'
+import { testsService } from './rpc'
 import type { TestCase } from '../main/testparse'
 import { totalsOf } from '../main/testparse'
 
@@ -204,7 +205,7 @@ export function initTestExplorer(d: TestExplorerDeps): TestExplorerView {
     summary.textContent = 'Running…'
     draw()
     try {
-      const res: TestRunResult = await window.forge.testsRun(root, { framework: fw, ...opts })
+      const res: TestRunResult = await testsService.run(root, { framework: fw, ...opts })
       ranWith = fw
       const asked = opts.names ? res.tests.filter((t) => opts.names?.includes(t.name)) : res.tests // a name filter marks every other test skipped: not a result
       if (!opts.file && !opts.names) tests = res.tests
@@ -247,7 +248,7 @@ export function initTestExplorer(d: TestExplorerDeps): TestExplorerView {
     runAll: () => run({}),
     async refresh() {
       const root = d.getRoot()
-      frameworks = root ? await window.forge.testsDetect(root) : []
+      frameworks = root ? await testsService.detect(root) : []
       draw()
     }
   }

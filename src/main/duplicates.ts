@@ -1,6 +1,5 @@
 import { readFile, stat } from 'node:fs/promises'
 import { extname } from 'node:path'
-import { ipcMain } from 'electron'
 import { walkFiles } from './walk'
 
 // "Find Duplicated Code": copy-pasted blocks across the project. Lines are normalized (trimmed, whitespace collapsed, lines
@@ -153,6 +152,13 @@ export async function findDuplicates(root: string, minLines = 6): Promise<DupRes
   return { groups, filesScanned: files.length, truncated }
 }
 
-export function registerDuplicates(): void {
-  ipcMain.handle('duplicates:find', (_e, root: string, minLines?: number) => findDuplicates(root, minLines))
+export interface DuplicatesApi {
+  find(root: string, minLines?: number): Promise<DupResult>
+}
+
+/** Provided as the "duplicates" service (see platform). */
+export class DuplicatesService implements DuplicatesApi {
+  find(root: string, minLines?: number): Promise<DupResult> {
+    return findDuplicates(root, minLines)
+  }
 }

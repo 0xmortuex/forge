@@ -1,5 +1,6 @@
 import * as monaco from 'monaco-editor'
 import type { TextEdit, WorkspaceEdit } from 'vscode-languageserver-protocol'
+import { filesService } from './rpc'
 
 /**
  * Applies LSP text edits to a string (for files that aren't open in an editor).
@@ -68,7 +69,7 @@ export async function applyWorkspaceEdit(edit: WorkspaceEdit, deps: EditDeps): P
       )
       model.pushStackElement()
     } else {
-      await window.forge.writeFile(path, applyTextEdits(await window.forge.readFile(path), list))
+      await filesService.writeFile(path, applyTextEdits(await filesService.readFile(path), list))
     }
     edits += list.length
   }

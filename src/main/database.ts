@@ -2,7 +2,6 @@ import { readFile, stat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname } from 'node:path'
 import { Worker } from 'node:worker_threads'
-import { ipcMain } from 'electron'
 
 // The database viewer's engine: SQLite compiled to WebAssembly (sql.js), run in a worker thread so that a heavy or
 // runaway query can be stopped instead of freezing the whole IDE. The file is loaded into memory and is READ-ONLY: SQLite
@@ -203,16 +202,29 @@ export async function queryDatabase(path: string, sql: string, limit = DEFAULT_L
   return session.request<DbQueryResult>({ type: 'query', sql, limit: capped }, [], QUERY_TIMEOUT_MS)
 }
 
-export function registerDatabase(): void {
-  ipcMain.handle('db:open', (_e, path: string) => openDatabase(path))
-  ipcMain.handle('db:query', (_e, path: string, sql: string, limit?: number) => queryDatabase(path, sql, limit))
-  ipcMain.handle('db:stop', (_e, path: string) => {
+export interface DatabaseApi {
+  open(path: string): Promise<DbSchema>
+  query(path: string, sql: string, limit?: number): Promise<DbQueryResult>
+  /** Cancels the running statement by closing the worker; the database can be opened again. */
+  stop(path: string): Promise<void>
+  close(path: string): Promise<void>
+}
+
+/** Provided as the "database" service (see platform). */
+export class DatabaseService implements DatabaseApi {
+  open(path: string): Promise<DbSchema> {
+    return openDatabase(path)
+  }
+  query(path: string, sql: string, limit?: number): Promise<DbQueryResult> {
+    return queryDatabase(path, sql, limit)
+  }
+  async stop(path: string): Promise<void> {
     sessions.get(path)?.close()
-  })
-  ipcMain.handle('db:close', (_e, path: string) => {
+  }
+  async close(path: string): Promise<void> {
     sessions.get(path)?.close()
     sessions.delete(path)
-  })
+  }
 }
 
 /** Run at quit: the workers must not keep the process alive. */

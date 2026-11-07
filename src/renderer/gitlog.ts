@@ -4,6 +4,7 @@ import { icons } from './icons'
 import { askText, showMenu, type MenuItem } from './menu'
 import { quickPick } from './quick'
 import { chooseRebase } from './rebase'
+import { gitService } from './rpc'
 
 // The Git window: the commit history with a graph, filters, and the details and changed files of the selected commit.
 // Operations on a commit (cherry-pick, revert, new branch, reset ...) are in its context menu.
@@ -165,7 +166,7 @@ export function initGitLog(deps: GitLogDeps): GitLog {
     const root = deps.getRoot()
     if (!root) return
     const prev = branchSel.value
-    const list = await window.forge.gitBranchesFull(root)
+    const list = await gitService.branchesFull(root)
     branchSel.replaceChildren()
     const add = (value: string, label: string): void => {
       const o = el('option', '', label) as HTMLOptionElement
@@ -233,7 +234,7 @@ export function initGitLog(deps: GitLogDeps): GitLog {
     try {
       if (reset) await fillBranches()
       const skip = reset ? 0 : commits.length
-      const page = await window.forge.gitLog(root, {
+      const page = await gitService.log(root, {
         branch: current(),
         text: msgInput.value.trim() || undefined,
         author: authorInput.value.trim() || undefined,
@@ -278,7 +279,7 @@ export function initGitLog(deps: GitLogDeps): GitLog {
     details.replaceChildren(el('div', 'hint', 'Loading…'))
     let d: CommitDetails
     try {
-      d = await window.forge.gitCommitDetails(root, sha)
+      d = await gitService.commitDetails(root, sha)
     } catch (err) {
       details.replaceChildren(el('div', 'hint herr', `Could not read the commit: ${err instanceof Error ? err.message : String(err)}`))
       throw err
@@ -314,8 +315,8 @@ export function initGitLog(deps: GitLogDeps): GitLog {
           const rootDir = deps.getRoot()
           if (!rootDir) return
           const parent = d.parents[0]
-          const left = f.status === 'A' || !parent ? '' : await window.forge.gitFileAt(rootDir, parent, f.oldPath ?? f.path)
-          const right = f.status === 'D' ? '' : await window.forge.gitFileAt(rootDir, d.sha, f.path)
+          const left = f.status === 'A' || !parent ? '' : await gitService.fileAt(rootDir, parent, f.oldPath ?? f.path)
+          const right = f.status === 'D' ? '' : await gitService.fileAt(rootDir, d.sha, f.path)
           await deps.showStaticDiff(f.path, d.sha.slice(0, 7), left, right)
         })
         .catch(() => undefined) // reported by guard
@@ -355,10 +356,10 @@ export function initGitLog(deps: GitLogDeps): GitLog {
     if (!root) return
     await deps
       .guard('Interactive rebase', async () => {
-        const info = await window.forge.gitRebasePlan(root, c.sha)
+        const info = await gitService.rebasePlan(root, c.sha)
         const steps = await chooseRebase(info)
         if (!steps) return
-        const res = await window.forge.gitRebaseRun(root, info.base, steps)
+        const res = await gitService.rebaseRun(root, info.base, steps)
         deps.report(res.conflicts ? res.message : 'Rebase done', res.conflicts)
         await deps.onWorktreeChanged()
         await deps.refreshStatus()
@@ -377,23 +378,23 @@ export function initGitLog(deps: GitLogDeps): GitLog {
       run: () =>
         void plain(`Reset ${mode}`, async () => {
           if (mode === 'hard' && !confirm(`Reset the current branch to ${short} and DISCARD all uncommitted changes?`)) throw new Error('Cancelled')
-          await window.forge.gitReset(root, c.sha, mode)
+          await gitService.reset(root, c.sha, mode)
         }, `Reset to ${short} (${mode})`)
     })
     return [
       { label: 'Copy Revision Number', run: () => void window.forge.copyText(c.sha) },
       'sep',
-      { label: 'Cherry-Pick', run: () => void runOp(`Cherry-pick ${short}`, () => window.forge.gitCherryPick(root, c.sha)) },
-      { label: 'Revert Commit', run: () => void runOp(`Revert ${short}`, () => window.forge.gitRevertCommit(root, c.sha)) },
+      { label: 'Cherry-Pick', run: () => void runOp(`Cherry-pick ${short}`, () => gitService.cherryPick(root, c.sha)) },
+      { label: 'Revert Commit', run: () => void runOp(`Revert ${short}`, () => gitService.revertCommit(root, c.sha)) },
       { label: 'Interactively Rebase from Here…', run: () => void interactiveRebase(c) },
       'sep',
-      { label: 'Checkout Revision', run: () => void plain('Checkout', () => window.forge.gitCheckout(root, c.sha, 'detached'), `Checked out ${short} (detached HEAD)`) },
+      { label: 'Checkout Revision', run: () => void plain('Checkout', () => gitService.checkout(root, c.sha, 'detached'), `Checked out ${short} (detached HEAD)`) },
       {
         label: 'New Branch from Here…',
         run: () =>
           void (async () => {
             const name = await askText('New branch name')
-            if (name) await plain('New branch', () => window.forge.gitBranchFrom(root, name, c.sha), `Created and switched to ${name}`)
+            if (name) await plain('New branch', () => gitService.branchFrom(root, name, c.sha), `Created and switched to ${name}`)
           })()
       },
       {
@@ -401,7 +402,7 @@ export function initGitLog(deps: GitLogDeps): GitLog {
         run: () =>
           void (async () => {
             const name = await askText('Tag name')
-            if (name) await plain('New tag', () => window.forge.gitTag(root, name, c.sha), `Tagged ${short} as ${name}`)
+            if (name) await plain('New tag', () => gitService.tag(root, name, c.sha), `Tagged ${short} as ${name}`)
           })()
       },
       'sep',
@@ -417,7 +418,7 @@ export function initGitLog(deps: GitLogDeps): GitLog {
   async function compareWith(ref: string): Promise<void> {
     const root = deps.getRoot()
     if (!root) return
-    const files = await window.forge.gitDiffFiles(root, ref)
+    const files = await gitService.diffFiles(root, ref)
     quickPick({
       title: `Compare the working tree with ${ref}`,
       placeholder: 'Type to filter files',
@@ -431,7 +432,7 @@ export function initGitLog(deps: GitLogDeps): GitLog {
       onChoose: (f) => {
         void deps
           .guard(`Compare ${basename(f.path)}`, async () => {
-            const left = f.status === 'A' ? '' : await window.forge.gitFileAt(root, ref, f.oldPath ?? f.path)
+            const left = f.status === 'A' ? '' : await gitService.fileAt(root, ref, f.oldPath ?? f.path)
             await deps.showDiff(f.path, left, f.status === 'D')
           })
           .catch(() => undefined)
@@ -444,21 +445,21 @@ export function initGitLog(deps: GitLogDeps): GitLog {
     if (!root) return []
     const items: (MenuItem | 'sep')[] = []
     const checkout = (): Promise<void> =>
-      plain('Checkout', () => window.forge.gitCheckout(root, b.name, b.remote ? 'remote' : 'local'), `Switched to ${b.name}`)
+      plain('Checkout', () => gitService.checkout(root, b.name, b.remote ? 'remote' : 'local'), `Switched to ${b.name}`)
     if (!b.current) items.push({ label: 'Checkout', run: () => void checkout() })
     items.push({
       label: `New Branch from '${b.name}'…`,
       run: () =>
         void (async () => {
           const name = await askText('New branch name')
-          if (name) await plain('New branch', () => window.forge.gitBranchFrom(root, name, b.name), `Created and switched to ${name}`)
+          if (name) await plain('New branch', () => gitService.branchFrom(root, name, b.name), `Created and switched to ${name}`)
         })()
     })
     items.push({ label: 'Compare with Working Tree…', run: () => void compareWith(b.name).catch((err: unknown) => deps.report(`Compare: ${String(err)}`, true)) })
     if (cur && !b.current) {
       items.push('sep')
-      items.push({ label: `Merge '${b.name}' into '${cur.name}'`, run: () => void runOp(`Merge ${b.name}`, () => window.forge.gitMerge(root, b.name)) })
-      if (!cur.remote) items.push({ label: `Rebase '${cur.name}' onto '${b.name}'`, run: () => void runOp(`Rebase onto ${b.name}`, () => window.forge.gitRebase(root, b.name)) })
+      items.push({ label: `Merge '${b.name}' into '${cur.name}'`, run: () => void runOp(`Merge ${b.name}`, () => gitService.merge(root, b.name)) })
+      if (!cur.remote) items.push({ label: `Rebase '${cur.name}' onto '${b.name}'`, run: () => void runOp(`Rebase onto ${b.name}`, () => gitService.rebase(root, b.name)) })
     }
     items.push('sep')
     if (!b.remote) {
@@ -467,7 +468,7 @@ export function initGitLog(deps: GitLogDeps): GitLog {
         run: () =>
           void (async () => {
             const name = await askText('Rename branch', b.name)
-            if (name && name !== b.name) await plain('Rename', () => window.forge.gitRenameBranch(root, b.name, name), `Renamed ${b.name} to ${name}`)
+            if (name && name !== b.name) await plain('Rename', () => gitService.renameBranch(root, b.name, name), `Renamed ${b.name} to ${name}`)
           })()
       })
     }
@@ -481,12 +482,12 @@ export function initGitLog(deps: GitLogDeps): GitLog {
             async () => {
               if (b.remote && !confirm(`Delete ${b.name} from the remote? This cannot be undone.`)) throw new Error('Cancelled')
               try {
-                await window.forge.gitDeleteBranch(root, b.name, false, b.remote)
+                await gitService.deleteBranch(root, b.name, false, b.remote)
               } catch (err) {
                 // git refuses to delete a branch whose commits aren't merged anywhere; that is the user's call.
                 if (!/not fully merged/i.test(String(err))) throw err
                 if (!confirm(`${b.name} has commits that are not merged. Delete it anyway?`)) throw new Error('Cancelled')
-                await window.forge.gitDeleteBranch(root, b.name, true, b.remote)
+                await gitService.deleteBranch(root, b.name, true, b.remote)
               }
             },
             `Deleted ${b.name}`
@@ -499,7 +500,7 @@ export function initGitLog(deps: GitLogDeps): GitLog {
   async function showBranches(): Promise<void> {
     const root = deps.getRoot()
     if (!root) return
-    const list = await window.forge.gitBranchesFull(root)
+    const list = await gitService.branchesFull(root)
     const cur = list.find((b) => b.current)
     const detailOf = (b: BranchInfo): string =>
       [b.current ? 'current' : b.remote ? 'remote' : 'local', b.upstream ? `tracks ${b.upstream}` : '', b.ahead ? `↑${b.ahead}` : '', b.behind ? `↓${b.behind}` : '']
@@ -519,10 +520,10 @@ export function initGitLog(deps: GitLogDeps): GitLog {
         if (pick.kind === 'new') {
           void (async () => {
             const name = await askText('New branch name')
-            if (name) await plain('New branch', () => window.forge.gitCreateBranch(root, name), `Created and switched to ${name}`)
+            if (name) await plain('New branch', () => gitService.createBranch(root, name), `Created and switched to ${name}`)
           })()
-        } else if (pick.kind === 'fetch') void plain('Fetch', () => window.forge.gitFetch(root), 'Fetched')
-        else if (!pick.b.current) void plain('Checkout', () => window.forge.gitCheckout(root, pick.b.name, pick.b.remote ? 'remote' : 'local'), `Switched to ${pick.b.name}`)
+        } else if (pick.kind === 'fetch') void plain('Fetch', () => gitService.fetch(root), 'Fetched')
+        else if (!pick.b.current) void plain('Checkout', () => gitService.checkout(root, pick.b.name, pick.b.remote ? 'remote' : 'local'), `Switched to ${pick.b.name}`)
       },
       onContext: (pick, at) => {
         if (pick.kind === 'branch') showMenu(at.x, at.y, branchMenu(pick.b, cur))
@@ -533,17 +534,17 @@ export function initGitLog(deps: GitLogDeps): GitLog {
   // ---- Banner for an operation that stopped (merge / rebase / cherry-pick / revert) ----
   async function updateBanner(): Promise<void> {
     const root = deps.getRoot()
-    const op = root ? await window.forge.gitInProgress(root) : null
+    const op = root ? await gitService.inProgress(root) : null
     banner.hidden = !op
     banner.replaceChildren()
     if (!op || !root) return
     banner.append(el('span', '', `A ${op} is in progress. Resolve the conflicts in the Commit window, then continue — or abort.`))
     const cont = el('button', 'btn-primary', 'Continue')
-    cont.onclick = () => void runOp(`Continue ${op}`, () => window.forge.gitContinue(root))
+    cont.onclick = () => void runOp(`Continue ${op}`, () => gitService.continue(root))
     const abort = el('button', 'btn', 'Abort')
     abort.onclick = () => {
       if (!confirm(`Abort the ${op}? Everything it has done so far is undone.`)) return
-      void plain(`Abort ${op}`, () => window.forge.gitAbort(root), `Aborted the ${op}`)
+      void plain(`Abort ${op}`, () => gitService.abort(root), `Aborted the ${op}`)
     }
     banner.append(cont, abort)
   }
@@ -565,7 +566,7 @@ export function initGitLog(deps: GitLogDeps): GitLog {
   }
   fetchBtn.onclick = () => {
     const root = deps.getRoot()
-    if (root) void plain('Fetch', () => window.forge.gitFetch(root), 'Fetched')
+    if (root) void plain('Fetch', () => gitService.fetch(root), 'Fetched')
   }
 
   async function refresh(): Promise<void> {

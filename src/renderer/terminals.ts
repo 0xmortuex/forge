@@ -1,6 +1,7 @@
 import { icons } from './icons'
 import { createTerminalView, shellSpec, type TerminalView } from './terminal'
 import { askText } from './menu'
+import { terminalService } from './rpc'
 
 /** One shell. A tab (Pane) holds one or more of them side by side. */
 interface Cell {
@@ -154,7 +155,7 @@ export function initTerminals(deps: TerminalsDeps): Terminals {
       .guard('Terminal', async () => {
         if (!pane.cwd) throw new Error('Open a folder first (Ctrl+O) — the terminal starts in the project folder')
         const cwd = pane.cwd
-        await cell.view.begin((cols, rows) => window.forge.termCreate(cwd, cols, rows, shellSpec()))
+        await cell.view.begin((cols, rows) => terminalService.create(cwd, cols, rows, shellSpec()))
         if (opts.command) cell.view.write(opts.command + '\r')
       })
       .catch(async () => {

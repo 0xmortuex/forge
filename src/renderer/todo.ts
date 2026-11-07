@@ -1,3 +1,4 @@
+import { filesService } from './rpc'
 // The TODO window: every TODO / FIXME / HACK / XXX comment in the project, grouped by keyword, click to jump.
 
 export interface TodoDeps {
@@ -46,7 +47,7 @@ export function initTodo(d: TodoDeps): TodoView {
     if (!root) return hint('Open a folder first (Ctrl+O)')
     list.replaceChildren()
     title.textContent = 'TODO — scanning…'
-    const res = await window.forge.search(root, `\\b(${WORDS.join('|')})\\b`, { regex: true, caseSensitive: true })
+    const res = await filesService.search(root, `\\b(${WORDS.join('|')})\\b`, { regex: true, caseSensitive: true })
     d.onCount(res.hits.length)
     title.textContent = `TODO — ${res.hits.length}${res.truncated ? '+' : ''}`
     if (!res.hits.length) return hint('Nothing to do. Nice.')

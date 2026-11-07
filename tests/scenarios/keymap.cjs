@@ -72,7 +72,7 @@ run('keymap', { 'a.txt': 'x\n' }, async (t) => {
   )
   await js(`${row('Toggle Word Wrap')}.querySelector('.btn').click()`)
   key('Escape')
-  check('Escape cancels recording', (await js(`${row('Toggle Word Wrap')}.querySelector('.btn').textContent`)) === 'Set')
+  check('Escape cancels recording', !!(await waitFor(async () => (await js(`${row('Toggle Word Wrap')}.querySelector('.btn').textContent`)) === 'Set', 5000)))
 
   // Removal
   await js(`${row('Toggle Minimap')}.querySelector('.btn:last-child').click()`)

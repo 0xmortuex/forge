@@ -1,7 +1,6 @@
 import { execFile } from 'node:child_process'
 import { existsSync, readdirSync } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
-import { ipcMain } from 'electron'
 
 // "Inspect Code": the language servers only report the files that are open, so this runs the project's own checkers
 // over everything: `tsc --noEmit` (TypeScript projects), ESLint (when the project has it installed) and pyright (Python).
@@ -130,6 +129,13 @@ export async function inspectProject(root: string): Promise<InspectResult> {
   return { problems, ran }
 }
 
-export function registerInspect(): void {
-  ipcMain.handle('inspect:run', (_e, root: string) => inspectProject(root))
+export interface InspectApi {
+  run(root: string): Promise<InspectResult>
+}
+
+/** Provided as the "inspect" service (see platform). */
+export class InspectService implements InspectApi {
+  run(root: string): Promise<InspectResult> {
+    return inspectProject(root)
+  }
 }

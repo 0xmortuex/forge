@@ -1,6 +1,5 @@
 import { execFile } from 'node:child_process'
 import { readdir } from 'node:fs/promises'
-import { ipcMain } from 'electron'
 import { argsFor, composeFileOf, parseContainers, parseImages, type Container, type ContainerAction, type DockerImage } from './dockerparse'
 
 // Docker through its CLI (containers, images, logs). Forge starts nothing on its own: every action is the user's click.
@@ -62,21 +61,37 @@ export async function dockerStatus(root: string): Promise<DockerStatus> {
   return { installed: true, running: true, version: info.stdout.trim(), message: '', composeFile }
 }
 
-export function registerDocker(): void {
-  ipcMain.handle('docker:status', (_e, root: string) => dockerStatus(root))
-  ipcMain.handle('docker:containers', async (_e, root: string): Promise<Container[]> => parseContainers(await docker(root, ['ps', '-a', '--format', '{{json .}}'])))
-  ipcMain.handle('docker:images', async (_e, root: string): Promise<DockerImage[]> => parseImages(await docker(root, ['images', '--format', '{{json .}}'])))
-  ipcMain.handle('docker:action', async (_e, root: string, action: ContainerAction, id: string): Promise<void> => {
+export interface DockerApi {
+  status(root: string): Promise<DockerStatus>
+  containers(root: string): Promise<Container[]>
+  images(root: string): Promise<DockerImage[]>
+  action(root: string, action: ContainerAction, id: string): Promise<void>
+  removeImage(root: string, id: string): Promise<void>
+  logs(root: string, id: string): Promise<string>
+}
+
+/** Provided as the "docker" service (see platform). */
+export class DockerService implements DockerApi {
+  status(root: string): Promise<DockerStatus> {
+    return dockerStatus(root)
+  }
+  async containers(root: string): Promise<Container[]> {
+    return parseContainers(await docker(root, ['ps', '-a', '--format', '{{json .}}']))
+  }
+  async images(root: string): Promise<DockerImage[]> {
+    return parseImages(await docker(root, ['images', '--format', '{{json .}}']))
+  }
+  async action(root: string, action: ContainerAction, id: string): Promise<void> {
     await docker(root, argsFor(action, id))
-  })
-  ipcMain.handle('docker:removeImage', async (_e, root: string, id: string): Promise<void> => {
+  }
+  async removeImage(root: string, id: string): Promise<void> {
     if (!/^[\w][\w.:/@-]*$/.test(id)) throw new Error(`Not an image id or name: ${id}`)
     await docker(root, ['rmi', id])
-  })
-  ipcMain.handle('docker:logs', async (_e, root: string, id: string): Promise<string> => {
+  }
+  async logs(root: string, id: string): Promise<string> {
     argsFor('start', id) // validates the id
     const { stdout, stderr, code } = await runDocker(root, ['logs', '--tail', '1000', id])
     if (code !== 0) throw new Error(`docker logs failed: ${stderr.trim().split('\n').slice(0, 3).join(' ')}`)
-    return stdout + stderr // a container's stderr is part of its log
-  })
+    return stdout + stderr // the stderr of a container is part of its log
+  }
 }

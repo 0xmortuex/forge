@@ -1,5 +1,4 @@
 import { execFile } from 'node:child_process'
-import { ipcMain } from 'electron'
 import { detailPr, summarizePr, type PrDetail, type PrSummary } from './ghparse'
 
 // GitHub pull requests through the `gh` CLI (the user's own login; Forge never sees a token). Tests point FORGE_GH at a
@@ -73,27 +72,46 @@ export async function viewPr(root: string, n: number): Promise<PrDetail> {
   return detailPr(JSON.parse(await gh(root, ['pr', 'view', prNumber(n), '--json', VIEW_FIELDS])) as unknown)
 }
 
-export function registerGithub(): void {
-  ipcMain.handle('gh:status', (_e, root: string) => ghStatus(root))
-  ipcMain.handle('gh:list', (_e, root: string, state: 'open' | 'closed' | 'merged' | 'all') => listPrs(root, state))
-  ipcMain.handle('gh:view', (_e, root: string, n: number) => viewPr(root, n))
-  ipcMain.handle('gh:diff', (_e, root: string, n: number) => gh(root, ['pr', 'diff', prNumber(n), '--color', 'never']))
-  ipcMain.handle('gh:checkout', async (_e, root: string, n: number): Promise<string> => {
+export interface GithubApi {
+  status(root: string): Promise<GhStatus>
+  list(root: string, state: 'open' | 'closed' | 'merged' | 'all'): Promise<PrSummary[]>
+  view(root: string, n: number): Promise<PrDetail>
+  diff(root: string, n: number): Promise<string>
+  checkout(root: string, n: number): Promise<string>
+  comment(root: string, n: number, body: string): Promise<void>
+  create(root: string, opts: { title: string; body: string; base?: string; draft?: boolean }): Promise<string>
+}
+
+/** Provided as the "github" service (see platform). */
+export class GithubService implements GithubApi {
+  status(root: string): Promise<GhStatus> {
+    return ghStatus(root)
+  }
+  list(root: string, state: 'open' | 'closed' | 'merged' | 'all'): Promise<PrSummary[]> {
+    return listPrs(root, state)
+  }
+  view(root: string, n: number): Promise<PrDetail> {
+    return viewPr(root, n)
+  }
+  diff(root: string, n: number): Promise<string> {
+    return gh(root, ['pr', 'diff', prNumber(n), '--color', 'never'])
+  }
+  async checkout(root: string, n: number): Promise<string> {
     const { stdout, stderr, code } = await runGh(root, ['pr', 'checkout', prNumber(n)])
     const said = (stderr.trim() || stdout.trim()).split('\n').slice(-3).join(' ')
     if (code !== 0) throw new Error(`gh pr checkout failed: ${said}`)
     return said || `Checked out #${n}`
-  })
-  ipcMain.handle('gh:comment', (_e, root: string, n: number, body: string) => {
+  }
+  async comment(root: string, n: number, body: string): Promise<void> {
     if (!body.trim()) throw new Error('The comment is empty')
-    return gh(root, ['pr', 'comment', prNumber(n), '--body', body]).then(() => undefined)
-  })
-  ipcMain.handle('gh:create', async (_e, root: string, opts: { title: string; body: string; base?: string; draft?: boolean }): Promise<string> => {
+    await gh(root, ['pr', 'comment', prNumber(n), '--body', body])
+  }
+  async create(root: string, opts: { title: string; body: string; base?: string; draft?: boolean }): Promise<string> {
     if (!opts.title.trim()) throw new Error('The pull request needs a title')
     const args = ['pr', 'create', '--title', opts.title, '--body', opts.body]
     if (opts.base) args.push('--base', opts.base)
     if (opts.draft) args.push('--draft')
     const out = await gh(root, args)
     return out.trim().split('\n').pop() ?? ''
-  })
+  }
 }

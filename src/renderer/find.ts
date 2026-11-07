@@ -1,4 +1,5 @@
 import type { SearchOptions } from '../main/search'
+import { filesService } from './rpc'
 
 // Find in Files: search the whole project (match case, whole word, regular expression, file mask), see every match with
 // its line, and Replace All. Files that are open in the editor are edited there (so Ctrl+Z works and nothing is written
@@ -113,7 +114,7 @@ export function initFind(d: FindDeps): Finder {
     d.count.textContent = 'Searching…'
     await d.guard('Find in project', async () => {
       const opts = options()
-      const res = await window.forge.search(root, query, opts)
+      const res = await filesService.search(root, query, opts)
       if (id !== runId) return
       hits = res.hits
       lastQuery = query
@@ -165,7 +166,7 @@ export function initFind(d: FindDeps): Finder {
             done += n
           }
         }
-        if (closed.length) done += await window.forge.replaceInFiles(lastQuery, lastOptions, replacement, closed)
+        if (closed.length) done += await filesService.replace(lastQuery, lastOptions, replacement, closed)
         d.report(`Replaced ${done} match${done === 1 ? '' : 'es'}${paths.length > closed.length ? ' (open files are changed in the editor — save them)' : ''}`)
         await search()
       })

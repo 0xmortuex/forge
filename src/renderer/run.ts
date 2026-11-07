@@ -4,6 +4,7 @@ import { icons } from './icons'
 import { showMenu, type MenuItem } from './menu'
 import type { TerminalView } from './terminal'
 import { openRunConfigs } from './runconfigs'
+import { terminalService, filesService } from './rpc'
 
 export type ConfigType = 'current-file' | 'node' | 'python' | 'command' | 'dap'
 
@@ -208,7 +209,7 @@ export function initRun(deps: RunDeps): {
     const root = deps.getRoot()
     if (!root) throw new Error('Open a folder first (Ctrl+O)')
     const path = configPath(root)
-    const loaded = (await window.forge.exists(path)) ? parseConfigs(await window.forge.readFile(path)) : []
+    const loaded = (await filesService.exists(path)) ? parseConfigs(await filesService.readFile(path)) : []
     configs = loaded.some((c) => c.type === 'current-file') ? loaded : [CURRENT_FILE, ...loaded]
     selected = configs.find((c) => c.name === selected.name) ?? configs[0] ?? CURRENT_FILE
     nameEl!.textContent = selected.name
@@ -226,7 +227,7 @@ export function initRun(deps: RunDeps): {
       const resolved = await resolveSelected(false)
       await deps.saveAll()
       deps.showRunView()
-      await deps.view.begin((cols, rows) => window.forge.termCreate(resolved.cwd, cols, rows, resolved.spec))
+      await deps.view.begin((cols, rows) => terminalService.create(resolved.cwd, cols, rows, resolved.spec))
       deps.report(`Running ${resolved.label}`)
       updateButtons()
     })
@@ -239,7 +240,7 @@ export function initRun(deps: RunDeps): {
         : { file: 'sh', args: ['-c', command] }
       await deps.saveAll()
       deps.showRunView()
-      await deps.view.begin((cols, rows) => window.forge.termCreate(cwd, cols, rows, spec))
+      await deps.view.begin((cols, rows) => terminalService.create(cwd, cols, rows, spec))
       deps.report(`Running ${label}`)
       updateButtons()
     })
@@ -261,10 +262,10 @@ export function initRun(deps: RunDeps): {
     const root = deps.getRoot()
     if (!root) throw new Error('Open a folder first (Ctrl+O)')
     const path = configPath(root)
-    if (!(await window.forge.exists(path))) {
+    if (!(await filesService.exists(path))) {
       const dir = joinTo(root, CONFIG_DIR)
-      if (!(await window.forge.exists(dir))) await window.forge.createDir(dir)
-      await window.forge.writeFile(path, TEMPLATE)
+      if (!(await filesService.exists(dir))) await filesService.createDir(dir)
+      await filesService.writeFile(path, TEMPLATE)
       deps.report(`Created ${path}`)
     }
     await deps.openFile(path)
@@ -275,7 +276,7 @@ export function initRun(deps: RunDeps): {
     const root = deps.getRoot()
     if (!root) throw new Error('Open a folder first (Ctrl+O)')
     const path = configPath(root)
-    const existing = (await window.forge.exists(path)) ? parseConfigs(await window.forge.readFile(path)) : parseConfigs(TEMPLATE)
+    const existing = (await filesService.exists(path)) ? parseConfigs(await filesService.readFile(path)) : parseConfigs(TEMPLATE)
     openRunConfigs({
       configs: existing,
       openJson: () => void deps.guard('Edit configurations', editConfigs).catch(() => undefined),
@@ -283,8 +284,8 @@ export function initRun(deps: RunDeps): {
         const text = JSON.stringify({ configurations: list.map((c) => ({ ...c, args: c.args?.length ? c.args : undefined, env: c.env && Object.keys(c.env).length ? c.env : undefined, adapter: c.adapter ? { ...c.adapter, args: c.adapter.args?.length ? c.adapter.args : undefined } : undefined })) }, null, 2) + '\n'
         parseConfigs(text) // the same checks as when it is read back: a name, a script or command where needed
         const dir = joinTo(root, CONFIG_DIR)
-        if (!(await window.forge.exists(dir))) await window.forge.createDir(dir)
-        await window.forge.writeFile(path, text)
+        if (!(await filesService.exists(dir))) await filesService.createDir(dir)
+        await filesService.writeFile(path, text)
         await loadConfigs()
         deps.report(`Saved ${list.length} run configuration${list.length === 1 ? '' : 's'}`)
       }
