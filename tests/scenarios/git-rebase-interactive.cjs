@@ -75,7 +75,8 @@ run('git-rebase-interactive', { 'a.txt': 'base\n' }, async (t) => {
   check('the typo fix was folded into "add one"', out('show', 'HEAD~2:one.txt') === 'one with a typo: the\n', out('show', 'HEAD~2:one.txt'))
   check('the dropped commit\'s file is gone', !fs.existsSync(path.join(root, 'three.txt')))
   check('the working tree is clean afterwards', out('status', '--porcelain').trim() === '', out('status', '--porcelain'))
-  check('no helper files are left in .git', !fs.existsSync(path.join(root, '.git', 'forge-rebase')))
+  // The history changes before the rebase has finished tidying up, so wait for the cleanup instead of sampling it once.
+  check('no helper files are left in .git', !!(await waitFor(() => !fs.existsSync(path.join(root, '.git', 'forge-rebase')), 10000)))
 
   // ---- 2. squash with the default combined message ----
   await waitFor(() => js("document.querySelectorAll('#view-git .gc').length === 4"), 8000)
@@ -86,7 +87,8 @@ run('git-rebase-interactive', { 'a.txt': 'base\n' }, async (t) => {
   check('squashing shows the combined message to edit', combined === 'add two (reworded)\n\nadd four', JSON.stringify(combined))
   await js("document.getElementById('rebase-start').click()")
   check('the commits are combined', !!(await waitFor(() => subjects() === 'add two (reworded)|add one|base', 20000)), subjects())
-  check('...with both messages in the commit message', out('log', '-1', '--format=%B').trim() === 'add two (reworded)\n\nadd four', JSON.stringify(out('log', '-1', '--format=%B')))
+  // The squashed commit exists a moment before its final message is amended in, so wait for the message.
+  check('...with both messages in the commit message', !!(await waitFor(() => out('log', '-1', '--format=%B').trim() === 'add two (reworded)\n\nadd four', 10000)), JSON.stringify(out('log', '-1', '--format=%B')))
   check('...and both files', fs.existsSync(path.join(root, 'two.txt')) && fs.existsSync(path.join(root, 'four.txt')))
 
   // ---- 3. invalid plans are refused in the dialog ----
