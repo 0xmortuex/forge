@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -264,4 +264,26 @@ test('completeWord offers the identifiers of the project and follows watcher cha
 
 test('completeWord before a project is open is an error', async () => {
   await assert.rejects(new FileIndex().completeWord('abc'), /no project open/)
+})
+
+test('completeWord answers at once with what is indexed so far, or waits for the build when asked', async () => {
+  const p = await project(['a.ts'])
+  try {
+    await writeFile(join(p.root, 'a.ts'), 'export const quokkaFriend = 1\n')
+    let release!: () => void
+    const gate = new Promise<void>((ok) => (release = ok))
+    const idx = new FileIndex({
+      readText: async (path) => {
+        await gate
+        return (await readFile(path, 'utf8'))
+      }
+    })
+    await idx.open(p.root) // the file list is final; the text build is blocked on the gate
+    assert.deepEqual(await idx.completeWord('quokka'), [], 'nothing indexed yet, and it does not wait')
+    const waiting = idx.completeWord('quokka', 20, true)
+    release()
+    assert.deepEqual((await waiting).map((w) => w.word), ['quokkaFriend'], 'waiting for the build gives the complete answer')
+  } finally {
+    await p.done()
+  }
 })

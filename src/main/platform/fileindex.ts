@@ -24,10 +24,11 @@ export interface FileIndexApi {
   /** Lines containing the text (at least 3 characters), case-insensitive. Waits for the text index to be built. */
   searchText(text: string, limit?: number): Promise<TextHit[]>
   /**
-   * Identifiers of the project that start with `prefix` (at least 2 characters), best first. Answers at once from what has
-   * been indexed so far (typing must never wait for the background build), so it can be incomplete while a project is opening.
+   * Identifiers of the project that start with `prefix` (at least 2 characters), best first. By default it answers at once from
+   * what has been indexed so far (typing must not wait for the background build), so it can be incomplete while a project is
+   * opening; with `waitForBuild` it first waits for the scan and the build, so the answer is complete.
    */
-  completeWord(prefix: string, limit?: number): Promise<WordHit[]>
+  completeWord(prefix: string, limit?: number, waitForBuild?: boolean): Promise<WordHit[]>
   /** How much of the project is searchable as text, and which files are not (binary, too large, unreadable). */
   textStats(): { files: number; building: boolean; skipped: { path: string; reason: string }[] }
   /** Paths reported by the file watcher; `all` means events were lost and everything must be re-checked. */
@@ -187,8 +188,12 @@ export class FileIndex implements FileIndexApi {
     return this.text.search(text, limit, (p) => this.readText(p))
   }
 
-  async completeWord(prefix: string, limit = 20): Promise<WordHit[]> {
+  async completeWord(prefix: string, limit = 20, waitForBuild = false): Promise<WordHit[]> {
     if (!this.root) throw new Error('The index has no project open')
+    if (waitForBuild) {
+      await this.scan
+      await this.textBuild
+    }
     return this.text.complete(prefix, limit)
   }
 

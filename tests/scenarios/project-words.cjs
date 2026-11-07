@@ -9,6 +9,13 @@ run(
     const { js, key, type, check, sleep, waitFor } = t
     const text = (/** @type {string} */ id) => js(`document.getElementById(${JSON.stringify(id)}).textContent`)
     const widget = () => js("document.querySelector('.suggest-widget.visible')?.textContent ?? ''")
+    // What the backend knows, for a failure message that says why.
+    const diagnosis = async () =>
+      JSON.stringify({
+        widget: await widget(),
+        words: await js("window.forge.rpc({ service: 'fileindex', method: 'completeWord', args: ['zebracr', 20, true] })"),
+        stats: await js("window.forge.rpc({ service: 'fileindex', method: 'textStats', args: [] })")
+      }).slice(0, 600)
 
     key('O', ['control'])
     await waitFor(async () => (await text('tree')).includes('a.ts'), 5000)
@@ -19,7 +26,7 @@ run(
     await sleep(200)
 
     await type('zebracr')
-    check('a word from another, unopened file is offered', !!(await waitFor(async () => (await widget()).includes('zebracrossingSignal'), 10000)), await widget())
+    check('a word from another, unopened file is offered', !!(await waitFor(async () => (await widget()).includes('zebracrossingSignal'), 10000)), await diagnosis())
     key('Tab')
     check(
       'accepting it completes the word',

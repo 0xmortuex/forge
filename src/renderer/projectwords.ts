@@ -18,6 +18,7 @@ const MAX_SUGGESTIONS = 30
 
 export function initProjectWords(deps: ProjectWordsDeps): void {
   let reported = false
+  let warmFor: string | null = null // the project whose word index this window has seen complete
   monaco.languages.registerCompletionItemProvider('*', {
     async provideCompletionItems(model, position) {
       const root = deps.getRoot()
@@ -26,7 +27,9 @@ export function initProjectWords(deps: ProjectWordsDeps): void {
       if (word.word.length < MIN_TYPED) return { suggestions: [] }
       try {
         await indexedFiles(root) // opens the project index the first time
-        const hits = await fileIndex.completeWord(word.word, MAX_SUGGESTIONS)
+        // The first request for a project waits for the index to finish building, so its answer is complete; later ones are instant.
+        const hits = await fileIndex.completeWord(word.word, MAX_SUGGESTIONS, warmFor !== root)
+        warmFor = root
         const range = { startLineNumber: position.lineNumber, endLineNumber: position.lineNumber, startColumn: word.startColumn, endColumn: word.endColumn }
         return {
           suggestions: hits.map((h, i) => ({
