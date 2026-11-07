@@ -50,6 +50,24 @@ run('platform-rpc', { 'src/alpha.ts': 'a\n', 'src/beta.ts': 'b\n', 'README.md': 
   const dict = await rpc('spell', 'dictionary')
   check('the spell service (a migrated module) serves the dictionary', dict.ok && dict.value.aff.length > 1000 && dict.value.dic.length > 1000, JSON.stringify(dict).slice(0, 120))
 
+  const file = path.join(root, 'src', 'beta.ts')
+  const V1 = 'version one' + String.fromCharCode(10)
+  const added = await rpc('history', 'add', [file, V1])
+  const again = await rpc('history', 'add', [file, V1])
+  const listedHist = await rpc('history', 'list', [file])
+  const readBack = listedHist.ok && listedHist.value[0] ? await rpc('history', 'read', [file, listedHist.value[0].id]) : { ok: false }
+  check('history: add stores a snapshot, an identical one is skipped, list/read return it',
+    added.value === true && again.value === false && listedHist.value.length === 1 && readBack.value === V1, JSON.stringify([added, again, listedHist, readBack]))
+  const badId = await rpc('history', 'read', [file, '../../x'])
+  check('history: an id that tries to leave the folder is refused', !badId.ok && /Invalid history entry/.test(badId.error), JSON.stringify(badId))
+
+  const sc1 = await rpc('scratch', 'create', ['txt'])
+  const sc2 = await rpc('scratch', 'create', ['txt'])
+  const scList = await rpc('scratch', 'list')
+  check('scratch: create numbers new files and list returns them', sc1.ok && sc2.ok && sc1.value !== sc2.value && scList.value.includes(sc1.value) && scList.value.includes(sc2.value), JSON.stringify([sc1, sc2, scList]))
+  const badExt = await rpc('scratch', 'create', ['../x'])
+  check('scratch: an invalid extension is an error', !badExt.ok && /Invalid file extension/.test(badExt.error), JSON.stringify(badExt))
+
   const ghost = await rpc('nope', 'x')
   check('an unknown service is an error response', !ghost.ok && /No module provides the service "nope"/.test(ghost.error), JSON.stringify(ghost))
   const hidden = await rpc('fileindex', 'constructor')

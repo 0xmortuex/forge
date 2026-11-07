@@ -35,7 +35,7 @@ import { initProblems } from './problems'
 import { initBreadcrumbs } from './breadcrumbs'
 import { initTooltips } from './tooltips'
 import { initQuick, quickPick } from './quick'
-import { indexedFiles } from './rpc'
+import { indexedFiles, scratchService } from './rpc'
 import { initNavigation } from './navigation'
 import { initBookmarks } from './bookmarks'
 import { initSearchEverywhere, type SearchScope } from './searchall'
@@ -1372,12 +1372,12 @@ function newScratch(): void {
     placeholder: 'Choose a language',
     items: SCRATCH_TYPES.map(([ext, label]) => ({ label, detail: `.${ext}`, icon: fileIcon(`x.${ext}`), data: ext })),
     onChoose: (ext) => {
-      void guarded('New scratch file', async () => openFile(await window.forge.scratchCreate(ext))).catch(() => undefined)
+      void guarded('New scratch file', async () => openFile(await scratchService.create(ext))).catch(() => undefined)
     }
   })
 }
 async function showScratches(): Promise<void> {
-  const list = await window.forge.scratchList()
+  const list = await scratchService.list()
   quickPick({
     title: 'Scratch Files',
     placeholder: 'Type to filter',
@@ -1691,7 +1691,7 @@ const dockerView = initDocker({
     terminals.newTerminal(cwd, { name: title, command })
   },
   openText: async (ext, text) => {
-    const path = await window.forge.scratchCreate(ext)
+    const path = await scratchService.create(ext)
     await window.forge.writeFile(path, text)
     await openFile(path)
   },
@@ -1702,7 +1702,7 @@ const github = initGithub({
   root: $('view-github'),
   getRoot: () => rootDir,
   openText: async (ext, text) => {
-    const path = await window.forge.scratchCreate(ext)
+    const path = await scratchService.create(ext)
     await window.forge.writeFile(path, text)
     await openFile(path)
   },

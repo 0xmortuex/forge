@@ -11,7 +11,6 @@ import { registerGit } from './git'
 import { registerSettings } from './settings'
 import { replaceInFiles, searchProject, type SearchOptions } from './search'
 import { killAllLsp, registerLsp } from './lsp'
-import { registerHistory } from './history'
 import { registerHttp } from './http'
 import { registerInspect } from './inspect'
 import { registerAi } from './ai'
@@ -24,7 +23,6 @@ import { registerDeps } from './deps'
 import { registerTestRun } from './testrun'
 import { registerWatch, stopWatching } from './watch'
 import { registerPlatform } from './platform'
-import { registerScratch } from './scratch'
 import { killAllTerminals, registerTerminal } from './terminal'
 import { walkFiles } from './walk'
 
@@ -185,6 +183,7 @@ ipcMain.handle('fs:references', async (_e, root: string, target: string): Promis
 ipcMain.handle('fs:trash', (_e, path: string) => shell.trashItem(path))
 ipcMain.handle('shell:reveal', (_e, path: string) => shell.showItemInFolder(path))
 ipcMain.handle('clipboard:write', (_e, text: string) => clipboard.writeText(text))
+ipcMain.handle('clipboard:read', () => clipboard.readText())
 
 ipcMain.handle('fs:readFile', (_e, path: string) => readFile(path, 'utf8'))
 
@@ -230,7 +229,6 @@ registerTerminal()
 registerLsp()
 registerGit()
 registerDebug()
-registerHistory()
 registerHttp()
 registerInspect()
 registerAi()
@@ -243,7 +241,6 @@ registerDeps()
 registerTestRun()
 registerWatch()
 registerPlatform()
-registerScratch()
 let terminalsEnded = false
 app.on('before-quit', (e) => {
   stopWatching()

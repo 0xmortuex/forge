@@ -1,5 +1,6 @@
 import * as monaco from 'monaco-editor'
 import { quickPick } from './quick'
+import { historyService } from './rpc'
 
 // Local History in the UI: pick an earlier version of the current file to compare with it, or to restore.
 
@@ -39,13 +40,13 @@ export function ago(time: number, now = Date.now()): string {
 
 export function initHistory(deps: HistoryDeps): History {
   const record: History['record'] = (path, text) => {
-    window.forge.historyAdd(path, text).catch((err: unknown) => deps.report(`Local history: ${err instanceof Error ? err.message : String(err)}`, true))
+    historyService.add(path, text).catch((err: unknown) => deps.report(`Local history: ${err instanceof Error ? err.message : String(err)}`, true))
   }
 
   async function pick(title: string, onChoose: (path: string, text: string) => void): Promise<void> {
     const path = deps.currentPath()
     if (!path) return deps.report('Open a file to see its history', true)
-    const list = await window.forge.historyList(path)
+    const list = await historyService.list(path)
     quickPick({
       title,
       placeholder: 'Type to filter versions',
@@ -56,8 +57,8 @@ export function initHistory(deps: HistoryDeps): History {
         data: s.id
       })),
       onChoose: (id) => {
-        window.forge
-          .historyRead(path, id)
+        historyService
+          .read(path, id)
           .then((text) => onChoose(path, text))
           .catch((err: unknown) => deps.report(`Local history: ${err instanceof Error ? err.message : String(err)}`, true))
       }

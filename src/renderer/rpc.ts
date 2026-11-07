@@ -1,11 +1,15 @@
 import { client } from '../shared/rpc'
 import type { FileIndexApi } from '../main/platform/fileindex'
 import type { SpellApi } from '../main/spell'
+import type { HistoryApi } from '../main/history'
+import type { ScratchApi } from '../main/scratch'
 
 // Typed handles to backend services (see src/main/platform). Each call is one round trip to the main process.
 
 export const fileIndex = client<FileIndexApi>('fileindex', (req) => window.forge.rpc(req))
 export const spell = client<SpellApi>('spell', (req) => window.forge.rpc(req))
+export const historyService = client<HistoryApi>('history', (req) => window.forge.rpc(req))
+export const scratchService = client<ScratchApi>('scratch', (req) => window.forge.rpc(req))
 export const onBackendEvent = (cb: (topic: string, payload: unknown) => void): (() => void) => window.forge.onRpcEvent(cb)
 
 // The backend indexes one project at a time. It is opened on first use (a snapshot makes that quick after the first

@@ -12,7 +12,6 @@ import type { Breakpoint } from '../main/debug-types'
 import type { BlameLine, BranchInfo, ChangeKind, CommitDetails, CommitFile, CommitInfo, GitStatus, LogQuery, OpResult, RebaseInfo, SelectionCommit, StashEntry } from '../main/git'
 import type { RebaseStep } from '../main/rebaseplan'
 import type { SearchOptions, SearchResult } from '../main/search'
-import type { Snapshot } from '../main/history'
 import type { FsChange } from '../main/watch'
 import type { HttpRequestSpec, HttpResponse } from '../main/http'
 import type { InspectResult } from '../main/inspect'
@@ -90,12 +89,7 @@ const api = {
   ghCheckout: (root: string, n: number): Promise<string> => ipcRenderer.invoke('gh:checkout', root, n),
   ghComment: (root: string, n: number, body: string): Promise<void> => ipcRenderer.invoke('gh:comment', root, n, body),
   ghCreate: (root: string, opts: { title: string; body: string; base?: string; draft?: boolean }): Promise<string> => ipcRenderer.invoke('gh:create', root, opts),
-  scratchCreate: (ext: string): Promise<string> => ipcRenderer.invoke('scratch:create', ext),
-  scratchList: (): Promise<string[]> => ipcRenderer.invoke('scratch:list'),
   readClipboard: (): Promise<string> => ipcRenderer.invoke('clipboard:read'),
-  historyAdd: (path: string, text: string): Promise<boolean> => ipcRenderer.invoke('history:add', path, text),
-  historyList: (path: string): Promise<Snapshot[]> => ipcRenderer.invoke('history:list', path),
-  historyRead: (path: string, id: string): Promise<string> => ipcRenderer.invoke('history:read', path, id),
   lspWorkspace: (root: string, method: string, params: unknown): Promise<{ server: string; result?: unknown; error?: string }[]> =>
     ipcRenderer.invoke('lsp:workspace', root, method, params),
   realpath: (path: string): Promise<string> => ipcRenderer.invoke('fs:realpath', path),
