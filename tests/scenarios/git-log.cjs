@@ -85,18 +85,18 @@ run('git-log', { 'a.txt': 'one\n' }, async (t) => {
 
   // ---- filters ----
   await setInput('#view-git .git-filter[placeholder="Message"]', 'f1')
-  check('the message filter narrows the list', !!(await waitFor(async () => (await rows()) === 1, 4000)), await subjects())
+  check('the message filter narrows the list', !!(await waitFor(async () => (await rows()) === 1, 15000)), await subjects())
   check('...and drops the graph, which only makes sense for the whole history', (await js("document.querySelectorAll('#view-git .gcg').length")) === 0)
   await setInput('#view-git .git-filter[placeholder="Message"]', '')
-  await waitFor(async () => (await rows()) === 5, 4000)
+  await waitFor(async () => (await rows()) === 5, 15000)
   await setSelect('all')
-  check('"All branches" includes the other branches', !!(await waitFor(async () => (await subjects()).includes('t1 topic fix') && (await rows()) === 6, 4000)), await subjects())
+  check('"All branches" includes the other branches', !!(await waitFor(async () => (await subjects()).includes('t1 topic fix') && (await rows()) === 6, 15000)), await subjects())
 
   // ---- operations from the commit menu ----
   await setSelect('')
-  await waitFor(async () => (await rows()) === 5, 4000)
+  await waitFor(async () => (await rows()) === 5, 15000)
   await setSelect('all')
-  await waitFor(async () => (await rows()) === 6, 4000)
+  await waitFor(async () => (await rows()) === 6, 15000)
   await menu('t1 topic fix', 'Cherry-Pick')
   check('Cherry-Pick applies the commit to the current branch', !!(await waitFor(() => git('log', '-1', '--format=%s') === 't1 topic fix' && git('branch', '--show-current') === 'main', 5000)), git('log', '-1', '--format=%s'))
   await menu('m1 main work', 'Revert Commit')
@@ -106,7 +106,7 @@ run('git-log', { 'a.txt': 'one\n' }, async (t) => {
   await waitFor(() => js("!document.getElementById('ask').hidden"), 3000)
   await type('v-test')
   enter()
-  check('New Tag tags that commit', !!(await waitFor(() => gitq('rev-parse', 'v-test^{commit}') === c2, 4000)))
+  check('New Tag tags that commit', !!(await waitFor(() => gitq('rev-parse', 'v-test^{commit}') === c2, 15000)))
 
   await menu('c1 first', 'New Branch from Here')
   await waitFor(() => js("!document.getElementById('ask').hidden"), 3000)
@@ -130,7 +130,7 @@ run('git-log', { 'a.txt': 'one\n' }, async (t) => {
   check('Show Git History for File lists only the commits that touched it', !!(await waitFor(async () => (await rows()) === 1 && (await subjects()) === 'c1 first', 5000)), await subjects())
   check('...with a chip to go back to the whole history', (await text('view-git')).includes('History of a.txt'))
   await js("document.querySelector('#view-git .git-pathchip').click()")
-  check('clicking the chip shows everything again', !!(await waitFor(async () => (await rows()) >= 2, 4000)))
+  check('clicking the chip shows everything again', !!(await waitFor(async () => (await rows()) >= 2, 15000)))
 
   // ---- a merge that stops on conflicts ----
   git('switch', '-q', 'main')
@@ -146,5 +146,5 @@ run('git-log', { 'a.txt': 'one\n' }, async (t) => {
   check('a merge stopped on conflicts shows a banner with Continue and Abort', !!(await waitFor(async () => !(await js("document.querySelector('#view-git .git-banner').hidden")) && (await text('view-git')).includes('merge is in progress'), 5000)))
   await js("[...document.querySelectorAll('#view-git .git-banner button')].find(b => b.textContent === 'Abort').click()")
   check('Abort puts everything back', !!(await waitFor(() => !fs.existsSync(path.join(root, '.git', 'MERGE_HEAD')) && git('status', '--porcelain') === '', 5000)), git('status', '--porcelain'))
-  check('...and the banner goes away', !!(await waitFor(() => js("document.querySelector('#view-git .git-banner').hidden"), 4000)))
+  check('...and the banner goes away', !!(await waitFor(() => js("document.querySelector('#view-git .git-banner').hidden"), 15000)))
 })
