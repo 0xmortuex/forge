@@ -15,6 +15,7 @@ import type { GithubApi } from '../main/github'
 import type { DatabaseApi } from '../main/database'
 import type { SettingsApi } from '../main/settings'
 import type { ExtensionsApi } from '../main/extensions'
+import type { GitApi } from '../main/git'
 
 // Typed handles to backend services (see src/main/platform). Each call is one round trip to the main process.
 
@@ -34,6 +35,7 @@ export const githubService = client<GithubApi>('github', (req) => window.forge.r
 export const databaseService = client<DatabaseApi>('database', (req) => window.forge.rpc(req))
 export const settingsService = client<SettingsApi>('settings', (req) => window.forge.rpc(req))
 export const extensionsService = client<ExtensionsApi>('extensions', (req) => window.forge.rpc(req))
+export const gitService = client<GitApi>('git', (req) => window.forge.rpc(req))
 export const onBackendEvent = (cb: (topic: string, payload: unknown) => void): (() => void) => window.forge.onRpcEvent(cb)
 
 /** Terminal output and exits arrive as bus events. Each subscription returns a function that removes it. */

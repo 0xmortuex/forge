@@ -1,15 +1,9 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import type { DirEntry } from '../main/index'
-import type { ExtensionInfo } from '../main/extensions'
-import type { LoadedUserData } from '../main/settings'
 import type { DapLaunch, DebugEvent, DebugEval, DebugKind, DebugScope, DebugVar } from '../main/debug'
 import type { Breakpoint } from '../main/debug-types'
-import type { BlameLine, BranchInfo, ChangeKind, CommitDetails, CommitFile, CommitInfo, GitStatus, LogQuery, OpResult, RebaseInfo, SelectionCommit, StashEntry } from '../main/git'
-import type { RebaseStep } from '../main/rebaseplan'
 import type { SearchOptions, SearchResult } from '../main/search'
 import type { FsChange } from '../main/watch'
-import type { HttpRequestSpec, HttpResponse } from '../main/http'
-import type { FileDiff } from '../main/gitpatch'
 import type { AiEvent, AiRequest } from '../main/ai'
 import type { PtySpec } from '../main/terminal'
 import type { RpcRequest, RpcResponse } from '../shared/rpc'
@@ -79,55 +73,7 @@ const api = {
   onLspLog: (cb: (server: string, type: number, message: string) => void): void => {
     ipcRenderer.on('lsp:log', (_e, server: string, type: number, message: string) => cb(server, type, message))
   },
-  gitLog: (root: string, q: LogQuery): Promise<CommitInfo[]> => ipcRenderer.invoke('git:log', root, q),
-  gitCommitDetails: (root: string, sha: string): Promise<CommitDetails> => ipcRenderer.invoke('git:commit-details', root, sha),
-  gitFileAt: (root: string, sha: string, path: string): Promise<string> => ipcRenderer.invoke('git:file-at', root, sha, path),
-  gitBranchesFull: (root: string): Promise<BranchInfo[]> => ipcRenderer.invoke('git:branches-full', root),
-  gitTags: (root: string): Promise<string[]> => ipcRenderer.invoke('git:tags', root),
-  gitCheckout: (root: string, target: string, kind: 'local' | 'remote' | 'detached'): Promise<void> => ipcRenderer.invoke('git:checkout', root, target, kind),
-  gitBranchFrom: (root: string, name: string, from: string): Promise<void> => ipcRenderer.invoke('git:branch-from', root, name, from),
-  gitDeleteBranch: (root: string, name: string, force: boolean, remote: boolean): Promise<void> => ipcRenderer.invoke('git:delete-branch', root, name, force, remote),
-  gitRenameBranch: (root: string, from: string, to: string): Promise<void> => ipcRenderer.invoke('git:rename-branch', root, from, to),
-  gitStashApply: (root: string, ref: string): Promise<void> => ipcRenderer.invoke('git:stashApply', root, ref),
-  gitIgnore: (root: string, path: string): Promise<void> => ipcRenderer.invoke('git:ignore', root, path),
-  gitFetch: (root: string): Promise<void> => ipcRenderer.invoke('git:fetch', root),
-  gitMerge: (root: string, branch: string): Promise<OpResult> => ipcRenderer.invoke('git:merge', root, branch),
-  gitRebase: (root: string, onto: string): Promise<OpResult> => ipcRenderer.invoke('git:rebase', root, onto),
-  gitCherryPick: (root: string, sha: string): Promise<OpResult> => ipcRenderer.invoke('git:cherry-pick', root, sha),
-  gitRevertCommit: (root: string, sha: string): Promise<OpResult> => ipcRenderer.invoke('git:revert-commit', root, sha),
-  gitContinue: (root: string): Promise<OpResult> => ipcRenderer.invoke('git:continue', root),
-  gitAbort: (root: string): Promise<void> => ipcRenderer.invoke('git:abort', root),
-  gitInProgress: (root: string): Promise<string | null> => ipcRenderer.invoke('git:in-progress', root),
-  gitResolve: (root: string, path: string, how: 'ours' | 'theirs' | 'mark'): Promise<void> => ipcRenderer.invoke('git:resolve', root, path, how),
-  gitReset: (root: string, sha: string, mode: 'soft' | 'mixed' | 'hard'): Promise<void> => ipcRenderer.invoke('git:reset', root, sha, mode),
-  gitTag: (root: string, name: string, sha: string): Promise<void> => ipcRenderer.invoke('git:tag', root, name, sha),
-  gitDiffFiles: (root: string, ref: string): Promise<CommitFile[]> => ipcRenderer.invoke('git:diff-files', root, ref),
-  gitStatus: (root: string): Promise<GitStatus | null> => ipcRenderer.invoke('git:status', root),
-  gitHeadText: (root: string, path: string): Promise<string | null> => ipcRenderer.invoke('git:head-text', root, path),
-  gitShow: (root: string, path: string): Promise<string> => ipcRenderer.invoke('git:show', root, path),
-  gitBlame: (root: string, path: string): Promise<BlameLine[] | null> =>
-    ipcRenderer.invoke('git:blame', root, path),
-  gitBranches: (root: string): Promise<string[]> => ipcRenderer.invoke('git:branches', root),
-  gitSwitch: (root: string, branch: string): Promise<void> => ipcRenderer.invoke('git:switch', root, branch),
-  gitCreateBranch: (root: string, name: string): Promise<void> =>
-    ipcRenderer.invoke('git:createBranch', root, name),
-  gitPush: (root: string, force = false): Promise<void> => ipcRenderer.invoke('git:push', root, force),
-  gitPull: (root: string, mode: 'ff-only' | 'merge' | 'rebase' = 'ff-only'): Promise<OpResult> => ipcRenderer.invoke('git:pull', root, mode),
-  gitStashList: (root: string): Promise<StashEntry[]> => ipcRenderer.invoke('git:stashList', root),
-  gitStashPush: (root: string, message: string): Promise<void> => ipcRenderer.invoke('git:stashPush', root, message),
-  gitStashPop: (root: string, ref: string): Promise<void> => ipcRenderer.invoke('git:stashPop', root, ref),
-  gitStashDrop: (root: string, ref: string): Promise<void> => ipcRenderer.invoke('git:stashDrop', root, ref),
-  gitRevert: (root: string, path: string, kind: ChangeKind): Promise<void> =>
-    ipcRenderer.invoke('git:revert', root, path, kind),
-  gitDiffForCommit: (root: string, changes: { path: string; kind: ChangeKind }[]): Promise<string> => ipcRenderer.invoke('git:diff-for-commit', root, changes),
-  gitSelectionHistory: (root: string, abs: string, start: number, end: number): Promise<SelectionCommit[]> => ipcRenderer.invoke('git:selection-history', root, abs, start, end),
-  gitRebasePlan: (root: string, from: string): Promise<RebaseInfo> => ipcRenderer.invoke('git:rebase-plan', root, from),
-  gitRebaseRun: (root: string, base: string, steps: RebaseStep[]): Promise<OpResult> => ipcRenderer.invoke('git:rebase-run', root, base, steps),
-  gitFileHunks: (root: string, abs: string): Promise<FileDiff | null> => ipcRenderer.invoke('git:file-hunks', root, abs),
-  gitCommitPartial: (root: string, message: string, whole: string[], partial: { path: string; fingerprint: string; selected: number[][] }[]): Promise<void> =>
-    ipcRenderer.invoke('git:commit-partial', root, message, whole, partial),
-  gitCommit: (root: string, message: string, paths: string[], amend = false): Promise<void> => ipcRenderer.invoke('git:commit', root, message, paths, amend),
-  debugLaunch: (cwd: string, cols: number, rows: number, spec: PtySpec, kind: DebugKind, dap?: DapLaunch): Promise<number> =>
+                                                                                          debugLaunch: (cwd: string, cols: number, rows: number, spec: PtySpec, kind: DebugKind, dap?: DapLaunch): Promise<number> =>
     ipcRenderer.invoke('debug:launch', cwd, cols, rows, spec, kind, dap),
   debugSetBreakpoints: (path: string, lines: Breakpoint[]): Promise<void> =>
     ipcRenderer.invoke('debug:setBreakpoints', path, lines),

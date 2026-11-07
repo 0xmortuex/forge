@@ -1,4 +1,5 @@
 import * as monaco from 'monaco-editor'
+import { gitService } from './rpc'
 
 // Annotate with Git Blame: shows who last changed each line (author and date) in the line-number column.
 // It reads git's blame of the saved file, so it only makes sense while the file has no unsaved edits.
@@ -47,7 +48,7 @@ export function initAnnotate(deps: AnnotateDeps): Annotate {
       const path = deps.currentPath()
       if (!root || !path) return deps.report('Open a file in a git project to annotate it', true)
       if (deps.isDirty()) return deps.report('Save the file first: blame reads the saved version', true)
-      const lines = await window.forge.gitBlame(root, path)
+      const lines = await gitService.blame(root, path)
       if (!lines) return deps.report('Git does not track this file yet, so there is nothing to annotate', true)
       on = true
       deps.editor.updateOptions({

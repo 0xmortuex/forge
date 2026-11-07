@@ -7,7 +7,6 @@ import { registerDebug } from './debug'
 import { assertEncoding, decode, detectEncoding, encode } from './encoding'
 import { referencesTo, type Reference } from './safedelete'
 import { registerExtensions, registerExtensionScheme } from './extensions'
-import { registerGit } from './git'
 import { registerSettings } from './settings'
 import { replaceInFiles, searchProject, type SearchOptions } from './search'
 import { killAllLsp, registerLsp } from './lsp'
@@ -218,7 +217,6 @@ if (process.env['FORGE_USER_DATA']) app.setPath('userData', process.env['FORGE_U
 registerSettings()
 registerExtensions()
 registerLsp()
-registerGit()
 registerDebug()
 registerAi()
 registerWatch()

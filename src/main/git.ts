@@ -2,7 +2,6 @@ import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { basename, join, relative, resolve } from 'node:path'
-import { ipcMain } from 'electron'
 import { buildPatch, parseDiff, type FileDiff } from './gitpatch'
 import { planTodo, withExecLines, type RebaseStep } from './rebaseplan'
 
@@ -351,10 +350,13 @@ async function fileDiff(root: string, repo: Repo, abs: string): Promise<FileDiff
   return parseDiff(await git(root, ['diff', 'HEAD', '--no-color', '--no-ext-diff', '--no-renames', '-U3', '--', toGitPath(repo, abs)]))
 }
 
-export function registerGit(): void {
-  ipcMain.handle('git:status', (_e, root: string) => status(root))
+/** Provided as the "git" service (see platform). */
+export class GitService {
+  status(root: string) {
+    return status(root)
+  }
 
-  ipcMain.handle('git:log', async (_e, root: string, q: LogQuery): Promise<CommitInfo[]> => {
+  async log(root: string, q: LogQuery): Promise<CommitInfo[]> {
     const repo = await needRepo(root)
     const args = ['log', '--date-order', PRETTY, `--skip=${q.skip ?? 0}`, `-n${q.limit ?? 200}`]
     if (q.author) args.push(`--author=${q.author}`)
@@ -369,9 +371,9 @@ export function registerGit(): void {
       if (/does not have any commits yet|bad default revision/i.test((err as Error).message)) return []
       throw err
     }
-  })
+  }
 
-  ipcMain.handle('git:commit-details', async (_e, root: string, sha: string): Promise<CommitDetails> => {
+  async commitDetails(root: string, sha: string): Promise<CommitDetails> {
     const repo = await needRepo(root)
     const [info] = parseLog(await git(root, ['show', '-s', PRETTY, sha]))
     if (!info) throw new Error(`Unknown commit ${sha}`)
@@ -384,10 +386,10 @@ export function registerGit(): void {
         : await git(root, ['show', '--name-status', '-M', '--format=', '-z', sha])
     )
     return { ...info, body, files }
-  })
+  }
 
   /** A file as it was in a commit ('' if it did not exist there). */
-  ipcMain.handle('git:file-at', async (_e, root: string, sha: string, abs: string): Promise<string> => {
+  async fileAt(root: string, sha: string, abs: string): Promise<string> {
     const repo = await needRepo(root)
     try {
       return await git(root, ['show', `${sha}:${toGitPath(repo, abs)}`])
@@ -395,9 +397,9 @@ export function registerGit(): void {
       if (/exists on disk, but not in|does not exist in|Path '.*' does not exist/i.test((err as Error).message)) return ''
       throw err
     }
-  })
+  }
 
-  ipcMain.handle('git:branches-full', async (_e, root: string): Promise<BranchInfo[]> => {
+  async branchesFull(root: string): Promise<BranchInfo[]> {
     await needRepo(root)
     const fmt = ['%(HEAD)', '%(refname)', '%(refname:short)', '%(upstream:short)', '%(objectname)', '%(upstream:track,nobracket)'].join(FS)
     const out = await git(root, ['for-each-ref', `--format=${fmt}`, 'refs/heads', 'refs/remotes'])
@@ -410,56 +412,56 @@ export function registerGit(): void {
       list.push({ name, remote: ref.startsWith('refs/remotes/'), current: head === '*', upstream: upstream || null, sha, ahead: Number(ahead ?? 0), behind: Number(behind ?? 0) })
     }
     return list
-  })
+  }
 
-  ipcMain.handle('git:tags', async (_e, root: string): Promise<string[]> => {
+  async tags(root: string): Promise<string[]> {
     await needRepo(root)
     return (await git(root, ['tag', '--list', '--sort=-creatordate'])).split('\n').map((s) => s.trim()).filter(Boolean)
-  })
+  }
 
   /** Checks out a branch, a remote branch (creating a local tracking branch), a tag or a commit. */
-  ipcMain.handle('git:checkout', async (_e, root: string, target: string, kind: 'local' | 'remote' | 'detached') => {
+  async checkout(root: string, target: string, kind: 'local' | 'remote' | 'detached') {
     await needRepo(root)
     if (kind === 'remote') await git(root, ['switch', '--track', '-c', target.slice(target.indexOf('/') + 1), target])
     else if (kind === 'detached') await git(root, ['switch', '--detach', target])
     else await git(root, ['switch', target])
-  })
+  }
 
-  ipcMain.handle('git:branch-from', async (_e, root: string, name: string, from: string) => {
+  async branchFrom(root: string, name: string, from: string) {
     await needRepo(root)
     await git(root, ['switch', '-c', name, from])
-  })
+  }
 
-  ipcMain.handle('git:delete-branch', async (_e, root: string, name: string, force: boolean, remote: boolean) => {
+  async deleteBranch(root: string, name: string, force: boolean, remote: boolean) {
     await needRepo(root)
     if (remote) {
       const [remoteName, ...rest] = name.split('/')
       await git(root, ['push', remoteName ?? 'origin', '--delete', rest.join('/')], true)
     } else await git(root, ['branch', force ? '-D' : '-d', name])
-  })
+  }
 
-  ipcMain.handle('git:rename-branch', async (_e, root: string, from: string, to: string) => {
+  async renameBranch(root: string, from: string, to: string) {
     await needRepo(root)
     await git(root, ['branch', '-m', from, to])
-  })
+  }
 
-  ipcMain.handle('git:fetch', async (_e, root: string) => {
+  async fetch(root: string) {
     await needRepo(root)
     await git(root, ['fetch', '--all', '--prune'], true)
-  })
+  }
 
-  ipcMain.handle('git:merge', async (_e, root: string, branch: string): Promise<OpResult> => {
+  async merge(root: string, branch: string): Promise<OpResult> {
     await needRepo(root)
     return operation(root, ['merge', '--no-edit', branch], `Merging ${branch}`)
-  })
+  }
 
-  ipcMain.handle('git:rebase', async (_e, root: string, onto: string): Promise<OpResult> => {
+  async rebase(root: string, onto: string): Promise<OpResult> {
     await needRepo(root)
     return operation(root, ['rebase', onto], `Rebasing onto ${onto}`)
-  })
+  }
 
   /** The commits an interactive rebase "from here" would rewrite: the given commit and everything after it, oldest first. */
-  ipcMain.handle('git:rebase-plan', async (_e, root: string, from: string): Promise<RebaseInfo> => {
+  async rebasePlan(root: string, from: string): Promise<RebaseInfo> {
     await needRepo(root)
     const parent = await git(root, ['rev-parse', '--verify', '--quiet', `${from}^`]).then(
       (out) => out.trim(),
@@ -490,13 +492,13 @@ export function registerGit(): void {
         return { sha, subject: text.split('\n')[0] ?? '', message: text, pushed: unpushed ? !unpushed.has(sha) : false }
       })
     return { base: parent, upstream, commits }
-  })
+  }
 
   /**
    * Runs an interactive rebase from the user's plan, with no editor: the plan is the todo list. A stop on conflicts comes back as
    * a result (the usual Continue / Abort take over); the message files stay in .git/forge-rebase until the next rebase.
    */
-  ipcMain.handle('git:rebase-run', async (_e, root: string, base: string, steps: RebaseStep[]): Promise<OpResult> => {
+  async rebaseRun(root: string, base: string, steps: RebaseStep[]): Promise<OpResult> {
     const repo = await needRepo(root)
     const gitDir = resolve(repo.top, (await git(root, ['rev-parse', '--git-dir'])).trim())
     if (existsSync(join(gitDir, 'rebase-merge')) || existsSync(join(gitDir, 'rebase-apply'))) throw new Error('A rebase is already in progress: continue or abort it first')
@@ -513,20 +515,20 @@ export function registerGit(): void {
     const result = await operation(root, ['rebase', '-i', '--autostash', base], 'Rebasing', env)
     if (result.ok) await rm(dir, { recursive: true, force: true })
     return result
-  })
+  }
 
-  ipcMain.handle('git:cherry-pick', async (_e, root: string, sha: string): Promise<OpResult> => {
+  async cherryPick(root: string, sha: string): Promise<OpResult> {
     await needRepo(root)
     return operation(root, ['cherry-pick', sha], `Cherry-picking ${sha.slice(0, 7)}`)
-  })
+  }
 
-  ipcMain.handle('git:revert-commit', async (_e, root: string, sha: string): Promise<OpResult> => {
+  async revertCommit(root: string, sha: string): Promise<OpResult> {
     await needRepo(root)
     return operation(root, ['revert', '--no-edit', sha], `Reverting ${sha.slice(0, 7)}`)
-  })
+  }
 
   /** After resolving conflicts: finish the operation that is in progress. */
-  ipcMain.handle('git:continue', async (_e, root: string): Promise<OpResult> => {
+  async continue(root: string): Promise<OpResult> {
     const repo = await needRepo(root)
     const gitDir = (await git(root, ['rev-parse', '--git-dir'])).trim()
     const dir = resolve(repo.top, gitDir)
@@ -538,9 +540,9 @@ export function registerGit(): void {
     if (has('CHERRY_PICK_HEAD')) return run(['cherry-pick', '--continue'])
     if (has('REVERT_HEAD')) return run(['revert', '--continue'])
     throw new Error('Nothing to continue: no merge, rebase, cherry-pick or revert is in progress')
-  })
+  }
 
-  ipcMain.handle('git:abort', async (_e, root: string) => {
+  async abort(root: string) {
     const repo = await needRepo(root)
     const dir = resolve(repo.top, (await git(root, ['rev-parse', '--git-dir'])).trim())
     const has = (name: string): boolean => existsSync(join(dir, name))
@@ -549,10 +551,10 @@ export function registerGit(): void {
     else if (has('CHERRY_PICK_HEAD')) await git(root, ['cherry-pick', '--abort'])
     else if (has('REVERT_HEAD')) await git(root, ['revert', '--abort'])
     else throw new Error('Nothing to abort: no merge, rebase, cherry-pick or revert is in progress')
-  })
+  }
 
   /** Which operation is stopped half way, if any (so the UI can offer Continue / Abort). */
-  ipcMain.handle('git:in-progress', async (_e, root: string): Promise<string | null> => {
+  async inProgress(root: string): Promise<string | null> {
     const repo = await repoFor(root)
     if (!repo) return null
     const dir = resolve(repo.top, (await git(root, ['rev-parse', '--git-dir'])).trim())
@@ -562,40 +564,40 @@ export function registerGit(): void {
     if (has('CHERRY_PICK_HEAD')) return 'cherry-pick'
     if (has('REVERT_HEAD')) return 'revert'
     return null
-  })
+  }
 
   /** Resolves a conflicted file: take one side wholesale, or just mark the edited file resolved. Stages it either way. */
-  ipcMain.handle('git:resolve', async (_e, root: string, abs: string, how: 'ours' | 'theirs' | 'mark') => {
+  async resolve(root: string, abs: string, how: 'ours' | 'theirs' | 'mark') {
     const repo = await needRepo(root)
     const rel = toGitPath(repo, abs)
     if (how !== 'mark') await git(root, ['checkout', `--${how}`, '--', rel])
     await git(root, ['add', '--', rel])
-  })
+  }
 
-  ipcMain.handle('git:reset', async (_e, root: string, sha: string, mode: 'soft' | 'mixed' | 'hard') => {
+  async reset(root: string, sha: string, mode: 'soft' | 'mixed' | 'hard') {
     await needRepo(root)
     await git(root, ['reset', `--${mode}`, sha])
-  })
+  }
 
-  ipcMain.handle('git:tag', async (_e, root: string, name: string, sha: string) => {
+  async tag(root: string, name: string, sha: string) {
     await needRepo(root)
     await git(root, ['tag', name, sha])
-  })
+  }
 
   /** What differs between the working tree and another branch/commit (absolute paths). */
-  ipcMain.handle('git:diff-files', async (_e, root: string, ref: string): Promise<CommitFile[]> => {
+  async diffFiles(root: string, ref: string): Promise<CommitFile[]> {
     const repo = await needRepo(root)
     return parseNameStatus(repo, await git(root, ['diff', '--name-status', '-M', '-z', ref]))
-  })
+  }
 
   /** File content at HEAD. The renderer only asks for files that exist there. */
-  ipcMain.handle('git:show', async (_e, root: string, abs: string) => {
+  async show(root: string, abs: string) {
     const repo = await needRepo(root)
     return git(root, ['show', `HEAD:${toGitPath(repo, abs)}`])
-  })
+  }
 
   /** The file at HEAD, or null when there is none to compare with (no repository, no commits, or the file is new). */
-  ipcMain.handle('git:head-text', async (_e, root: string, abs: string): Promise<string | null> => {
+  async headText(root: string, abs: string): Promise<string | null> {
     const repo = await repoFor(root)
     if (!repo) return null
     try {
@@ -604,10 +606,10 @@ export function registerGit(): void {
       if (/exists on disk, but not in|does not exist in|invalid object name|unknown revision|bad revision|ambiguous argument/i.test((err as Error).message)) return null
       throw err
     }
-  })
+  }
 
   /** Null when the file isn't tracked yet (nothing to blame) — a normal state, not an error. */
-  ipcMain.handle('git:blame', async (_e, root: string, abs: string): Promise<BlameLine[] | null> => {
+  async blame(root: string, abs: string): Promise<BlameLine[] | null> {
     const repo = await needRepo(root)
     const rel = toGitPath(repo, abs)
     try {
@@ -617,29 +619,29 @@ export function registerGit(): void {
       return null
     }
     return parseBlame(await git(root, ['blame', '--porcelain', '--', rel]))
-  })
+  }
 
-  ipcMain.handle('git:branches', async (_e, root: string): Promise<string[]> => {
+  async branches(root: string): Promise<string[]> {
     await needRepo(root)
     const out = await git(root, ['branch', '--format=%(refname:short)'])
     return out.split('\n').map((s) => s.trim()).filter(Boolean)
-  })
+  }
 
-  ipcMain.handle('git:switch', async (_e, root: string, branch: string) => {
+  async switch(root: string, branch: string) {
     await needRepo(root)
     await git(root, ['switch', branch])
-  })
+  }
 
-  ipcMain.handle('git:createBranch', async (_e, root: string, name: string) => {
+  async createBranch(root: string, name: string) {
     await needRepo(root)
     await git(root, ['switch', '-c', name])
-  })
+  }
 
   /**
    * Pushes the current branch; with no upstream yet, publishes it to origin and sets the upstream. `force` uses
    * --force-with-lease: it overwrites the remote branch only if nobody else has pushed to it since you last looked.
    */
-  ipcMain.handle('git:push', async (_e, root: string, force = false) => {
+  async push(root: string, force = false) {
     await needRepo(root)
     const st = await status(root)
     if (!st || st.detached) throw new Error('Cannot push: HEAD is detached')
@@ -648,10 +650,10 @@ export function registerGit(): void {
     if (!remotes.length) throw new Error('Cannot push: this repository has no remote configured')
     if (!remotes.includes('origin')) throw new Error(`Cannot push: no "origin" remote (found: ${remotes.join(', ')})`)
     await git(root, ['push', '--set-upstream', ...(force ? ['--force-with-lease'] : []), 'origin', st.branch], true)
-  })
+  }
 
   /** How to bring in the remote's commits: fast-forward only (the default: never a merge behind your back), merge, or rebase. */
-  ipcMain.handle('git:pull', async (_e, root: string, mode: 'ff-only' | 'merge' | 'rebase' = 'ff-only'): Promise<OpResult> => {
+  async pull(root: string, mode: 'ff-only' | 'merge' | 'rebase' = 'ff-only'): Promise<OpResult> {
     await needRepo(root)
     const args = mode === 'rebase' ? ['pull', '--rebase'] : mode === 'merge' ? ['pull', '--no-rebase', '--no-edit'] : ['pull', '--ff-only']
     // Conflicts stop a merge/rebase half way: that is a state the user resolves, not an error (the network flag is needed
@@ -664,9 +666,9 @@ export function registerGit(): void {
       if (st?.changes.some((c) => c.kind === 'conflict')) return { ok: false, conflicts: true, message: 'The pull stopped on conflicts. Resolve them, then continue — or abort.' }
       throw err
     }
-  })
+  }
 
-  ipcMain.handle('git:stashList', async (_e, root: string): Promise<StashEntry[]> => {
+  async stashList(root: string): Promise<StashEntry[]> {
     await needRepo(root)
     const out = await git(root, ['stash', 'list', '--format=%gd%x09%gs'])
     return out
@@ -676,32 +678,32 @@ export function registerGit(): void {
         const [ref = '', ...rest] = line.split('\t')
         return { ref, message: rest.join('\t') }
       })
-  })
+  }
 
-  ipcMain.handle('git:stashPush', async (_e, root: string, message: string) => {
+  async stashPush(root: string, message: string) {
     await needRepo(root)
     // -u: untracked files are part of "my changes" too.
     await git(root, ['stash', 'push', '--include-untracked', ...(message.trim() ? ['-m', message.trim()] : [])])
-  })
+  }
 
   /** Applies a stash but keeps it in the list. */
-  ipcMain.handle('git:stashApply', async (_e, root: string, ref: string) => {
+  async stashApply(root: string, ref: string) {
     await needRepo(root)
     await git(root, ['stash', 'apply', ref])
-  })
+  }
 
-  ipcMain.handle('git:stashPop', async (_e, root: string, ref: string) => {
+  async stashPop(root: string, ref: string) {
     await needRepo(root)
     await git(root, ['stash', 'pop', ref])
-  })
+  }
 
-  ipcMain.handle('git:stashDrop', async (_e, root: string, ref: string) => {
+  async stashDrop(root: string, ref: string) {
     await needRepo(root)
     await git(root, ['stash', 'drop', ref])
-  })
+  }
 
   /** Discards a change. Untracked files are the renderer's job (Recycle Bin); renames/conflicts aren't handled. */
-  ipcMain.handle('git:revert', async (_e, root: string, abs: string, kind: ChangeKind) => {
+  async revert(root: string, abs: string, kind: ChangeKind) {
     const repo = await needRepo(root)
     const rel = toGitPath(repo, abs)
     if (kind === 'modified' || kind === 'deleted') {
@@ -711,10 +713,10 @@ export function registerGit(): void {
     } else {
       throw new Error(`Reverting a ${kind} change isn't supported — resolve it with git directly`)
     }
-  })
+  }
 
   /** Commits exactly `paths`: stages them, then `commit --only` so other staged work is left out. */
-  ipcMain.handle('git:commit', async (_e, root: string, message: string, paths: string[], amend = false) => {
+  async commit(root: string, message: string, paths: string[], amend = false) {
     const repo = await needRepo(root)
     if (!amend && !message.trim()) throw new Error('Commit message is empty')
     if (!amend && !paths.length) throw new Error('No files selected to commit')
@@ -724,13 +726,13 @@ export function registerGit(): void {
     // Amend: fold the selected files (if any) into the previous commit, optionally with a new message.
     const msg = message.trim() ? ['-m', message] : ['--no-edit']
     await git(root, ['commit', '--amend', ...msg, ...(rels.length ? ['--only', '--', ...rels] : [])])
-  })
+  }
 
   /**
    * What a commit of these changes would contain, as text for describing it: tracked changes as a diff against HEAD,
    * new (untracked) files as their first lines. Used to write a commit message.
    */
-  ipcMain.handle('git:diff-for-commit', async (_e, root: string, changes: { path: string; kind: ChangeKind }[]): Promise<string> => {
+  async diffForCommit(root: string, changes: { path: string; kind: ChangeKind }[]): Promise<string> {
     const repo = await needRepo(root)
     const hasHead = await git(root, ['rev-parse', '--verify', '--quiet', 'HEAD']).then(
       () => true,
@@ -748,10 +750,10 @@ export function registerGit(): void {
       parts.push(text.includes('\0') ? `new file ${name}: (binary file)\n` : `new file ${name}:\n${text.split('\n').slice(0, 80).join('\n')}\n`)
     }
     return parts.join('\n')
-  })
+  }
 
   /** The commits that touched a range of lines of a file, each with the part of its diff that concerns those lines (git log -L). */
-  ipcMain.handle('git:selection-history', async (_e, root: string, abs: string, start: number, end: number): Promise<SelectionCommit[]> => {
+  async selectionHistory(root: string, abs: string, start: number, end: number): Promise<SelectionCommit[]> {
     const repo = await needRepo(root)
     if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < start) throw new Error('Not a valid range of lines')
     const marker = '@@FORGE-COMMIT@@'
@@ -764,57 +766,57 @@ export function registerGit(): void {
         const [, sha = '', author = '', date = '', subject = ''] = chunk.slice(0, eol < 0 ? chunk.length : eol).split('\0')
         return { sha, author, date, subject, patch: eol < 0 ? '' : chunk.slice(eol + 1).trim() }
       })
-  })
+  }
 
   /** A modified file's changes against HEAD, as hunks and lines, for choosing which of them to commit. */
-  ipcMain.handle('git:file-hunks', async (_e, root: string, abs: string): Promise<FileDiff | null> => {
+  async fileHunks(root: string, abs: string): Promise<FileDiff | null> {
     const repo = await needRepo(root)
     return fileDiff(root, repo, abs)
-  })
+  }
 
   /**
    * Commits only the chosen parts of some files, plus whole other files. The commit is made through a temporary index, so the
    * real index, the working files and anything the user staged by hand are left as they were (apart from the committed paths).
    */
-  ipcMain.handle(
-    'git:commit-partial',
-    async (_e, root: string, message: string, whole: string[], partial: { path: string; fingerprint: string; selected: number[][] }[]) => {
-      const repo = await needRepo(root)
-      if (!message.trim()) throw new Error('Commit message is empty')
-      if (!whole.length && !partial.length) throw new Error('No files selected to commit')
-      await requireHead(root)
-      const gitDir = (await git(root, ['rev-parse', '--absolute-git-dir'])).trim()
-      const tempIndex = join(gitDir, `forge-index-${process.pid}-${Date.now()}`)
-      const env = { GIT_INDEX_FILE: tempIndex }
-      const wholeRels = whole.map((p) => toGitPath(repo, p))
-      try {
-        await gitIn(root, ['read-tree', 'HEAD'], env)
-        if (wholeRels.length) await gitIn(root, ['add', '-A', '--', ...wholeRels], env)
-        for (const p of partial) {
-          const diff = await fileDiff(root, repo, p.path)
-          if (!diff || diff.fingerprint !== p.fingerprint) {
-            throw new Error(`${basename(p.path)} changed since you chose its changes. Choose them again.`)
-          }
-          const patch = buildPatch(diff, p.selected)
-          if (!patch) throw new Error(`No changes are chosen in ${basename(p.path)}`)
-          await gitIn(root, ['apply', '--cached', '--recount', '-'], env, patch)
+  async commitPartial(root: string, message: string, whole: string[], partial: { path: string; fingerprint: string; selected: number[][] }[]) {
+    const repo = await needRepo(root)
+    if (!message.trim()) throw new Error('Commit message is empty')
+    if (!whole.length && !partial.length) throw new Error('No files selected to commit')
+    await requireHead(root)
+    const gitDir = (await git(root, ['rev-parse', '--absolute-git-dir'])).trim()
+    const tempIndex = join(gitDir, `forge-index-${process.pid}-${Date.now()}`)
+    const env = { GIT_INDEX_FILE: tempIndex }
+    const wholeRels = whole.map((p) => toGitPath(repo, p))
+    try {
+      await gitIn(root, ['read-tree', 'HEAD'], env)
+      if (wholeRels.length) await gitIn(root, ['add', '-A', '--', ...wholeRels], env)
+      for (const p of partial) {
+        const diff = await fileDiff(root, repo, p.path)
+        if (!diff || diff.fingerprint !== p.fingerprint) {
+          throw new Error(`${basename(p.path)} changed since you chose its changes. Choose them again.`)
         }
-        await gitIn(root, ['commit', '-m', message], env)
-      } finally {
-        await rm(tempIndex, { force: true })
+        const patch = buildPatch(diff, p.selected)
+        if (!patch) throw new Error(`No changes are chosen in ${basename(p.path)}`)
+        await gitIn(root, ['apply', '--cached', '--recount', '-'], env, patch)
       }
-      // The real index still holds the old versions of what was committed: bring those paths up to date (nothing else changes).
-      await git(root, ['reset', '-q', '--', ...wholeRels, ...partial.map((p) => toGitPath(repo, p.path))])
+      await gitIn(root, ['commit', '-m', message], env)
+    } finally {
+      await rm(tempIndex, { force: true })
     }
-  )
+    // The real index still holds the old versions of what was committed: bring those paths up to date (nothing else changes).
+    await git(root, ['reset', '-q', '--', ...wholeRels, ...partial.map((p) => toGitPath(repo, p.path))])
+  }
 
   /** Adds a path to the repository's .gitignore (created if needed). */
-  ipcMain.handle('git:ignore', async (_e, root: string, abs: string) => {
+  async ignore(root: string, abs: string) {
     const repo = await needRepo(root)
     const file = join(repo.top, '.gitignore')
     const existing = existsSync(file) ? await readFile(file, 'utf8') : ''
     const line = `/${toGitPath(repo, abs)}`
     if (existing.split(/\r?\n/).includes(line)) return
     await writeFile(file, existing + (existing && !existing.endsWith('\n') ? '\n' : '') + line + '\n', 'utf8')
-  })
+  }
 }
+
+export type GitApi = GitService
+

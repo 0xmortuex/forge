@@ -3,6 +3,7 @@ import { ask, cleanCommitMessage, commitPrompt } from './ai'
 import { icons } from './icons'
 import { chooseChanges, type PartialChoice } from './partial'
 import { askText, showMenu, type MenuItem } from './menu'
+import { gitService } from './rpc'
 
 export interface GitDeps {
   getRoot: () => string | null
@@ -71,8 +72,8 @@ export function initGit(deps: GitDeps): {
     blameCache.clear()
     const root = deps.getRoot()
     try {
-      status = root ? await window.forge.gitStatus(root) : null
-      operation = root && status ? await window.forge.gitInProgress(root) : null
+      status = root ? await gitService.status(root) : null
+      operation = root && status ? await gitService.inProgress(root) : null
     } catch (err) {
       status = null
       render()
@@ -164,7 +165,7 @@ export function initGit(deps: GitDeps): {
     await deps
       .guard('Choose changes', async () => {
         await deps.saveAll() // the diff must be of what is on disk
-        const diff = await window.forge.gitFileHunks(root, c.path)
+        const diff = await gitService.fileHunks(root, c.path)
         if (!diff) throw new Error(`${basename(c.path)} has no text changes to choose from`)
         const result = await chooseChanges(basename(c.path), diff, partial.get(c.path))
         if (!result) return
@@ -190,7 +191,7 @@ export function initGit(deps: GitDeps): {
       commitBtn.disabled = true
       void deps
         .guard(`Complete ${op}`, async () => {
-          const res = await window.forge.gitContinue(root)
+          const res = await gitService.continue(root)
           deps.report(res.ok ? `Completed the ${op}` : res.message, !res.ok)
           await deps.onWorktreeChanged()
           await refresh()
@@ -218,7 +219,7 @@ export function initGit(deps: GitDeps): {
     void deps
       .guard('Generate commit message', async () => {
         await deps.saveAll()
-        const diff = await window.forge.gitDiffForCommit(root, changes)
+        const diff = await gitService.diffForCommit(root, changes)
         if (!diff.trim()) throw new Error('There is nothing to describe')
         message.value = cleanCommitMessage(await ask(commitPrompt(diff), { maxTokens: 300, temperature: 0.2, timeoutMs: 60000 }))
       })
@@ -246,14 +247,14 @@ export function initGit(deps: GitDeps): {
       .guard(thenPush ? 'Commit and push' : 'Commit', async () => {
         await deps.saveAll() // git only commits what is on disk
         if (chosen.length) {
-          await window.forge.gitCommitPartial(
+          await gitService.commitPartial(
             root,
             message.value,
             paths.filter((p) => !partial.has(p)),
             chosen.map((p) => ({ path: p, fingerprint: partial.get(p)!.fingerprint, selected: partial.get(p)!.selected }))
           )
         } else {
-          await window.forge.gitCommit(root, message.value, paths, amend)
+          await gitService.commit(root, message.value, paths, amend)
         }
         message.value = ''
         amendBox.checked = false
@@ -264,7 +265,7 @@ export function initGit(deps: GitDeps): {
         deps.report(amend ? 'Amended the last commit' : `Committed ${paths.length} file${paths.length === 1 ? '' : 's'}`)
         await deps.onWorktreeChanged()
         if (thenPush) {
-          await window.forge.gitPush(root)
+          await gitService.push(root)
           deps.report('Pushed')
         }
         await refresh()
@@ -282,7 +283,7 @@ export function initGit(deps: GitDeps): {
     if (!amendBox.checked || !root || message.value.trim()) return
     void deps
       .guard('Amend', async () => {
-        const last = await window.forge.gitCommitDetails(root, 'HEAD')
+        const last = await gitService.commitDetails(root, 'HEAD')
         message.value = last.body ? `${last.subject}\n\n${last.body}` : last.subject
       })
       .catch(() => undefined) // already reported by guard
@@ -298,7 +299,7 @@ export function initGit(deps: GitDeps): {
         void runOp('Resolve', async () => {
           if (!root) return false
           if (how === 'mark') await deps.saveAll() // the resolved text must be on disk before it is staged
-          await window.forge.gitResolve(root, c.path, how)
+          await gitService.resolve(root, c.path, how)
           return true
         }, done, true)
       return [
@@ -317,7 +318,7 @@ export function initGit(deps: GitDeps): {
     if (c.kind === 'untracked') {
       items.push({
         label: 'Add to .gitignore',
-        run: () => void runOp('Ignore', async () => void (await window.forge.gitIgnore(root, c.path)), `Added ${name} to .gitignore`, false)
+        run: () => void runOp('Ignore', async () => void (await gitService.ignore(root, c.path)), `Added ${name} to .gitignore`, false)
       })
       items.push({
         label: 'Delete…',
@@ -341,7 +342,7 @@ export function initGit(deps: GitDeps): {
         run: () =>
           void runOp(label.replace('…', ''), async () => {
             if (!confirm(prompt)) return false
-            await window.forge.gitRevert(root, c.path, c.kind)
+            await gitService.revert(root, c.path, c.kind)
             return true
           }, c.kind === 'added' ? `Unstaged ${name}` : `Reverted ${name}`, true)
       })
@@ -369,7 +370,7 @@ export function initGit(deps: GitDeps): {
     if (!root || !status) return
     void deps
       .guard('Pull', async () => {
-        const res = await window.forge.gitPull(root, deps.pullMode())
+        const res = await gitService.pull(root, deps.pullMode())
         deps.report(res.conflicts ? res.message : res.ok && /Already up to date/i.test(res.message) ? 'Already up to date' : 'Pulled', res.conflicts)
         await deps.onWorktreeChanged()
         await refresh()
@@ -380,10 +381,10 @@ export function initGit(deps: GitDeps): {
   function push(force: boolean): void {
     const root = deps.getRoot()
     if (!root || !status) return
-    if (!force) return void runOp('Push', () => window.forge.gitPush(root), 'Pushed', false)
+    if (!force) return void runOp('Push', () => gitService.push(root), 'Pushed', false)
     void runOp('Force push', async () => {
       if (!confirm('Force-push the current branch? Commits on the remote that you do not have will be overwritten. (It refuses if someone else has pushed since you last fetched.)')) return false
-      await window.forge.gitPush(root, true)
+      await gitService.push(root, true)
       return true
     }, 'Force-pushed', false)
   }
@@ -400,7 +401,7 @@ export function initGit(deps: GitDeps): {
     const rect = byId('commit-stash').getBoundingClientRect()
     void deps
       .guard('Stash', async () => {
-        const stashes = await window.forge.gitStashList(root)
+        const stashes = await gitService.stashList(root)
         const items: (MenuItem | 'sep')[] = [
           {
             label: 'Stash Changes…',
@@ -408,7 +409,7 @@ export function initGit(deps: GitDeps): {
               void runOp('Stash', async () => {
                 const message = await askText('Stash message (optional)')
                 if (message === null) return false
-                await window.forge.gitStashPush(root, message)
+                await gitService.stashPush(root, message)
                 return true
               }, 'Stashed your changes', true)
           }
@@ -417,11 +418,11 @@ export function initGit(deps: GitDeps): {
         for (const s of stashes) {
           items.push({
             label: `Apply: ${s.message}`,
-            run: () => void runOp('Stash apply', () => window.forge.gitStashApply(root, s.ref), `Applied ${s.ref} (kept in the stash list)`, true)
+            run: () => void runOp('Stash apply', () => gitService.stashApply(root, s.ref), `Applied ${s.ref} (kept in the stash list)`, true)
           })
           items.push({
             label: `Pop: ${s.message}`,
-            run: () => void runOp('Stash pop', () => window.forge.gitStashPop(root, s.ref), `Applied and removed ${s.ref}`, true)
+            run: () => void runOp('Stash pop', () => gitService.stashPop(root, s.ref), `Applied and removed ${s.ref}`, true)
           })
           items.push({
             label: `Drop: ${s.message}`,
@@ -429,7 +430,7 @@ export function initGit(deps: GitDeps): {
             run: () =>
               void runOp('Stash drop', async () => {
                 if (!confirm(`Permanently drop "${s.message}"?`)) return false
-                await window.forge.gitStashDrop(root, s.ref)
+                await gitService.stashDrop(root, s.ref)
                 return true
               }, `Dropped ${s.ref}`, false)
           })
@@ -449,7 +450,7 @@ export function initGit(deps: GitDeps): {
     if (blameCache.has(key)) return Promise.resolve(blameCache.get(key) ?? null)
     let p = pending.get(key)
     if (!p) {
-      p = window.forge.gitBlame(root, path).then((lines) => {
+      p = gitService.blame(root, path).then((lines) => {
         blameCache.set(key, lines)
         return lines
       })

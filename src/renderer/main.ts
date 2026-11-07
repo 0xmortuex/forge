@@ -35,7 +35,7 @@ import { initProblems } from './problems'
 import { initBreadcrumbs } from './breadcrumbs'
 import { initTooltips } from './tooltips'
 import { initQuick, quickPick } from './quick'
-import { indexedFiles, inspectService, scratchService, settingsService } from './rpc'
+import { indexedFiles, inspectService, scratchService, settingsService, gitService } from './rpc'
 import { initNavigation } from './navigation'
 import { initBookmarks } from './bookmarks'
 import { initSearchEverywhere, type SearchScope } from './searchall'
@@ -1543,7 +1543,7 @@ async function showSelectionHistoryOf(): Promise<void> {
   let end = sel ? sel.endLineNumber : 1
   if (sel && !sel.isEmpty() && sel.endColumn === 1 && end > start) end-- // a selection that ends at the start of a line does not include that line
   await saveAllDirty() // line numbers must match what git sees
-  const commits = await window.forge.gitSelectionHistory(rootDir, active.path, start, end)
+  const commits = await gitService.selectionHistory(rootDir, active.path, start, end)
   await showSelectionHistory(relPath(active.path), start === end ? `line ${start}` : `lines ${start}-${end}`, commits, (text) => void window.forge.copyText(text))
 }
 editor.addAction({
@@ -1798,7 +1798,7 @@ async function openDiff(path: string, kind: ChangeKind): Promise<void> {
   await guarded(`Diff ${basename(path)}`, async () => {
     // Renamed files: the old path isn't tracked here, so the whole file shows as added.
     const isNew = kind === 'added' || kind === 'untracked' || kind === 'renamed'
-    const original = isNew ? '' : await window.forge.gitShow(root, path)
+    const original = isNew ? '' : await gitService.show(root, path)
     await showDiffTab(path, original, kind === 'deleted')
   })
 }
@@ -1909,7 +1909,7 @@ const gutter = initGutter({
   headText: async (path) => {
     const root = rootDir
     if (!root) return null
-    return window.forge.gitHeadText(root, path)
+    return gitService.headText(root, path)
   },
   openDiff: (path) => void openDiff(path, 'modified').catch(() => undefined), // reported by the opener
   enabled: () => settings.get<boolean>('gitGutter'),
@@ -2206,7 +2206,7 @@ registerBuiltinCommands({
     const root = rootDir
     if (!root) return report('Open a project first', true)
     void guarded('Fetch', async () => {
-      await window.forge.gitFetch(root)
+      await gitService.fetch(root)
       report('Fetched')
       await gitUi.refresh()
     }).catch(() => undefined)
