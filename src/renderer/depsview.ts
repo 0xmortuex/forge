@@ -1,5 +1,6 @@
 import { foldByFolder } from '../main/depfold'
 import type { DepsResult } from '../main/deps'
+import { depsService } from './rpc'
 
 // The Dependencies window: the project's import graph as a layered diagram (what depends on what, left to right), by folder
 // or by file, with the circular imports listed and drawn in red. Click a node to see what it imports and what imports it.
@@ -324,7 +325,7 @@ export function initDepsView(d: DepsDeps): DepsView {
     }
     hint('Reading the project…')
     try {
-      result = await window.forge.depsAnalyse(root)
+      result = await depsService.analyse(root)
     } catch (err) {
       result = null
       return hint(err instanceof Error ? err.message : String(err), true)

@@ -1,4 +1,5 @@
 import type { DepKind, Manager, NpmDep, NpmPackage, Outdated } from '../main/npm'
+import { npmService } from './rpc'
 
 // The npm window: the project's package.json files, their scripts (run in a terminal tab) and their dependencies with the
 // installed and latest versions (update or remove with the project's own package manager).
@@ -168,7 +169,7 @@ export function initNpm(d: NpmDeps): NpmView {
 
   async function load(): Promise<void> {
     const root = d.getRoot()
-    packages = root ? await window.forge.npmPackages(root) : []
+    packages = root ? await npmService.packages(root) : []
     current = Math.min(current, Math.max(0, packages.length - 1))
     // The root package first, then the others in folder order.
     status.textContent = packages.length ? `${packages.length} package${packages.length === 1 ? '' : 's'}` : ''
@@ -194,8 +195,8 @@ export function initNpm(d: NpmDeps): NpmView {
     outdated.disabled = true
     status.classList.remove('err')
     status.textContent = 'Checking the registry…'
-    window.forge
-      .npmOutdated(p.dir)
+    npmService
+      .outdated(p.dir)
       .then((res) => {
         results.set(p.dir, res)
         checked.add(p.dir)

@@ -2,6 +2,7 @@
 // The backend platform end to end: the typed RPC channel reaches the lazily activated file-index module, the module
 // keeps its index current from the file watcher, state changes arrive as events, and bad requests fail loudly.
 const fs = require('node:fs')
+const http = require('node:http')
 const path = require('node:path')
 const { run } = require('../harness.cjs')
 
@@ -67,6 +68,24 @@ run('platform-rpc', { 'src/alpha.ts': 'a\n', 'src/beta.ts': 'b\n', 'README.md': 
   check('scratch: create numbers new files and list returns them', sc1.ok && sc2.ok && sc1.value !== sc2.value && scList.value.includes(sc1.value) && scList.value.includes(sc2.value), JSON.stringify([sc1, sc2, scList]))
   const badExt = await rpc('scratch', 'create', ['../x'])
   check('scratch: an invalid extension is an error', !badExt.ok && /Invalid file extension/.test(badExt.error), JSON.stringify(badExt))
+
+  const server = http.createServer((_req, res) => res.end('pong'))
+  await new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(undefined)))
+  const url = 'http://127.0.0.1:' + /** @type {import('node:net').AddressInfo} */ (server.address()).port + '/'
+  const sent = await rpc('http', 'send', [{ method: 'GET', url, headers: {} }])
+  check('http: send performs a real request and returns the response', sent.ok && sent.value.status === 200 && sent.value.body === 'pong', JSON.stringify(sent))
+  server.close()
+  const badMethod = await rpc('http', 'send', [{ method: 'FETCH', url, headers: {} }])
+  check('http: an unsupported method is an error', !badMethod.ok && /Unsupported HTTP method/.test(badMethod.error), JSON.stringify(badMethod))
+
+  const dup = await rpc('duplicates', 'find', [root])
+  check('duplicates: find scans the project', dup.ok && Array.isArray(dup.value.groups) && dup.value.filesScanned >= 1, JSON.stringify(dup).slice(0, 160))
+  const deps = await rpc('deps', 'analyse', [root])
+  check('deps: analyse returns a graph and cycles', deps.ok && !!deps.value.graph && Array.isArray(deps.value.cycles), JSON.stringify(deps).slice(0, 160))
+  const fw = await rpc('tests', 'detect', [root])
+  check('tests: detect finds no framework in a bare project', fw.ok && Array.isArray(fw.value) && fw.value.length === 0, JSON.stringify(fw))
+  const pk = await rpc('npm', 'packages', [root])
+  check('npm: packages finds no package.json in a bare project', pk.ok && Array.isArray(pk.value) && pk.value.length === 0, JSON.stringify(pk))
 
   const ghost = await rpc('nope', 'x')
   check('an unknown service is an error response', !ghost.ok && /No module provides the service "nope"/.test(ghost.error), JSON.stringify(ghost))

@@ -1,4 +1,5 @@
 import type { DupGroup, DupResult } from '../main/duplicates'
+import { duplicatesService } from './rpc'
 
 // The Duplicates window: copy-pasted code found across the project. Each group is a block that appears in several places; open
 // a group to see the code and every place it occurs, and click a place to go there.
@@ -94,7 +95,7 @@ export function initDuplicates(d: DuplicatesDeps): DuplicatesView {
     status.classList.remove('err')
     status.textContent = 'Scanning…'
     try {
-      result = await window.forge.findDuplicates(root, Number(minSel.value))
+      result = await duplicatesService.find(root, Number(minSel.value))
       open.clear()
       const dupLines = result.groups.reduce((n, g) => n + g.lines * (g.occurrences.length - 1), 0)
       status.textContent = result.groups.length

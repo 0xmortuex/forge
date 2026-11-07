@@ -4,7 +4,6 @@ import type { ExtensionInfo } from '../main/extensions'
 import type { LoadedUserData } from '../main/settings'
 import type { GhStatus } from '../main/github'
 import type { DockerStatus } from '../main/docker'
-import type { DepsResult } from '../main/deps'
 import type { Container, ContainerAction, DockerImage } from '../main/dockerparse'
 import type { PrDetail, PrSummary } from '../main/ghparse'
 import type { DapLaunch, DebugEvent, DebugEval, DebugKind, DebugScope, DebugVar } from '../main/debug'
@@ -14,11 +13,7 @@ import type { RebaseStep } from '../main/rebaseplan'
 import type { SearchOptions, SearchResult } from '../main/search'
 import type { FsChange } from '../main/watch'
 import type { HttpRequestSpec, HttpResponse } from '../main/http'
-import type { InspectResult } from '../main/inspect'
 import type { DbQueryResult, DbSchema } from '../main/database'
-import type { DupResult } from '../main/duplicates'
-import type { NpmPackage, Outdated } from '../main/npm'
-import type { Framework, RunOptions, TestRunResult } from '../main/testrun'
 import type { FileDiff } from '../main/gitpatch'
 import type { AiEvent, AiRequest } from '../main/ai'
 import type { PtySpec } from '../main/terminal'
@@ -59,23 +54,15 @@ const api = {
     ipcRenderer.on('ai:event', listener)
     return () => ipcRenderer.removeListener('ai:event', listener)
   },
-  testsDetect: (dir: string): Promise<Framework[]> => ipcRenderer.invoke('tests:detect', dir),
-  testsRun: (dir: string, options: RunOptions): Promise<TestRunResult> => ipcRenderer.invoke('tests:run', dir, options),
-  npmPackages: (root: string): Promise<NpmPackage[]> => ipcRenderer.invoke('npm:packages', root),
-  npmOutdated: (dir: string): Promise<Record<string, Outdated>> => ipcRenderer.invoke('npm:outdated', dir),
   lspConfigure: (servers: unknown): Promise<{ id: string; name: string; extensions: string[] }[]> => ipcRenderer.invoke('lsp:configure', servers),
-  findDuplicates: (root: string, minLines?: number): Promise<DupResult> => ipcRenderer.invoke('duplicates:find', root, minLines),
   dbOpen: (path: string): Promise<DbSchema> => ipcRenderer.invoke('db:open', path),
   dbQuery: (path: string, sql: string, limit?: number): Promise<DbQueryResult> => ipcRenderer.invoke('db:query', path, sql, limit),
   dbStop: (path: string): Promise<void> => ipcRenderer.invoke('db:stop', path),
   dbClose: (path: string): Promise<void> => ipcRenderer.invoke('db:close', path),
-  inspect: (root: string): Promise<InspectResult> => ipcRenderer.invoke('inspect:run', root),
-  httpSend: (spec: HttpRequestSpec): Promise<HttpResponse> => ipcRenderer.invoke('http:send', spec),
   copy: (from: string, to: string): Promise<void> => ipcRenderer.invoke('fs:copy', from, to),
   createFile: (path: string): Promise<void> => ipcRenderer.invoke('fs:createFile', path),
   createDir: (path: string): Promise<void> => ipcRenderer.invoke('fs:createDir', path),
   rename: (from: string, to: string): Promise<void> => ipcRenderer.invoke('fs:rename', from, to),
-  depsAnalyse: (root: string): Promise<DepsResult> => ipcRenderer.invoke('deps:analyse', root),
   dockerStatus: (root: string): Promise<DockerStatus> => ipcRenderer.invoke('docker:status', root),
   dockerContainers: (root: string): Promise<Container[]> => ipcRenderer.invoke('docker:containers', root),
   dockerImages: (root: string): Promise<DockerImage[]> => ipcRenderer.invoke('docker:images', root),

@@ -1,4 +1,3 @@
-import { ipcMain } from 'electron'
 
 // The HTTP client behind `.http` files: sends one request and returns what came back. It runs in the main process so the
 // page's security rules (CORS, content security policy) do not apply to the user's own requests.
@@ -82,6 +81,13 @@ export async function sendRequest(spec: HttpRequestSpec): Promise<HttpResponse> 
   }
 }
 
-export function registerHttp(): void {
-  ipcMain.handle('http:send', (_e, spec: HttpRequestSpec) => sendRequest(spec))
+export interface HttpApi {
+  send(spec: HttpRequestSpec): Promise<HttpResponse>
+}
+
+/** Provided as the "http" service (see platform). */
+export class HttpService implements HttpApi {
+  send(spec: HttpRequestSpec): Promise<HttpResponse> {
+    return sendRequest(spec)
+  }
 }

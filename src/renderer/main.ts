@@ -35,7 +35,7 @@ import { initProblems } from './problems'
 import { initBreadcrumbs } from './breadcrumbs'
 import { initTooltips } from './tooltips'
 import { initQuick, quickPick } from './quick'
-import { indexedFiles, scratchService } from './rpc'
+import { indexedFiles, inspectService, scratchService } from './rpc'
 import { initNavigation } from './navigation'
 import { initBookmarks } from './bookmarks'
 import { initSearchEverywhere, type SearchScope } from './searchall'
@@ -1482,7 +1482,7 @@ const problemsView = initProblems({
   root: $('view-problems'),
   inspect: () => {
     if (!rootDir) throw new Error('Open a folder first (Ctrl+O)')
-    return window.forge.inspect(rootDir)
+    return inspectService.run(rootDir)
   },
   onError: (err) => report(`Inspect Code: ${err instanceof Error ? err.message : String(err)}`, true),
   relPath,

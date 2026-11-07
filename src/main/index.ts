@@ -11,16 +11,10 @@ import { registerGit } from './git'
 import { registerSettings } from './settings'
 import { replaceInFiles, searchProject, type SearchOptions } from './search'
 import { killAllLsp, registerLsp } from './lsp'
-import { registerHttp } from './http'
-import { registerInspect } from './inspect'
 import { registerAi } from './ai'
 import { closeAllDatabases, registerDatabase } from './database'
-import { registerDuplicates } from './duplicates'
-import { registerNpm } from './npm'
 import { registerGithub } from './github'
 import { registerDocker } from './docker'
-import { registerDeps } from './deps'
-import { registerTestRun } from './testrun'
 import { registerWatch, stopWatching } from './watch'
 import { registerPlatform } from './platform'
 import { killAllTerminals, registerTerminal } from './terminal'
@@ -229,16 +223,10 @@ registerTerminal()
 registerLsp()
 registerGit()
 registerDebug()
-registerHttp()
-registerInspect()
 registerAi()
 registerDatabase()
-registerDuplicates()
-registerNpm()
 registerGithub()
 registerDocker()
-registerDeps()
-registerTestRun()
 registerWatch()
 registerPlatform()
 let terminalsEnded = false

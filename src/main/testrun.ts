@@ -4,7 +4,6 @@ import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { ipcMain } from 'electron'
 import { parseJestJson, parseJunit, parseTap, totalsOf, type TestCase, type Totals } from './testparse'
 import { findOnPath } from './terminal'
 
@@ -220,7 +219,17 @@ export async function runTests(dir: string, o: RunOptions): Promise<TestRunResul
   }
 }
 
-export function registerTestRun(): void {
-  ipcMain.handle('tests:detect', (_e, dir: string) => detectFrameworks(dir))
-  ipcMain.handle('tests:run', (_e, dir: string, options: RunOptions) => runTests(dir, options))
+export interface TestApi {
+  detect(dir: string): Promise<Framework[]>
+  run(dir: string, options: RunOptions): Promise<TestRunResult>
+}
+
+/** Provided as the "tests" service (see platform). */
+export class TestService implements TestApi {
+  detect(dir: string): Promise<Framework[]> {
+    return detectFrameworks(dir)
+  }
+  run(dir: string, options: RunOptions): Promise<TestRunResult> {
+    return runTests(dir, options)
+  }
 }

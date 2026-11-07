@@ -8,6 +8,12 @@ import { ModuleRegistry } from './modules'
 import { SpellService } from '../spell'
 import { HistoryService } from '../history'
 import { ScratchService } from '../scratch'
+import { NpmService } from '../npm'
+import { TestService } from '../testrun'
+import { HttpService } from '../http'
+import { InspectService } from '../inspect'
+import { DuplicatesService } from '../duplicates'
+import { DepsService } from '../deps'
 
 // The backend platform: a module registry, the typed RPC entry point the UI talks to, and the built-in modules.
 // Features are moved onto it one at a time; the older ipcMain handlers keep working beside it meanwhile.
@@ -35,6 +41,12 @@ registry.register({
 registry.register({ id: 'forge.spell', activation: 'lazy', provides: ['spell'], activate: () => ({ services: { spell: new SpellService() } }) })
 registry.register({ id: 'forge.history', activation: 'lazy', provides: ['history'], activate: () => ({ services: { history: new HistoryService() } }) })
 registry.register({ id: 'forge.scratch', activation: 'lazy', provides: ['scratch'], activate: () => ({ services: { scratch: new ScratchService() } }) })
+registry.register({ id: 'forge.npm', activation: 'lazy', provides: ['npm'], activate: () => ({ services: { npm: new NpmService() } }) })
+registry.register({ id: 'forge.tests', activation: 'lazy', provides: ['tests'], activate: () => ({ services: { tests: new TestService() } }) })
+registry.register({ id: 'forge.http', activation: 'lazy', provides: ['http'], activate: () => ({ services: { http: new HttpService() } }) })
+registry.register({ id: 'forge.inspect', activation: 'lazy', provides: ['inspect'], activate: () => ({ services: { inspect: new InspectService() } }) })
+registry.register({ id: 'forge.duplicates', activation: 'lazy', provides: ['duplicates'], activate: () => ({ services: { duplicates: new DuplicatesService() } }) })
+registry.register({ id: 'forge.deps', activation: 'lazy', provides: ['deps'], activate: () => ({ services: { deps: new DepsService() } }) })
 
 export function registerPlatform(): void {
   const server = new RpcServer((name) => registry.service(name))

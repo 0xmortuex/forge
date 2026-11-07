@@ -1,5 +1,6 @@
 import * as monaco from 'monaco-editor'
 import type { HttpRequestSpec, HttpResponse } from '../main/http'
+import { httpService } from './rpc'
 
 // .http files: write requests as text, run them with the green arrow in the gutter (or Ctrl+Enter), read the answer in
 // the Response window.
@@ -224,7 +225,7 @@ export function initHttpClient(d: HttpDeps): HttpClient {
     statusEl.className = 'http-status'
     statusEl.textContent = 'Sending…'
     try {
-      show(block.title, await window.forge.httpSend(block.spec))
+      show(block.title, await httpService.send(block.spec))
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       showError(block.title, message)
