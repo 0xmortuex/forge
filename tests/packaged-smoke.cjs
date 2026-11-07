@@ -85,7 +85,7 @@ async function main() {
       const full = path.join(project, file)
       fs.writeFileSync(full, text)
       const uri = 'file:///' + full.split(path.sep).join('/')
-      const caps = await evaluate(`window.forge.lspOpen(${JSON.stringify(project)}, ${JSON.stringify(uri)}, ${JSON.stringify(full)}, 1, ${JSON.stringify(text)}).then(async (ok) => ok ? Object.keys(await window.forge.lspCapabilities(${JSON.stringify(uri)})).length : -1)`)
+      const caps = await evaluate(`(async () => { const call = (m, ...a) => window.forge.rpc({ service: 'lsp', method: m, args: a }).then((r) => { if (!r.ok) throw new Error(r.error); return r.value }); const ok = await call('open', ${JSON.stringify(project)}, ${JSON.stringify(uri)}, ${JSON.stringify(full)}, 1, ${JSON.stringify(text)}); return ok ? Object.keys(await call('capabilities', ${JSON.stringify(uri)})).length : -1 })()`)
       check(`the bundled language server for ${file} starts`, typeof caps === 'number' && caps > 0, JSON.stringify(caps))
     }
     ws.close()

@@ -181,6 +181,16 @@ run('platform-rpc', { 'src/alpha.ts': 'a\n', 'src/beta.ts': 'b\n', 'README.md': 
   const listed2 = await rpc('files', 'listFiles', [ft])
   check('files: listFiles walks the folder', listed2.ok && listed2.value.length >= 3, JSON.stringify(listed2).slice(0, 200))
 
+  // lsp: nothing here starts a language server (the code-intel scenario covers a real one through the UI)
+  const noServer = await rpc('lsp', 'open', [root, 'file:///x/readme.unknownext', path.join(root, 'readme.unknownext'), 1, ''])
+  check('lsp: a file type without a language server is not an error, it just returns false', noServer.ok && noServer.value === false, JSON.stringify(noServer))
+  const notOpen = await rpc('lsp', 'request', ['file:///never-opened.ts', 'textDocument/hover', {}])
+  check('lsp: a request for a document that was never opened is an error', !notOpen.ok && /not open in a language server/.test(notOpen.error), JSON.stringify(notOpen))
+  const badCfg = await rpc('lsp', 'configure', ['not an array'])
+  check('lsp: a wrong language-server configuration is refused', !badCfg.ok, JSON.stringify(badCfg))
+  const emptyCfg = await rpc('lsp', 'configure', [[]])
+  check('lsp: an empty configuration is accepted', emptyCfg.ok && Array.isArray(emptyCfg.value) && emptyCfg.value.length === 0, JSON.stringify(emptyCfg))
+
   const server = http.createServer((_req, res) => res.end('pong'))
   await new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(undefined)))
   const url = 'http://127.0.0.1:' + /** @type {import('node:net').AddressInfo} */ (server.address()).port + '/'

@@ -72,6 +72,7 @@ import { formatForSave, initEditorConfig } from './editorconfig'
 import { initAnnotate } from './annotate'
 import type { ChangeKind, GitChange } from '../main/git'
 import { ENCODINGS, shortName } from '../main/encodinglist'
+import { lspService } from './rpc'
 
 self.MonacoEnvironment = {
   getWorker(_id, label) {
@@ -1656,7 +1657,7 @@ registerExtraLanguages()
 {
   // The user's own language servers (settings.json "languageServers"): sent now and whenever the list changes.
   const sendServers = (): void => {
-    window.forge.lspConfigure(settings.getJson<unknown>('languageServers', [])).catch((err: unknown) => {
+    lspService.configure(settings.getJson<unknown>('languageServers', [])).catch((err: unknown) => {
       report(`languageServers in settings.json: ${(err instanceof Error ? err.message : String(err)).replace(/^Error invoking remote method '[^']*': (Error: )?/, '')}`, true)
     })
   }

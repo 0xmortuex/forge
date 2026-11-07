@@ -24,32 +24,10 @@ const api = {
     ipcRenderer.on('ai:event', listener)
     return () => ipcRenderer.removeListener('ai:event', listener)
   },
-  lspConfigure: (servers: unknown): Promise<{ id: string; name: string; extensions: string[] }[]> => ipcRenderer.invoke('lsp:configure', servers),
-          readClipboard: (): Promise<string> => ipcRenderer.invoke('clipboard:read'),
-  lspWorkspace: (root: string, method: string, params: unknown): Promise<{ server: string; result?: unknown; error?: string }[]> =>
-    ipcRenderer.invoke('lsp:workspace', root, method, params),
-    trash: (path: string): Promise<void> => ipcRenderer.invoke('fs:trash', path),
+            readClipboard: (): Promise<string> => ipcRenderer.invoke('clipboard:read'),
+      trash: (path: string): Promise<void> => ipcRenderer.invoke('fs:trash', path),
 
-  lspOpen: (root: string, uri: string, path: string, version: number, text: string): Promise<boolean> =>
-    ipcRenderer.invoke('lsp:open', root, uri, path, version, text),
-  lspChange: (uri: string, version: number, text: string): Promise<void> =>
-    ipcRenderer.invoke('lsp:change', uri, version, text),
-  lspClose: (uri: string): Promise<void> => ipcRenderer.invoke('lsp:close', uri),
-  lspRequest: (uri: string, method: string, params: unknown): Promise<unknown> =>
-    ipcRenderer.invoke('lsp:request', uri, method, params),
-  lspCapabilities: (uri: string): Promise<Record<string, any>> => ipcRenderer.invoke('lsp:capabilities', uri),
-  lspApplyEditResult: (id: number, applied: boolean, failureReason?: string): Promise<void> =>
-    ipcRenderer.invoke('lsp:applyEditResult', id, applied, failureReason),
-  onLspApplyEdit: (cb: (id: number, edit: unknown) => void): void => {
-    ipcRenderer.on('lsp:applyEdit', (_e, id: number, edit: unknown) => cb(id, edit))
-  },
-  onLspDiagnostics: (cb: (uri: string, diagnostics: unknown[]) => void): void => {
-    ipcRenderer.on('lsp:diagnostics', (_e, uri: string, diagnostics: unknown[]) => cb(uri, diagnostics))
-  },
-  onLspLog: (cb: (server: string, type: number, message: string) => void): void => {
-    ipcRenderer.on('lsp:log', (_e, server: string, type: number, message: string) => cb(server, type, message))
-  },
-                                                                                          debugLaunch: (cwd: string, cols: number, rows: number, spec: PtySpec, kind: DebugKind, dap?: DapLaunch): Promise<number> =>
+                                                                                                      debugLaunch: (cwd: string, cols: number, rows: number, spec: PtySpec, kind: DebugKind, dap?: DapLaunch): Promise<number> =>
     ipcRenderer.invoke('debug:launch', cwd, cols, rows, spec, kind, dap),
   debugSetBreakpoints: (path: string, lines: Breakpoint[]): Promise<void> =>
     ipcRenderer.invoke('debug:setBreakpoints', path, lines),

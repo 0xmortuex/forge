@@ -18,6 +18,7 @@ import type { ExtensionsApi } from '../main/extensions'
 import type { GitApi } from '../main/git'
 import type { FilesApi } from '../main/files'
 import type { FsChange, WatchApi } from '../main/watch'
+import type { LspApi } from '../main/lsp'
 
 // Typed handles to backend services (see src/main/platform). Each call is one round trip to the main process.
 
@@ -40,7 +41,28 @@ export const extensionsService = client<ExtensionsApi>('extensions', (req) => wi
 export const gitService = client<GitApi>('git', (req) => window.forge.rpc(req))
 export const filesService = client<FilesApi>('files', (req) => window.forge.rpc(req))
 export const watchService = client<WatchApi>('watch', (req) => window.forge.rpc(req))
+export const lspService = client<LspApi>('lsp', (req) => window.forge.rpc(req))
 export const onBackendEvent = (cb: (topic: string, payload: unknown) => void): (() => void) => window.forge.onRpcEvent(cb)
+
+/** Language server events: diagnostics, log lines and edits the server wants applied (answer with lspService.applyEditResult). */
+export const onLspDiagnostics = (cb: (uri: string, diagnostics: unknown[]) => void): (() => void) =>
+  window.forge.onRpcEvent((topic, payload) => {
+    if (topic !== 'lsp.diagnostics') return
+    const e = payload as { uri: string; diagnostics: unknown[] }
+    cb(e.uri, e.diagnostics)
+  })
+export const onLspLog = (cb: (server: string, type: number, message: string) => void): (() => void) =>
+  window.forge.onRpcEvent((topic, payload) => {
+    if (topic !== 'lsp.log') return
+    const e = payload as { server: string; type: number; message: string }
+    cb(e.server, e.type, e.message)
+  })
+export const onLspApplyEdit = (cb: (id: number, edit: unknown) => void): (() => void) =>
+  window.forge.onRpcEvent((topic, payload) => {
+    if (topic !== 'lsp.applyEdit') return
+    const e = payload as { id: number; edit: unknown }
+    cb(e.id, e.edit)
+  })
 
 /** The project watcher reports changes made outside Forge as bus events. */
 export const onFsChanged = (cb: (change: FsChange) => void): (() => void) =>

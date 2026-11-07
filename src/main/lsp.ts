@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { basename, dirname, extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { ipcMain, type WebContents } from 'electron'
 import { findOnPath } from './terminal'
 import { BUILTIN_DEFS, customDefs, type ServerDef } from './langservers'
 import {
@@ -37,13 +36,23 @@ interface ServerSpec {
 
 const nodeRequire = createRequire(__filename)
 
+// Events for the UI go out on the platform bus: "lsp.diagnostics" ({ uri, diagnostics }), "lsp.log" ({ server, type,
+// message }) and "lsp.applyEdit" ({ id, edit }). The platform sets where they go.
+type Emit = (topic: string, payload: unknown) => void
+let emit: Emit = () => {
+  throw new Error('Language server events have no destination: the platform did not set an emitter')
+}
+export function setLspEmitter(fn: Emit): void {
+  emit = fn
+}
+
 // Servers can ask the client to apply an edit (e.g. after a command). The renderer owns the editor models,
-// so the request is forwarded there and answered through 'lsp:applyEditResult'.
+// so the request is forwarded there and answered through the service's applyEditResult.
 const APPLY_EDIT_TIMEOUT_MS = 30000
 const pendingEdits = new Map<number, (r: { applied: boolean; failureReason?: string }) => void>()
 let nextEditId = 1
 
-function requestApplyEdit(wc: WebContents, edit: unknown): Promise<{ applied: boolean; failureReason?: string }> {
+function requestApplyEdit(edit: unknown): Promise<{ applied: boolean; failureReason?: string }> {
   return new Promise((resolve) => {
     const id = nextEditId++
     const timer = setTimeout(() => {
@@ -54,8 +63,7 @@ function requestApplyEdit(wc: WebContents, edit: unknown): Promise<{ applied: bo
       clearTimeout(timer)
       resolve(r)
     })
-    if (wc.isDestroyed()) return resolve({ applied: false, failureReason: 'The window is gone' })
-    wc.send('lsp:applyEdit', id, edit)
+    emit('lsp.applyEdit', { id, edit })
   })
 }
 
@@ -199,7 +207,6 @@ class Client {
   constructor(
     readonly spec: ServerSpec,
     readonly root: string,
-    private wc: WebContents,
     onDead: () => void
   ) {
     const launch = spec.launch()
@@ -237,7 +244,7 @@ class Client {
       new StreamMessageWriter(this.child.stdin)
     )
     this.conn.onNotification('textDocument/publishDiagnostics', (p: { uri: string; diagnostics: unknown[] }) => {
-      if (!wc.isDestroyed()) wc.send('lsp:diagnostics', p.uri, p.diagnostics)
+      emit('lsp.diagnostics', { uri: p.uri, diagnostics: p.diagnostics })
     })
     this.conn.onNotification('window/logMessage', (p: { type: number; message: string }) =>
       this.log(p.type, p.message)
@@ -251,7 +258,7 @@ class Client {
     this.conn.onRequest('client/registerCapability', () => null)
     this.conn.onRequest('client/unregisterCapability', () => null)
     this.conn.onRequest('window/workDoneProgress/create', () => null)
-    this.conn.onRequest('workspace/applyEdit', (p: { edit: unknown }) => requestApplyEdit(wc, p.edit))
+    this.conn.onRequest('workspace/applyEdit', (p: { edit: unknown }) => requestApplyEdit(p.edit))
     this.conn.listen()
 
     this.ready = spawned.then(() => this.initialize())
@@ -264,7 +271,7 @@ class Client {
   }
 
   private log(type: number, message: string): void {
-    if (!this.wc.isDestroyed()) this.wc.send('lsp:log', this.spec.id, type, message)
+    emit('lsp.log', { server: this.spec.id, type, message })
   }
 
   private async initialize(): Promise<void> {
@@ -371,62 +378,60 @@ function getDoc(uri: string): Doc {
   return d
 }
 
-export function registerLsp(): void {
+/** Provided as the "lsp" service (see platform). */
+export class LspService {
   /** Returns false if no language server handles this file type (not an error). */
-  ipcMain.handle(
-    'lsp:open',
-    async (e, root: string, uri: string, path: string, version: number, text: string): Promise<boolean> => {
-      const entry = BY_EXT[extname(path).toLowerCase()] ?? BY_NAME[basename(path).toLowerCase()]
-      if (!entry) return false
-      const [languageId, serverId] = entry
-      const spec = SERVERS[serverId]
-      if (!spec) throw new Error(`No server spec for ${serverId}`)
-      if (spec.optional) {
-        // A server that is not installed is no error: say so once (with how to get it) and leave the file without it.
-        const since = missing.get(serverId)
-        if (since !== undefined && Date.now() - since < RECHECK_MS) return false
-        try {
-          spec.launch()
-          missing.delete(serverId)
-        } catch (err) {
-          if (since === undefined) e.sender.send('lsp:log', spec.name ?? serverId, 2, err instanceof Error ? err.message : String(err))
-          missing.set(serverId, Date.now())
-          return false
-        }
+  async open(root: string, uri: string, path: string, version: number, text: string): Promise<boolean> {
+    const entry = BY_EXT[extname(path).toLowerCase()] ?? BY_NAME[basename(path).toLowerCase()]
+    if (!entry) return false
+    const [languageId, serverId] = entry
+    const spec = SERVERS[serverId]
+    if (!spec) throw new Error(`No server spec for ${serverId}`)
+    if (spec.optional) {
+      // A server that is not installed is no error: say so once (with how to get it) and leave the file without it.
+      const since = missing.get(serverId)
+      if (since !== undefined && Date.now() - since < RECHECK_MS) return false
+      try {
+        spec.launch()
+        missing.delete(serverId)
+      } catch (err) {
+        if (since === undefined) emit('lsp.log', { server: spec.name ?? serverId, type: 2, message: err instanceof Error ? err.message : String(err) })
+        missing.set(serverId, Date.now())
+        return false
       }
-
-      const key = `${serverId}\0${root}`
-      let client = clients.get(key)
-      if (!client) {
-        client = new Client(spec, root, e.sender, () => {
-          clients.delete(key)
-          for (const [u, d] of docs) if (d.client === client) docs.delete(u)
-        })
-        clients.set(key, client)
-      }
-      const c = client
-      const opened = c.ready.then(() =>
-        c.notify('textDocument/didOpen', { textDocument: { uri, languageId, version, text } })
-      )
-      docs.set(uri, { client: c, opened })
-      await opened
-      // tsserver loads the rest of the project lazily and answers early cross-file queries (references,
-      // rename) with only what it has seen so far. One throwaway query when the first file opens makes it
-      // load the project in the background, so the user's first real query gets complete answers.
-      if (serverId === 'typescript' && !c.warmedUp) {
-        c.warmedUp = true
-        c.request('textDocument/references', {
-          textDocument: { uri },
-          position: { line: 0, character: 0 },
-          context: { includeDeclaration: false }
-        }).catch(() => undefined) // a failed warm-up is invisible by design; real queries report their own errors
-      }
-      return true
     }
-  )
+
+    const key = `${serverId}\0${root}`
+    let client = clients.get(key)
+    if (!client) {
+      client = new Client(spec, root, () => {
+        clients.delete(key)
+        for (const [u, d] of docs) if (d.client === client) docs.delete(u)
+      })
+      clients.set(key, client)
+    }
+    const c = client
+    const opened = c.ready.then(() =>
+      c.notify('textDocument/didOpen', { textDocument: { uri, languageId, version, text } })
+    )
+    docs.set(uri, { client: c, opened })
+    await opened
+    // tsserver loads the rest of the project lazily and answers early cross-file queries (references,
+    // rename) with only what it has seen so far. One throwaway query when the first file opens makes it
+    // load the project in the background, so the user's first real query gets complete answers.
+    if (serverId === 'typescript' && !c.warmedUp) {
+      c.warmedUp = true
+      c.request('textDocument/references', {
+        textDocument: { uri },
+        position: { line: 0, character: 0 },
+        context: { includeDeclaration: false }
+      }).catch(() => undefined) // a failed warm-up is invisible by design; real queries report their own errors
+    }
+    return true
+  }
 
   /** The user's own language servers (the languageServers list of settings.json). Throws a message for a wrong entry. */
-  ipcMain.handle('lsp:configure', (_e, raw: unknown) => {
+  configure(raw: unknown) {
     const defs = customDefs(raw, [...CORE_IDS, ...BUILTIN_DEFS.map((d) => d.id)])
     for (const id of customIds) unregisterDef(id)
     customIds.clear()
@@ -436,38 +441,38 @@ export function registerLsp(): void {
     }
     missing.clear()
     return defs.map((d) => ({ id: d.id, name: d.name, extensions: Object.keys(d.extensions) }))
-  })
+  }
 
-  ipcMain.handle('lsp:change', async (_e, uri: string, version: number, text: string) => {
+  async change(uri: string, version: number, text: string) {
     const d = getDoc(uri)
     await d.opened
     await d.client.notify('textDocument/didChange', {
       textDocument: { uri, version },
       contentChanges: [{ text }]
     })
-  })
+  }
 
-  ipcMain.handle('lsp:close', async (_e, uri: string) => {
+  async close(uri: string) {
     const d = docs.get(uri)
     if (!d) return
     docs.delete(uri)
     await d.opened
     await d.client.notify('textDocument/didClose', { textDocument: { uri } })
-  })
+  }
 
-  ipcMain.handle('lsp:capabilities', async (_e, uri: string) => {
+  async capabilities(uri: string) {
     const d = getDoc(uri)
     await d.opened
     return d.client.capabilities
-  })
+  }
 
-  ipcMain.handle('lsp:applyEditResult', (_e, id: number, applied: boolean, failureReason?: string) => {
+  applyEditResult(id: number, applied: boolean, failureReason?: string) {
     pendingEdits.get(id)?.({ applied, failureReason })
     pendingEdits.delete(id)
-  })
+  }
 
   /** Asks every server running for this project (for requests that belong to no single document, like workspace/symbol). */
-  ipcMain.handle('lsp:workspace', async (_e, root: string, method: string, params: unknown) => {
+  async workspace(root: string, method: string, params: unknown) {
     const out: { server: string; result?: unknown; error?: string }[] = []
     for (const [key, c] of clients) {
       if (!key.endsWith(`\0${root}`)) continue
@@ -479,14 +484,17 @@ export function registerLsp(): void {
       }
     }
     return out
-  })
+  }
 
-  ipcMain.handle('lsp:request', async (_e, uri: string, method: string, params: unknown) => {
+  async request(uri: string, method: string, params: unknown) {
     const d = getDoc(uri)
     await d.opened
     return d.client.request(method, params)
-  })
+  }
 }
+
+export type LspApi = LspService
+
 
 /** Synchronous on purpose: runs during app quit, where an async shutdown handshake would not finish. */
 export function killAllLsp(): void {

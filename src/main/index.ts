@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url'
 import { registerDebug } from './debug'
 import { registerExtensions, registerExtensionScheme } from './extensions'
 import { registerSettings } from './settings'
-import { killAllLsp, registerLsp } from './lsp'
+import { killAllLsp } from './lsp'
 import { registerAi } from './ai'
 import { closeAllDatabases } from './database'
 import { stopWatching } from './watch'
@@ -98,7 +98,6 @@ if (process.env['FORGE_USER_DATA']) app.setPath('userData', process.env['FORGE_U
 
 registerSettings()
 registerExtensions()
-registerLsp()
 registerDebug()
 registerAi()
 registerPlatform()
