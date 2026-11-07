@@ -116,10 +116,11 @@ links that point outside it. Only protocol messages go to stdout; diagnostics go
 * `pnpm test`: builds, then runs every scenario in its own Electron window. `platform-rpc` exercises every service
   through the real RPC channel; the older scenarios drive the UI.
 * CI (`.github/workflows/ci.yml`) runs typecheck, unit tests and build on three systems, and the scenarios on Windows.
-  The scenario job is allowed to fail, because a few scenarios depend on key timing and can flake on hosted runners
-  (`chrome` fails on the unchanged `main` branch too; `navigation`, `keymap`, `terminal-split` and `database` each failed once
-  and passed when the same commit was re-run). `git-rebase-interactive` used to fail almost every run; the cause was the
-  scenario reading the repository before the rebase had finished tidying up, and it now waits.
+  The scenario job is allowed to fail, because scenarios drive a real window with synthetic key events and can be timing
+  sensitive on a loaded hosted runner. Every flaky run seen on this branch was traced to the scenario, not the app, and fixed
+  in the scenario: sampling once instead of waiting (`git-rebase-interactive`, `keymap`, `git-log`), a lost Enter
+  (`terminal-split`), an assumed tab order (`chrome`), waits too short for a loaded runner (`navigation`), and clicking a file
+  before it was in the tree (`database`). When one fails, read its detail line first: most scenarios print what they saw.
 
 ## What is not done
 
