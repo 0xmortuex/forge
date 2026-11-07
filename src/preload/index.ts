@@ -1,5 +1,4 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
-import type { AiEvent, AiRequest } from '../main/ai'
 import type { RpcRequest, RpcResponse } from '../shared/rpc'
 
 const api = {
@@ -9,19 +8,7 @@ const api = {
   copyText: (text: string): Promise<void> => ipcRenderer.invoke('clipboard:write', text),
       openInBrowser: (path: string): Promise<void> => ipcRenderer.invoke('shell:openInBrowser', path),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
-  aiChat: (id: number, req: AiRequest): Promise<void> => ipcRenderer.invoke('ai:chat', id, req),
-  aiCancel: (id: number): Promise<void> => ipcRenderer.invoke('ai:cancel', id),
-  aiComplete: (req: AiRequest): Promise<string> => ipcRenderer.invoke('ai:complete', req),
-  aiTest: (baseUrl: string, model: string): Promise<{ reply: string; ms: number }> => ipcRenderer.invoke('ai:test', baseUrl, model),
-  aiKeySet: (key: string): Promise<void> => ipcRenderer.invoke('ai:key-set', key),
-  aiKeyClear: (): Promise<void> => ipcRenderer.invoke('ai:key-clear'),
-  aiKeyStatus: (): Promise<{ stored: boolean; encryption: boolean }> => ipcRenderer.invoke('ai:key-status'),
-  onAiEvent: (cb: (e: AiEvent) => void): (() => void) => {
-    const listener = (_e: unknown, event: AiEvent): void => cb(event)
-    ipcRenderer.on('ai:event', listener)
-    return () => ipcRenderer.removeListener('ai:event', listener)
-  },
-            readClipboard: (): Promise<string> => ipcRenderer.invoke('clipboard:read'),
+                          readClipboard: (): Promise<string> => ipcRenderer.invoke('clipboard:read'),
       trash: (path: string): Promise<void> => ipcRenderer.invoke('fs:trash', path),
 
                                                                                                                   settingsExport: (text: string): Promise<string | null> => ipcRenderer.invoke('settings:export', text),

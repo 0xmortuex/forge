@@ -4,7 +4,6 @@ import { pathToFileURL } from 'node:url'
 import { registerExtensions, registerExtensionScheme } from './extensions'
 import { registerSettings } from './settings'
 import { killAllLsp } from './lsp'
-import { registerAi } from './ai'
 import { closeAllDatabases } from './database'
 import { stopWatching } from './watch'
 import { registerPlatform } from './platform'
@@ -97,7 +96,6 @@ if (process.env['FORGE_USER_DATA']) app.setPath('userData', process.env['FORGE_U
 
 registerSettings()
 registerExtensions()
-registerAi()
 registerPlatform()
 let terminalsEnded = false
 app.on('before-quit', (e) => {

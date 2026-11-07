@@ -1,6 +1,6 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { app, ipcMain, safeStorage, type WebContents } from 'electron'
+import { app, ipcMain, safeStorage } from 'electron'
 
 // The AI client behind the chat panel, the selection actions, inline completions and commit messages. It speaks the
 // OpenAI-compatible "chat completions" protocol, which OpenAI, Anthropic (its compatibility endpoint), Ollama, LM Studio
@@ -141,13 +141,20 @@ const running = new Map<number, AbortController>()
 /** Requests the user cancelled, so their abort is told apart from a timeout. */
 const cancelled = new Set<number>()
 
-/** Streams an answer, sending `delta` events and finally `done` or `error` to the window that asked. */
-async function stream(sender: WebContents, id: number, req: AiRequest): Promise<void> {
+type Emit = (topic: string, payload: unknown) => void
+let emitToUi: Emit = () => {
+  throw new Error('AI events have no destination: the platform did not set an emitter')
+}
+/** Where "ai.event" messages go; the platform sets it at start-up. */
+export function setAiEmitter(fn: Emit): void {
+  emitToUi = fn
+}
+
+/** Streams an answer, publishing `delta` events and finally `done` or `error` as "ai.event" (each carries the request id). */
+async function stream(id: number, req: AiRequest): Promise<void> {
   const ctl = new AbortController()
   running.set(id, ctl)
-  const send = (e: AiEvent): void => {
-    if (!sender.isDestroyed()) sender.send('ai:event', e)
-  }
+  const send = (e: AiEvent): void => emitToUi('ai.event', e)
   const timer = setTimeout(() => ctl.abort(), req.timeoutMs ?? DEFAULT_TIMEOUT_MS)
   try {
     const res = await post(req, true, ctl.signal)
@@ -190,24 +197,42 @@ async function stream(sender: WebContents, id: number, req: AiRequest): Promise<
   }
 }
 
-export function registerAi(): void {
-  ipcMain.handle('ai:key-set', (_e, key: string) => storeKey(key))
-  ipcMain.handle('ai:key-clear', () => clearKey())
-  ipcMain.handle('ai:key-status', async () => ({ stored: (await loadKey().catch(() => '')) !== '', encryption: safeStorage.isEncryptionAvailable() }))
-  ipcMain.handle('ai:chat', (e, id: number, req: AiRequest) => {
-    void stream(e.sender, id, req)
-  })
-  ipcMain.handle('ai:cancel', (_e, id: number) => {
+/** Provided as the "ai" service (see platform). */
+export class AiService {
+  keySet(key: string) {
+    return storeKey(key)
+  }
+
+  keyClear() {
+    return clearKey()
+  }
+
+  async keyStatus() {
+    return ({ stored: (await loadKey().catch(() => '')) !== '', encryption: safeStorage.isEncryptionAvailable() })
+  }
+
+  chat(id: number, req: AiRequest) {
+    void stream(id, req)
+  }
+
+  cancel(id: number) {
     const ctl = running.get(id)
     if (!ctl) return
     cancelled.add(id)
     ctl.abort()
-  })
-  ipcMain.handle('ai:complete', (_e, req: AiRequest) => complete(req))
+  }
+
+  complete(req: AiRequest) {
+    return complete(req)
+  }
+
   /** A tiny request that proves the URL, key and model work together. */
-  ipcMain.handle('ai:test', async (_e, baseUrl: string, model: string) => {
+  async test(baseUrl: string, model: string) {
     const started = Date.now()
     const reply = await complete({ baseUrl, model, messages: [{ role: 'user', content: 'Reply with the single word: ready' }], maxTokens: 16, temperature: 0, timeoutMs: 30000 })
     return { reply: reply.trim(), ms: Date.now() - started }
-  })
+  }
 }
+
+export type AiApi = AiService
+

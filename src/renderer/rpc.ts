@@ -20,6 +20,7 @@ import type { FilesApi } from '../main/files'
 import type { FsChange, WatchApi } from '../main/watch'
 import type { LspApi } from '../main/lsp'
 import type { DebugApi, DebugEvent } from '../main/debug'
+import type { AiApi, AiEvent } from '../main/ai'
 
 // Typed handles to backend services (see src/main/platform). Each call is one round trip to the main process.
 
@@ -44,7 +45,14 @@ export const filesService = client<FilesApi>('files', (req) => window.forge.rpc(
 export const watchService = client<WatchApi>('watch', (req) => window.forge.rpc(req))
 export const lspService = client<LspApi>('lsp', (req) => window.forge.rpc(req))
 export const debugService = client<DebugApi>('debug', (req) => window.forge.rpc(req))
+export const aiService = client<AiApi>('ai', (req) => window.forge.rpc(req))
 export const onBackendEvent = (cb: (topic: string, payload: unknown) => void): (() => void) => window.forge.onRpcEvent(cb)
+
+/** Streamed AI answers: delta / done / error events, each carrying the id of the request that asked. */
+export const onAiEvent = (cb: (e: AiEvent) => void): (() => void) =>
+  window.forge.onRpcEvent((topic, payload) => {
+    if (topic === 'ai.event') cb(payload as AiEvent)
+  })
 
 /** Debugger events: stopped, resumed, output, session ended ... */
 export const onDebugEvent = (cb: (evt: DebugEvent) => void): (() => void) =>

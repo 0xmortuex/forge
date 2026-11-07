@@ -4,6 +4,7 @@ import { keymap, KEYMAP_PRESETS } from './keymap'
 import { icons } from './icons'
 import { CATEGORIES, DEFS, ensureSettingsFile, settings, userData, type SettingDef, type Value } from './settings'
 import { allThemes, BUILTIN_THEMES, type Palette } from './themes'
+import { aiService } from './rpc'
 
 export interface SettingsUiDeps {
   openFile: (path: string) => Promise<void>
@@ -462,7 +463,7 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
     g.append(row)
 
     const showStatus = (): void => {
-      window.forge.aiKeyStatus().then(
+      aiService.keyStatus().then(
         (st) => {
           status.textContent = !st.encryption ? 'This system cannot encrypt a key, so Forge will not store one' : st.stored ? 'A key is stored' : 'No key stored'
           status.style.color = st.stored ? 'var(--ok)' : ''
@@ -475,7 +476,7 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
     save.onclick = () => {
       const key = input.value.trim()
       if (!key) return deps.report('Paste an API key first', true)
-      window.forge.aiKeySet(key).then(
+      aiService.keySet(key).then(
         () => {
           input.value = ''
           showStatus()
@@ -485,7 +486,7 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
       )
     }
     remove.onclick = () => {
-      window.forge.aiKeyClear().then(showStatus, (err: unknown) => deps.report(err instanceof Error ? err.message : String(err), true))
+      aiService.keyClear().then(showStatus, (err: unknown) => deps.report(err instanceof Error ? err.message : String(err), true))
     }
 
     const testRow = el('div', 'srow')
@@ -499,8 +500,7 @@ export function initSettingsUi(deps: SettingsUiDeps): { open: (category?: string
       result.style.color = ''
       result.textContent = 'Connecting…'
       test.disabled = true
-      window.forge
-        .aiTest(settings.get<string>('aiBaseUrl'), settings.get<string>('aiModel'))
+      aiService.test(settings.get<string>('aiBaseUrl'), settings.get<string>('aiModel'))
         .then(
           (r) => {
             result.style.color = 'var(--ok)'

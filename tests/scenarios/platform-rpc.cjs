@@ -203,6 +203,45 @@ run('platform-rpc', { 'src/alpha.ts': 'a\n', 'src/beta.ts': 'b\n', 'README.md': 
   const bps = await rpc('debug', 'setBreakpoints', [path.join(root, 'src', 'beta.ts'), []])
   check('debug: clearing breakpoints with no session is fine', bps.ok, JSON.stringify(bps))
 
+  // ai: a stub OpenAI-style server on loopback (nothing external is contacted, nothing is launched).
+  const aiServer = http.createServer((req, res) => {
+    if (req.url && req.url.startsWith('/hang')) return // never answers: used to test cancelling
+    let body = ''
+    req.on('data', (c) => (body += c))
+    req.on('end', () => {
+      const wantsStream = JSON.parse(body).stream === true
+      if (!wantsStream) {
+        res.setHeader('content-type', 'application/json')
+        return res.end(JSON.stringify({ choices: [{ message: { content: 'Hello' } }] }))
+      }
+      res.setHeader('content-type', 'text/event-stream')
+      const NL = String.fromCharCode(10)
+      for (const t of ['Hel', 'lo']) res.write('data: ' + JSON.stringify({ choices: [{ delta: { content: t } }] }) + NL + NL)
+      res.end('data: [DONE]' + NL + NL)
+    })
+  })
+  await new Promise((ok) => aiServer.listen(0, '127.0.0.1', () => ok(undefined)))
+  const aiBase = 'http://127.0.0.1:' + /** @type {import('node:net').AddressInfo} */ (aiServer.address()).port
+  const aiReq = (/** @type {string} */ base) => ({ baseUrl: base, model: 'stub', messages: [{ role: 'user', content: 'hi' }], timeoutMs: 20000 })
+  const keyStatus = await rpc('ai', 'keyStatus')
+  check('ai: keyStatus says no key is stored in a fresh profile', keyStatus.ok && keyStatus.value.stored === false && typeof keyStatus.value.encryption === 'boolean', JSON.stringify(keyStatus))
+  const noSetup = await rpc('ai', 'complete', [{ baseUrl: '', model: 'stub', messages: [] }])
+  check('ai: a request without a base URL says AI is not set up', !noSetup.ok && /AI is not set up/.test(noSetup.error), JSON.stringify(noSetup))
+  const whole = await rpc('ai', 'complete', [aiReq(aiBase)])
+  check('ai: complete returns the whole answer', whole.ok && whole.value === 'Hello', JSON.stringify(whole))
+  await rpc('ai', 'chat', [7, aiReq(aiBase)])
+  const chatDone = await waitFor(async () => (await js('window.__events.filter((e) => e[0] === "ai.event" && e[1].id === 7).map((e) => e[1])')).some((/** @type {{ type: string }} */ e) => e.type === 'done'), 15000)
+  const chatEvents = await js('window.__events.filter((e) => e[0] === "ai.event" && e[1].id === 7).map((e) => e[1])')
+  const streamed = chatEvents.filter((/** @type {{ type: string }} */ e) => e.type === 'delta').map((/** @type {{ text: string }} */ e) => e.text).join('')
+  check('ai: chat streams the answer as ai.event deltas and then done', !!chatDone && streamed === 'Hello', JSON.stringify(chatEvents))
+  await rpc('ai', 'chat', [8, aiReq(aiBase + '/hang')])
+  await sleep(300)
+  await rpc('ai', 'cancel', [8])
+  const cancelDone = await waitFor(async () => (await js('window.__events.filter((e) => e[0] === "ai.event" && e[1].id === 8).map((e) => e[1].type)')).includes('done'), 10000)
+  check('ai: cancel stops a request that never answers and ends it with done (not an error)', !!cancelDone, JSON.stringify(await js('window.__events.filter((e) => e[0] === "ai.event" && e[1].id === 8).map((e) => e[1])')))
+  aiServer.closeAllConnections()
+  aiServer.close()
+
   const server = http.createServer((_req, res) => res.end('pong'))
   await new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(undefined)))
   const url = 'http://127.0.0.1:' + /** @type {import('node:net').AddressInfo} */ (server.address()).port + '/'

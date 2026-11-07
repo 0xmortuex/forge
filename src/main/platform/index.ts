@@ -24,6 +24,7 @@ import { GitService } from '../git'
 import { FilesService } from '../files'
 import { LspService, setLspEmitter } from '../lsp'
 import { DebugService, setDebugEmitter } from '../debug'
+import { AiService, setAiEmitter } from '../ai'
 
 // The backend platform: a module registry, the typed RPC entry point the UI talks to, and the built-in modules.
 // Features are moved onto it one at a time; the older ipcMain handlers keep working beside it meanwhile.
@@ -68,6 +69,7 @@ registry.register({ id: 'forge.files', activation: 'lazy', provides: ['files'], 
 registry.register({ id: 'forge.watch', activation: 'lazy', provides: ['watch'], activate: () => ({ services: { watch: new WatchService() } }) })
 registry.register({ id: 'forge.lsp', activation: 'lazy', provides: ['lsp'], activate: () => ({ services: { lsp: new LspService() } }) })
 registry.register({ id: 'forge.debug', activation: 'lazy', provides: ['debug'], activate: () => ({ services: { debug: new DebugService() } }) })
+registry.register({ id: 'forge.ai', activation: 'lazy', provides: ['ai'], activate: () => ({ services: { ai: new AiService() } }) })
 
 export function registerPlatform(): void {
   // Set now, not when the module activates: the debugger starts terminals without ever calling the service.
@@ -75,6 +77,7 @@ export function registerPlatform(): void {
   setWatchEmitter((topic, payload) => registry.bus.publish(topic, payload))
   setLspEmitter((topic, payload) => registry.bus.publish(topic, payload))
   setDebugEmitter((topic, payload) => registry.bus.publish(topic, payload))
+  setAiEmitter((topic, payload) => registry.bus.publish(topic, payload))
   const server = new RpcServer((name) => registry.service(name))
   ipcMain.handle('rpc:call', (_e, req: RpcRequest) => server.dispatch(req))
   registry.bus.tap((topic, payload) => {
