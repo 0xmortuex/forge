@@ -1,9 +1,18 @@
 // A trigram index over the text of the project's files: finding where a string occurs without reading every file.
 // Every run of three characters in a file is recorded (lower-cased); a query keeps only the files that contain all of the
 // query's trigrams, and only those are read and checked for the real match. Held in memory; rebuilt when a project opens.
+// The same pass also counts the identifiers in each file, so words can be completed from the whole project.
 
 export const MIN_QUERY = 3
 export const MAX_INDEXED_BYTES = 512 * 1024
+export const MIN_WORD_PREFIX = 2
+const WORD = /[A-Za-z_$][\w$]{2,63}/g
+
+export interface WordHit {
+  word: string
+  /** How often it occurs in the project. */
+  count: number
+}
 
 export interface TextHit {
   path: string
@@ -20,6 +29,9 @@ export class TextIndex {
   private readonly paths: (string | null)[] = []
   private readonly grams = new Map<string, Set<number>>()
   private readonly gramsOf = new Map<number, string[]>()
+  private readonly wordsOf = new Map<number, Map<string, number>>()
+  private readonly totals = new Map<string, number>()
+  private readonly byPrefix = new Map<string, Set<string>>()
 
   get size(): number {
     return this.gramsOf.size
@@ -50,7 +62,27 @@ export class TextIndex {
       set.add(id)
     }
     this.gramsOf.set(id, [...mine])
+    const counts = new Map<string, number>()
+    for (const w of text.match(WORD) ?? []) counts.set(w, (counts.get(w) ?? 0) + 1)
+    this.wordsOf.set(id, counts)
+    for (const [w, c] of counts) {
+      const before = this.totals.get(w) ?? 0
+      this.totals.set(w, before + c)
+      if (before === 0) this.prefixSet(w, true)
+    }
     return null
+  }
+
+  private prefixSet(word: string, add: boolean): void {
+    const key = word.slice(0, MIN_WORD_PREFIX).toLowerCase()
+    let set = this.byPrefix.get(key)
+    if (add) {
+      if (!set) this.byPrefix.set(key, (set = new Set()))
+      set.add(word)
+    } else if (set) {
+      set.delete(word)
+      if (set.size === 0) this.byPrefix.delete(key)
+    }
   }
 
   remove(path: string): void {
@@ -62,12 +94,37 @@ export class TextIndex {
       if (set?.size === 0) this.grams.delete(g)
     }
     this.gramsOf.delete(id)
+    for (const [w, c] of this.wordsOf.get(id) ?? []) {
+      const left = (this.totals.get(w) ?? 0) - c
+      if (left > 0) this.totals.set(w, left)
+      else {
+        this.totals.delete(w)
+        this.prefixSet(w, false)
+      }
+    }
+    this.wordsOf.delete(id)
   }
 
   /** Removes `path` and everything beneath it (a deleted folder). */
   removeTree(path: string, sep: string): void {
     const prefix = path + sep
     for (const [p] of this.ids) if (p === path || p.startsWith(prefix)) this.remove(p)
+  }
+
+  /**
+   * Identifiers of the project that start with `prefix` (case-insensitive), best first: those that also match the case you
+   * typed, then the most frequent, then the shortest. The word you typed is not offered back to you.
+   */
+  complete(prefix: string, limit: number): WordHit[] {
+    if (prefix.length < MIN_WORD_PREFIX) throw new Error(`Type at least ${MIN_WORD_PREFIX} characters to complete a word`)
+    const lower = prefix.toLowerCase()
+    const out: (WordHit & { exact: boolean })[] = []
+    for (const w of this.byPrefix.get(lower.slice(0, MIN_WORD_PREFIX)) ?? []) {
+      if (w === prefix || !w.toLowerCase().startsWith(lower)) continue
+      out.push({ word: w, count: this.totals.get(w) ?? 0, exact: w.startsWith(prefix) })
+    }
+    out.sort((a, b) => Number(b.exact) - Number(a.exact) || b.count - a.count || a.word.length - b.word.length || a.word.localeCompare(b.word))
+    return out.slice(0, limit).map(({ word, count }) => ({ word, count }))
   }
 
   /** The indexed files whose text may contain `query`: every query trigram is present, so the real check can follow. */

@@ -121,6 +121,8 @@ export const DEFS: SettingDef[] = [
     description: 'Type value.log, items.for, user.if and similar, then accept the suggestion to rewrite the expression (JavaScript, TypeScript, Python, Java, Kotlin, C#, Go, Rust).' },
   { key: 'spellcheck', category: 'Editor', group: 'Display', label: 'Check spelling', default: true, control: onOff,
     description: 'Underlines misspelled words in comments, strings, Markdown and text files (English). Ctrl+. offers corrections.' },
+  { key: 'projectWords', category: 'Editor', group: 'Display', label: 'Complete words from the whole project', default: false, control: onOff,
+    description: 'Offers words used anywhere in the project (not only in the open file) as you type, after the language server\'s suggestions. Works offline; nothing is sent anywhere.' },
   { key: 'emmet', category: 'Editor', group: 'Display', label: 'Emmet abbreviations', default: true, control: onOff,
     description: 'Type ul>li*3 or df in an HTML or CSS file and press Tab (or pick the suggestion) to expand it.' },
   { key: 'codeVision', category: 'Editor', group: 'Display', label: 'Show usages above declarations', default: true, control: onOff,

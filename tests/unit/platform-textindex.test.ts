@@ -88,3 +88,36 @@ test('a file deleted since it was indexed is skipped, any other read error is ra
     /denied/
   )
 })
+
+test('word completion ranks the matching case first, then frequency, then length, and never offers the typed word', () => {
+  const ix = new TextIndex()
+  ix.add('/a', 'userName userName userName user_id UserCard userId')
+  ix.add('/b', 'userName usage')
+  const words = ix.complete('user', 10).map((w) => w.word)
+  assert.deepEqual(words, ['userName', 'userId', 'user_id', 'UserCard'], 'same-case prefix first (by count, then length), other case last')
+  assert.equal(ix.complete('user', 10)[0]?.count, 4)
+  assert.deepEqual(ix.complete('userName', 10).map((w) => w.word), [], 'the word itself is not offered')
+  assert.equal(ix.complete('User', 10)[0]?.word, 'UserCard', 'a prefix typed with a capital prefers the word that has it')
+  assert.equal(ix.complete('USER', 10)[0]?.word, 'userName', 'with no exact-case match, frequency decides')
+  assert.equal(ix.complete('user', 2).length, 2)
+})
+
+test('word completion follows file updates and removals, and drops a word no file has any more', () => {
+  const ix = new TextIndex()
+  ix.add('/a', 'zebracrossing zebracrossing')
+  ix.add('/b', 'zebracrossing')
+  assert.equal(ix.complete('zebra', 5)[0]?.count, 3)
+  ix.add('/a', 'nothing about it')
+  assert.equal(ix.complete('zebra', 5)[0]?.count, 1)
+  ix.remove('/b')
+  assert.deepEqual(ix.complete('zebra', 5), [])
+})
+
+test('words need three characters, binary files contribute none, and a prefix under two characters is an error', () => {
+  const ix = new TextIndex()
+  ix.add('/a', 'id ab abc abcd')
+  ix.add('/bin', 'binaryword\0')
+  assert.deepEqual(ix.complete('ab', 5).map((w) => w.word), ['abc', 'abcd'], 'two-letter words are not indexed; shorter first when counts tie')
+  assert.deepEqual(ix.complete('bi', 5), [])
+  assert.throws(() => ix.complete('a', 5), /at least 2 characters/)
+})

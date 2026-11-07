@@ -243,3 +243,25 @@ test('a file that changes while the text index is still being built is not left 
 test('searchText before a project is open is an error', async () => {
   await assert.rejects(new FileIndex().searchText('anything'), /no project open/)
 })
+
+test('completeWord offers the identifiers of the project and follows watcher changes', async () => {
+  const p = await project(['a.ts', 'b.ts'])
+  try {
+    await writeFile(join(p.root, 'a.ts'), 'const frobnicateWidget = 1\nfrobnicateWidget + frobnicateGadget\n')
+    await writeFile(join(p.root, 'b.ts'), 'export const frobulator = 2\n')
+    const idx = new FileIndex()
+    await idx.open(p.root)
+    await idx.searchText('frob') // waits for the text/word build
+    assert.deepEqual((await idx.completeWord('frob')).map((w) => w.word), ['frobnicateWidget', 'frobulator', 'frobnicateGadget'])
+    await writeFile(join(p.root, 'b.ts'), 'export const frobulator = 2\nfrobulatorTwo()\n')
+    await idx.changed([join(p.root, 'b.ts')])
+    assert.ok((await idx.completeWord('frobulator')).some((w) => w.word === 'frobulatorTwo'))
+    await assert.rejects(idx.completeWord('f'), /at least 2 characters/)
+  } finally {
+    await p.done()
+  }
+})
+
+test('completeWord before a project is open is an error', async () => {
+  await assert.rejects(new FileIndex().completeWord('abc'), /no project open/)
+})

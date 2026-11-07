@@ -22,7 +22,7 @@ rpc.ts: typed clients  ── rpc:call ─────▶ RpcServer ─▶ Modul
 | Module registry | `src/main/platform/modules.ts` | Modules have an id, `requires`, `provides` (service names) and `activation` (`startup` or `lazy`). Activation is dependency-ordered, shared between concurrent callers, retried after a failure; cycles and unlisted dependencies are errors. `unload` is vetoed while another active module still needs the module. Includes the topic **bus**. |
 | Platform wiring | `src/main/platform/index.ts` | Registers every module, exposes `rpc:call` over IPC, forwards the bus to the window as `rpc:event`, and tells the services where their events go. |
 | File index | `src/main/platform/fileindex.ts` | Every project file, persisted as a snapshot in user data (so the next start answers at once while a rescan reconciles), kept current from the file watcher, fuzzy name queries. |
-| Text index | `src/main/platform/textindex.ts` | A trigram index of file text, built in the background after each scan and updated by the watcher. A query keeps only files that contain all its trigrams and reads just those. Binary, over-512 KB and unreadable files are reported by `textStats`, not hidden. |
+| Text index | `src/main/platform/textindex.ts` | A trigram index of file text (and a count of the identifiers in it, for word completion), built in the background after each scan and updated by the watcher. A query keeps only files that contain all its trigrams and reads just those. Binary, over-512 KB and unreadable files are reported by `textStats`, not hidden. |
 | WebSocket transport | `src/main/platform/ws.ts` | The same RPC and bus over a socket. A library: **nothing starts it** (see Security). |
 | MCP server | `src/mcp/` | The project as tools for an external agent (see below). |
 
@@ -32,7 +32,7 @@ All are lazy modules, reached through `src/renderer/rpc.ts`.
 
 | Service | Replaces | Notes |
 |---|---|---|
-| `fileindex` | (new) | `open`, `query`, `list`, `searchText`, `textStats`, `changed` |
+| `fileindex` | (new) | `open`, `query`, `list`, `searchText`, `completeWord`, `textStats`, `changed` |
 | `remote` | (new) | `start`, `stop`, `status` for the WebSocket backend (see Remote transport) |
 | `files` | `fs:*` handlers | read/write, encodings, bytes, listing, search/replace, create/rename/copy, realpath, references |
 | `git` | `git:*` (44) | one method per old handler; moved by a parser, bodies unchanged |
@@ -124,4 +124,7 @@ links that point outside it. Only protocol messages go to stdout; diagnostics go
 * The text index is in memory and rebuilt when a project opens; only the file list is persisted.
 * Search Everywhere's **Text** scope (command *Find Text in Project*) and the MCP server use `searchText`; the older Find in Files
   window still has its own search with regex and case options.
-* Local completion models (the notes' "Full Line") are not part of this; `ai` talks to any OpenAI-compatible server.
+* The notes' local completion models ("Full Line": a proprietary ~68 MB model run by a native inference process) are not
+  part of this. What exists locally is the heuristic kind: **Complete words from the whole project** (Settings, Editor, off by
+  default) offers identifiers from every text file, ranked by how often the project uses them, after the language server's
+  items. `ai` covers model-based completion through any OpenAI-compatible server.

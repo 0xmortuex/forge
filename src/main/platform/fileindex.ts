@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { dirname, relative, join, sep } from 'node:path'
 import { walkFiles } from '../walk'
-import { TextIndex, type SkipReason, type TextHit } from './textindex'
+import { TextIndex, type SkipReason, type TextHit, type WordHit } from './textindex'
 
 // A persistent list of the project's files, kept current from the file watcher. A snapshot on disk makes the next
 // start answer queries immediately while a rescan reconciles anything that changed while Forge was closed. Alongside it
@@ -23,6 +23,11 @@ export interface FileIndexApi {
   list(): string[]
   /** Lines containing the text (at least 3 characters), case-insensitive. Waits for the text index to be built. */
   searchText(text: string, limit?: number): Promise<TextHit[]>
+  /**
+   * Identifiers of the project that start with `prefix` (at least 2 characters), best first. Answers at once from what has
+   * been indexed so far (typing must never wait for the background build), so it can be incomplete while a project is opening.
+   */
+  completeWord(prefix: string, limit?: number): Promise<WordHit[]>
   /** How much of the project is searchable as text, and which files are not (binary, too large, unreadable). */
   textStats(): { files: number; building: boolean; skipped: { path: string; reason: string }[] }
   /** Paths reported by the file watcher; `all` means events were lost and everything must be re-checked. */
@@ -180,6 +185,11 @@ export class FileIndex implements FileIndexApi {
     await this.scan
     await this.textBuild
     return this.text.search(text, limit, (p) => this.readText(p))
+  }
+
+  async completeWord(prefix: string, limit = 20): Promise<WordHit[]> {
+    if (!this.root) throw new Error('The index has no project open')
+    return this.text.complete(prefix, limit)
   }
 
   textStats(): { files: number; building: boolean; skipped: { path: string; reason: string }[] } {
