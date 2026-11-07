@@ -35,7 +35,7 @@ import { initProblems } from './problems'
 import { initBreadcrumbs } from './breadcrumbs'
 import { initTooltips } from './tooltips'
 import { initQuick, quickPick } from './quick'
-import { indexedFiles, inspectService, scratchService, settingsService, gitService, filesService, onFsChanged, onFsWatchError, watchService } from './rpc'
+import { fileIndex, indexedFiles, inspectService, scratchService, settingsService, gitService, filesService, onFsChanged, onFsWatchError, watchService } from './rpc'
 import { initNavigation } from './navigation'
 import { initBookmarks } from './bookmarks'
 import { initSearchEverywhere, type SearchScope } from './searchall'
@@ -267,6 +267,11 @@ const searchAll = initSearchEverywhere({
   openFile,
   listFiles: (root) => indexedFiles(root),
   symbols: (query) => lsp.workspaceSymbols(query),
+  searchText: async (query) => {
+    if (!rootDir) throw new Error('Open a folder first')
+    await indexedFiles(rootDir) // opens the project index if it is not open yet
+    return fileIndex.searchText(query, 100)
+  },
   report,
   restoreFocus: () => (active ? editor.focus() : undefined)
 })

@@ -16,7 +16,7 @@ let server: McpServer
 const nl = String.fromCharCode(10)
 
 before(async () => {
-  base = realpathSync(mkdtempSync(join(tmpdir(), 'forge-mcp-')))
+  base = realpathSync.native(mkdtempSync(join(tmpdir(), 'forge-mcp-')))
   root = join(base, 'project')
   outside = join(base, 'outside')
   mkdirSync(join(root, 'src'), { recursive: true })
