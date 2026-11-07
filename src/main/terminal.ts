@@ -1,8 +1,16 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { delimiter, dirname, extname, isAbsolute, join } from 'node:path'
-import { ipcMain, type WebContents } from 'electron'
 import * as pty from 'node-pty'
+
+// Output and exits are published as "term.data" ({ id, data }) and "term.exit" ({ id, code }); the platform sets where they go.
+type Emit = (topic: string, payload: unknown) => void
+let emit: Emit = () => {
+  throw new Error('Terminal output has no destination: the platform did not set an emitter')
+}
+export function setTerminalEmitter(fn: Emit): void {
+  emit = fn
+}
 
 const terms = new Map<number, pty.IPty>()
 /** Terminals with no process behind them: something else (a debug adapter) decides what they show. */
@@ -21,20 +29,20 @@ export interface VirtualTerminal {
  * A terminal that only displays what it is sent. The Run tab uses it to show the output of a program that a debug adapter
  * runs. `onKill` is called when the user stops it (the Stop button).
  */
-export function startVirtual(wc: WebContents, onKill: () => void): VirtualTerminal {
+export function startVirtual(onKill: () => void): VirtualTerminal {
   const id = nextId++
   let ended = false
   const exit = (code = 0): void => {
     if (ended) return
     ended = true
     virtuals.delete(id)
-    if (!wc.isDestroyed()) wc.send('term:exit', id, code)
+    emit('term.exit', { id, code })
   }
   virtuals.set(id, { kill: () => (onKill(), exit()) })
   return {
     id,
     print: (data) => {
-      if (!ended && !wc.isDestroyed()) wc.send('term:data', id, data)
+      if (!ended) emit('term.data', { id, data })
     },
     exit
   }
@@ -78,12 +86,11 @@ function resolveProgram(name: string): string {
 }
 
 /**
- * Starts a pseudo-terminal running `spec` (default: the user's shell) and streams it to `wc`.
+ * Starts a pseudo-terminal running `spec` (default: the user's shell) and streams it as "term.data" events.
  * `tap` sees every chunk of output first, e.g. to read a debugger's listening URL;
  * `onExit` runs when the process ends.
  */
 export function startPty(
-  wc: WebContents,
   cwd: string,
   cols: number,
   rows: number,
@@ -102,12 +109,12 @@ export function startPty(
   })
   term.onData((data) => {
     tap?.(data)
-    if (!wc.isDestroyed()) wc.send('term:data', id, data)
+    emit('term.data', { id, data })
   })
   term.onExit(({ exitCode }) => {
     terms.delete(id)
     onExit?.(exitCode)
-    if (!wc.isDestroyed()) wc.send('term:exit', id, exitCode)
+    emit('term.exit', { id, code: exitCode })
   })
   terms.set(id, term)
   return id
@@ -128,21 +135,29 @@ function killTree(t: pty.IPty): void {
   }
 }
 
-export function registerTerminal(): void {
-  ipcMain.handle('term:create', (e, cwd: string, cols: number, rows: number, spec?: PtySpec) =>
-    startPty(e.sender, cwd, cols, rows, spec)
-  )
-  ipcMain.handle('term:write', (_e, id: number, data: string) => {
+export interface TerminalApi {
+  create(cwd: string, cols: number, rows: number, spec?: PtySpec): Promise<number>
+  write(id: number, data: string): Promise<void>
+  resize(id: number, cols: number, rows: number): Promise<void>
+  kill(id: number): Promise<void>
+}
+
+/** Provided as the "terminal" service (see platform). */
+export class TerminalService implements TerminalApi {
+  async create(cwd: string, cols: number, rows: number, spec?: PtySpec): Promise<number> {
+    return startPty(cwd, cols, rows, spec)
+  }
+  async write(id: number, data: string): Promise<void> {
     if (!virtuals.has(id)) getTerm(id).write(data) // a virtual terminal has nothing to type into
-  })
-  ipcMain.handle('term:resize', (_e, id: number, cols: number, rows: number) => {
+  }
+  async resize(id: number, cols: number, rows: number): Promise<void> {
     if (!virtuals.has(id)) getTerm(id).resize(cols, rows)
-  })
-  ipcMain.handle('term:kill', (_e, id: number) => {
+  }
+  async kill(id: number): Promise<void> {
     const v = virtuals.get(id)
     if (v) v.kill()
     else killTree(getTerm(id))
-  })
+  }
 }
 
 /**

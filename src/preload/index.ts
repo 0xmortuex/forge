@@ -82,12 +82,6 @@ const api = {
   realpath: (path: string): Promise<string> => ipcRenderer.invoke('fs:realpath', path),
   trash: (path: string): Promise<void> => ipcRenderer.invoke('fs:trash', path),
 
-  termCreate: (cwd: string, cols: number, rows: number, spec?: PtySpec): Promise<number> =>
-    ipcRenderer.invoke('term:create', cwd, cols, rows, spec),
-  termWrite: (id: number, data: string): Promise<void> => ipcRenderer.invoke('term:write', id, data),
-  termResize: (id: number, cols: number, rows: number): Promise<void> =>
-    ipcRenderer.invoke('term:resize', id, cols, rows),
-  termKill: (id: number): Promise<void> => ipcRenderer.invoke('term:kill', id),
   lspOpen: (root: string, uri: string, path: string, version: number, text: string): Promise<boolean> =>
     ipcRenderer.invoke('lsp:open', root, uri, path, version, text),
   lspChange: (uri: string, version: number, text: string): Promise<void> =>
@@ -205,18 +199,7 @@ const api = {
   /** Colors for the native window buttons (Windows/Linux). */
   setTitleBar: (color: string, symbolColor: string): Promise<void> => ipcRenderer.invoke('win:titleBar', color, symbolColor),
   /** 1 = 100%. */
-  setZoom: (factor: number): void => webFrame.setZoomFactor(factor),
-  /** Each subscription returns a function that removes it. */
-  onTermData: (cb: (id: number, data: string) => void): (() => void) => {
-    const listener = (_e: unknown, id: number, data: string): void => cb(id, data)
-    ipcRenderer.on('term:data', listener)
-    return () => ipcRenderer.removeListener('term:data', listener)
-  },
-  onTermExit: (cb: (id: number, code: number) => void): (() => void) => {
-    const listener = (_e: unknown, id: number, code: number): void => cb(id, code)
-    ipcRenderer.on('term:exit', listener)
-    return () => ipcRenderer.removeListener('term:exit', listener)
-  }
+  setZoom: (factor: number): void => webFrame.setZoomFactor(factor)
 }
 
 contextBridge.exposeInMainWorld('forge', api)

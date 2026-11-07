@@ -9,6 +9,7 @@ import type { HttpApi } from '../main/http'
 import type { InspectApi } from '../main/inspect'
 import type { DuplicatesApi } from '../main/duplicates'
 import type { DepsApi } from '../main/deps'
+import type { TerminalApi } from '../main/terminal'
 
 // Typed handles to backend services (see src/main/platform). Each call is one round trip to the main process.
 
@@ -22,7 +23,22 @@ export const httpService = client<HttpApi>('http', (req) => window.forge.rpc(req
 export const inspectService = client<InspectApi>('inspect', (req) => window.forge.rpc(req))
 export const duplicatesService = client<DuplicatesApi>('duplicates', (req) => window.forge.rpc(req))
 export const depsService = client<DepsApi>('deps', (req) => window.forge.rpc(req))
+export const terminalService = client<TerminalApi>('terminal', (req) => window.forge.rpc(req))
 export const onBackendEvent = (cb: (topic: string, payload: unknown) => void): (() => void) => window.forge.onRpcEvent(cb)
+
+/** Terminal output and exits arrive as bus events. Each subscription returns a function that removes it. */
+export const onTermData = (cb: (id: number, data: string) => void): (() => void) =>
+  window.forge.onRpcEvent((topic, payload) => {
+    if (topic !== 'term.data') return
+    const e = payload as { id: number; data: string }
+    cb(e.id, e.data)
+  })
+export const onTermExit = (cb: (id: number, code: number) => void): (() => void) =>
+  window.forge.onRpcEvent((topic, payload) => {
+    if (topic !== 'term.exit') return
+    const e = payload as { id: number; code: number }
+    cb(e.id, e.code)
+  })
 
 // The backend indexes one project at a time. It is opened on first use (a snapshot makes that quick after the first
 // time) and then kept current by the file watcher, so later calls are answered from memory.

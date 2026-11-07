@@ -8,6 +8,7 @@ import { ModuleRegistry } from './modules'
 import { SpellService } from '../spell'
 import { HistoryService } from '../history'
 import { ScratchService } from '../scratch'
+import { setTerminalEmitter, TerminalService } from '../terminal'
 import { NpmService } from '../npm'
 import { TestService } from '../testrun'
 import { HttpService } from '../http'
@@ -47,8 +48,11 @@ registry.register({ id: 'forge.http', activation: 'lazy', provides: ['http'], ac
 registry.register({ id: 'forge.inspect', activation: 'lazy', provides: ['inspect'], activate: () => ({ services: { inspect: new InspectService() } }) })
 registry.register({ id: 'forge.duplicates', activation: 'lazy', provides: ['duplicates'], activate: () => ({ services: { duplicates: new DuplicatesService() } }) })
 registry.register({ id: 'forge.deps', activation: 'lazy', provides: ['deps'], activate: () => ({ services: { deps: new DepsService() } }) })
+registry.register({ id: 'forge.terminal', activation: 'lazy', provides: ['terminal'], activate: () => ({ services: { terminal: new TerminalService() } }) })
 
 export function registerPlatform(): void {
+  // Set now, not when the module activates: the debugger starts terminals without ever calling the service.
+  setTerminalEmitter((topic, payload) => registry.bus.publish(topic, payload))
   const server = new RpcServer((name) => registry.service(name))
   ipcMain.handle('rpc:call', (_e, req: RpcRequest) => server.dispatch(req))
   registry.bus.tap((topic, payload) => {

@@ -17,7 +17,7 @@ import { registerGithub } from './github'
 import { registerDocker } from './docker'
 import { registerWatch, stopWatching } from './watch'
 import { registerPlatform } from './platform'
-import { killAllTerminals, registerTerminal } from './terminal'
+import { killAllTerminals } from './terminal'
 import { walkFiles } from './walk'
 
 export interface DirEntry {
@@ -219,7 +219,6 @@ if (process.env['FORGE_USER_DATA']) app.setPath('userData', process.env['FORGE_U
 
 registerSettings()
 registerExtensions()
-registerTerminal()
 registerLsp()
 registerGit()
 registerDebug()

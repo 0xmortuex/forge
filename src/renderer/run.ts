@@ -4,6 +4,7 @@ import { icons } from './icons'
 import { showMenu, type MenuItem } from './menu'
 import type { TerminalView } from './terminal'
 import { openRunConfigs } from './runconfigs'
+import { terminalService } from './rpc'
 
 export type ConfigType = 'current-file' | 'node' | 'python' | 'command' | 'dap'
 
@@ -226,7 +227,7 @@ export function initRun(deps: RunDeps): {
       const resolved = await resolveSelected(false)
       await deps.saveAll()
       deps.showRunView()
-      await deps.view.begin((cols, rows) => window.forge.termCreate(resolved.cwd, cols, rows, resolved.spec))
+      await deps.view.begin((cols, rows) => terminalService.create(resolved.cwd, cols, rows, resolved.spec))
       deps.report(`Running ${resolved.label}`)
       updateButtons()
     })
@@ -239,7 +240,7 @@ export function initRun(deps: RunDeps): {
         : { file: 'sh', args: ['-c', command] }
       await deps.saveAll()
       deps.showRunView()
-      await deps.view.begin((cols, rows) => window.forge.termCreate(cwd, cols, rows, spec))
+      await deps.view.begin((cols, rows) => terminalService.create(cwd, cols, rows, spec))
       deps.report(`Running ${label}`)
       updateButtons()
     })

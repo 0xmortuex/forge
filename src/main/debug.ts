@@ -77,7 +77,7 @@ export function registerDebug(): void {
       } else if (kind === 'dap' && dap) {
         // The program runs under the adapter, so the Run tab gets a terminal with no process: it shows what the adapter reports.
         const dapSession = new DapSession(deps, dap, cwd)
-        dapSession.attach(startVirtual(e.sender, () => dapSession.onProcessExit()))
+        dapSession.attach(startVirtual(() => dapSession.onProcessExit()))
         current = dapSession
         // The Run tab only listens to this terminal once this call has returned: don't print before then.
         setTimeout(() => dapSession.start(), 150)
@@ -85,7 +85,6 @@ export function registerDebug(): void {
       } else session = new NodeSession(deps)
       current = session
       session.ptyId = startPty(
-        e.sender,
         cwd,
         cols,
         rows,

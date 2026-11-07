@@ -73,9 +73,9 @@ async function main() {
       }).then((m) => (m.result.exceptionDetails ? { error: m.result.exceptionDetails.exception?.description ?? m.result.exceptionDetails.text } : m.result.result.value))
 
     for (let i = 0; i < 40 && (await evaluate("typeof window.forge === 'object' && !!document.getElementById('welcome')")) !== true; i++) await sleep(500)
-    check('the page loads with its preload bridge', (await evaluate("typeof window.forge.termCreate === 'function'")) === true)
+    check('the page loads with its preload bridge', (await evaluate("typeof window.forge.rpc === 'function'")) === true)
 
-    const pty = await evaluate(`window.forge.termCreate(${JSON.stringify(project)}, 80, 24).then((id) => { window.forge.termKill(id); return typeof id })`)
+    const pty = await evaluate(`window.forge.rpc({ service: 'terminal', method: 'create', args: [${JSON.stringify(project)}, 80, 24] }).then((r) => { window.forge.rpc({ service: 'terminal', method: 'kill', args: [r.value] }); return typeof r.value })`)
     check('a real shell starts (node-pty works from the package)', pty === 'number', JSON.stringify(pty))
 
     const dict = await evaluate('window.forge.rpc({ service: "spell", method: "dictionary", args: [] }).then((r) => r.value).then((d) => ({ aff: (d.aff || "").length, dic: (d.dic || "").length }))')

@@ -69,6 +69,23 @@ run('platform-rpc', { 'src/alpha.ts': 'a\n', 'src/beta.ts': 'b\n', 'README.md': 
   const badExt = await rpc('scratch', 'create', ['../x'])
   check('scratch: an invalid extension is an error', !badExt.ok && /Invalid file extension/.test(badExt.error), JSON.stringify(badExt))
 
+  // Streaming: terminal output and exits arrive as bus events (Electron itself runs as plain node, so no shell is involved).
+  const asNode = { file: process.execPath, env: { ELECTRON_RUN_AS_NODE: '1' } }
+  const events4 = (/** @type {number} */ id, /** @type {string} */ topic) => js(`window.__events.filter((e) => e[0] === ${JSON.stringify(topic)} && e[1].id === ${id}).map((e) => e[1])`)
+  const quick = await rpc('terminal', 'create', [root, 80, 24, { ...asNode, args: ['-e', "console.log('hi-' + 'term')"] }])
+  check('terminal: create returns an id', quick.ok && typeof quick.value === 'number', JSON.stringify(quick))
+  const outSeen = await waitFor(async () => (await events4(quick.value, 'term.data')).some((/** @type {{ data: unknown }} */ e) => String(e.data).includes('hi-term')), 15000)
+  check('terminal: the program output arrives as term.data events', !!outSeen)
+  const exited = await waitFor(async () => (await events4(quick.value, 'term.exit'))[0], 15000)
+  check('terminal: the exit arrives as a term.exit event with code 0', !!exited && exited.code === 0, JSON.stringify(exited))
+
+  const long = await rpc('terminal', 'create', [root, 80, 24, { ...asNode, args: ['-e', 'setInterval(() => {}, 1000)'] }])
+  const killed = await rpc('terminal', 'kill', [long.value])
+  const longExit = await waitFor(async () => (await events4(long.value, 'term.exit'))[0], 15000)
+  check('terminal: kill ends a running program and reports its exit', killed.ok && !!longExit, JSON.stringify([killed, longExit]))
+  const noTerm = await rpc('terminal', 'write', [987654, 'x'])
+  check('terminal: writing to an unknown terminal is an error', !noTerm.ok && /No terminal with id 987654/.test(noTerm.error), JSON.stringify(noTerm))
+
   const server = http.createServer((_req, res) => res.end('pong'))
   await new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(undefined)))
   const url = 'http://127.0.0.1:' + /** @type {import('node:net').AddressInfo} */ (server.address()).port + '/'
@@ -78,8 +95,13 @@ run('platform-rpc', { 'src/alpha.ts': 'a\n', 'src/beta.ts': 'b\n', 'README.md': 
   const badMethod = await rpc('http', 'send', [{ method: 'FETCH', url, headers: {} }])
   check('http: an unsupported method is an error', !badMethod.ok && /Unsupported HTTP method/.test(badMethod.error), JSON.stringify(badMethod))
 
-  const dup = await rpc('duplicates', 'find', [root])
-  check('duplicates: find scans the project', dup.ok && Array.isArray(dup.value.groups) && dup.value.filesScanned >= 1, JSON.stringify(dup).slice(0, 160))
+  // Two files that share a 12-line block of real code.
+  const block = Array.from({ length: 12 }, (_, i) => 'const value' + i + ' = compute(' + i + ', "x")').join(String.fromCharCode(10)) + String.fromCharCode(10)
+  fs.mkdirSync(path.join(root, 'dup'), { recursive: true })
+  fs.writeFileSync(path.join(root, 'dup', 'one.ts'), block + 'export const one = 1' + String.fromCharCode(10))
+  fs.writeFileSync(path.join(root, 'dup', 'two.ts'), 'export const two = 2' + String.fromCharCode(10) + block)
+  const dup = await rpc('duplicates', 'find', [root, 6])
+  check('duplicates: find reports the shared block', dup.ok && dup.value.filesScanned >= 2 && dup.value.groups.length >= 1, JSON.stringify(dup).slice(0, 200))
   const deps = await rpc('deps', 'analyse', [root])
   check('deps: analyse returns a graph and cycles', deps.ok && !!deps.value.graph && Array.isArray(deps.value.cycles), JSON.stringify(deps).slice(0, 160))
   const fw = await rpc('tests', 'detect', [root])
