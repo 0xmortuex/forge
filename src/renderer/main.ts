@@ -35,6 +35,7 @@ import { initProblems } from './problems'
 import { initBreadcrumbs } from './breadcrumbs'
 import { initTooltips } from './tooltips'
 import { initQuick, quickPick } from './quick'
+import { indexedFiles } from './rpc'
 import { initNavigation } from './navigation'
 import { initBookmarks } from './bookmarks'
 import { initSearchEverywhere, type SearchScope } from './searchall'
@@ -263,7 +264,7 @@ const searchAll = initSearchEverywhere({
   getRoot: () => rootDir,
   relPath,
   openFile,
-  listFiles: (root) => window.forge.listFiles(root),
+  listFiles: (root) => indexedFiles(root),
   symbols: (query) => lsp.workspaceSymbols(query),
   report,
   restoreFocus: () => (active ? editor.focus() : undefined)

@@ -17,6 +17,8 @@ export interface FileIndexApi {
   open(root: string): Promise<{ files: number }>
   state(): IndexState
   query(text: string, limit?: number): IndexHit[]
+  /** Every indexed file, in the order the scan found them. */
+  list(): string[]
   /** Paths reported by the file watcher; `all` means events were lost and everything must be re-checked. */
   changed(paths: string[], all?: boolean): Promise<void>
 }
@@ -143,6 +145,10 @@ export class FileIndex implements FileIndexApi {
       // A directory that changed says nothing about its contents; the watcher reports the files inside separately.
     }
     if (touched) await this.writeSnapshot()
+  }
+
+  list(): string[] {
+    return [...this.files]
   }
 
   query(text: string, limit = 50): IndexHit[] {

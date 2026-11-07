@@ -125,3 +125,17 @@ test('many concurrent changes write the snapshot safely and leave no temporary f
     await p.done()
   }
 })
+
+test('list() returns every indexed file and follows watcher changes', async () => {
+  const p = await project(['a.ts', 'sub/b.ts'])
+  try {
+    const idx = new FileIndex()
+    await idx.open(p.root)
+    assert.deepEqual(idx.list().map((f) => rel(p.root, f)).sort(), ['a.ts', 'sub/b.ts'])
+    await rm(join(p.root, 'a.ts'))
+    await idx.changed([join(p.root, 'a.ts')])
+    assert.deepEqual(idx.list().map((f) => rel(p.root, f)), ['sub/b.ts'])
+  } finally {
+    await p.done()
+  }
+})
